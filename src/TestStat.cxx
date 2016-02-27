@@ -111,7 +111,8 @@ double TestStat::accessValue(TString testStat, bool observed, int N) {
 /**
    -----------------------------------------------------------------------------
    Calculate the CL and CLs values using model fits.
-*/
+   @param type - "Exp" "Obs" or "Both".
+
 void TestStat::calculateNewCL() {
   printer("TestStat::calculateNewCL()", false);
   
@@ -172,11 +173,12 @@ void TestStat::calculateNewCL() {
   m_calculatedValues[getKey("CLs",0,2)] = getCLsFromCL(expCLp2);
   m_calculatedValues[getKey("CLs",1,0)] = getCLsFromCL(obsCL);
 }
+*/
 
 /**
    -----------------------------------------------------------------------------
    Calculate the p0 value using model fits.
-*/
+
 void TestStat::calculateNewP0() {
   printer("TestStat::calculateNewP0()", false);
   
@@ -213,6 +215,7 @@ void TestStat::calculateNewP0() {
   m_calculatedValues[getKey("p0", 1, 0)] = obsP0;
   m_calculatedValues[getKey("p0", 0, 0)] = expP0;
 }
+*/
 
 /**
    -----------------------------------------------------------------------------
@@ -223,7 +226,7 @@ void TestStat::clearData() {
   m_calculatedValues.clear();
   m_mapGlobs.clear();
   m_mapNP.clear();
-  m_mapPars.clear();
+  m_mapPoI.clear();
   m_doSaveSnapshot = false;
   m_doPlot = false;
   m_plotDir = "";
@@ -247,7 +250,8 @@ void TestStat::clearFitParamSettings() {
    @param valPoI - The value of the parameter of interest.
    @return - A pseudo-dataset.
 */
-RooDataSet* TestStat::createPseudoData(int seed, int valPoI) {
+RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
+				     std::map<TString,double> namesAndValsPoI) {
   printer(Form("TestStat::createPseudoData(seed=%d, PoI=%d)", seed, valPoI), 
 	  false);
   
@@ -268,7 +272,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI) {
   RooArgSet* nuisanceParameters = (RooArgSet*)m_mc->GetNuisanceParameters();
   RooArgSet* globalObservables = (RooArgSet*)m_mc->GetGlobalObservables();
   RooArgSet* observables = (RooArgSet*)m_mc->GetObservables();
-  RooRealVar* firstPoI = (RooRealVar*)m_mc->GetParametersOfInterest()->first();
+  RooArgSet* poi = (RooArgSet*)m_mc->GetParametersOfInterest();
   
   RooRandom::randomGenerator()->SetSeed(seed);
   statistics::constSet(nuisanceParameters, true);
@@ -278,9 +282,18 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI) {
   statistics::randomizeSet(combPdf, globalObservables, seed); 
   statistics::constSet(globalObservables, true);
     
-  // Set the parameter of interest value and status:
-  firstPoI->setVal(valPoI);
-  firstPoI->setConstant(true);
+  // Set the values of parameters of interest as specified in the input.
+  for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
+       iterPoI != namesAndValsPoI.end(); iterPoI++) {
+    if (m_workspace->var(iterPoI->first)) {
+      m_workspace->var(iterPoI->first)->setVal(iterPoI->second);
+      m_workspace->var(iterPoI->first)->setConstant(true);
+    }
+    else {
+      printer(Form("TestStat: ERROR! %s parameter missing",
+		   (iterPoI->first).Data()), true);
+    }
+  }
   
   // Check if other parameter settings have been specified for toys:
   // WARNING! This overrides the randomization settings above!
@@ -341,7 +354,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI) {
   // Save the parameters used to generate toys:
   storeParams(nuisanceParameters, m_mapNP);
   storeParams(globalObservables, m_mapGlobs);
-  storeParams((RooArgSet*)m_workspace->set("nonSysParameters"), m_mapPars);
+  storeParams(poi, m_mapPoI);
 
   // release nuisance parameters (but don't change the values!):
   //m_workspace->loadSnapshot("paramsOrigin");
@@ -449,15 +462,16 @@ double TestStat::getCLsFromQMu(double qMu, double N) {
    Get the negative-log-likelihood for a fit of a specified type to a specified
    dataset.
    @param datasetName - The name of the dataset in the workspace.
-   @param valPoI - The parameter of interest value to fix.
+   @param valPoI - The parameter of interest value to fix (0 or 1).
    @param fixPoI - True if PoI should be fixed to the specified value.
-   @param &profiledValPoI - The profiled value of mu (passed by reference)
+   @param namesAndValsPoI - Map of names and values of PoIs to set for fit.
    @param resetParams - True iff original parameter values are used at start. 
    @return - The NLL value.
 */
-double TestStat::getFitNLL(TString datasetName, double valPoI, bool fixPoI,
-			     double &profiledValPoI, bool resetParams) {
-  printer(Form("TestStat: getFitNLL(%s, PoI=%f, fixPoI=%d, resetPars=%d)",
+double TestStat::getFitNLL(TString datasetName, int valPoI, bool fixPoI,
+			   std::map<TString,double> namesAndValsPoI,
+			   bool resetParams) {
+  printer(Form("TestStat: getFitNLL(%s, PoI=%d, fixPoI=%d, resetPars=%d)",
 	       datasetName.Data(),valPoI,(int)fixPoI,(int)resetParams),false);
   
   RooAbsPdf* combPdf = m_mc->GetPdf();
@@ -466,7 +480,6 @@ double TestStat::getFitNLL(TString datasetName, double valPoI, bool fixPoI,
   if (resetParams) m_workspace->loadSnapshot("paramsOrigin");
   RooArgSet* origValNP = (RooArgSet*)m_workspace->getSnapshot("paramsOrigin");
   RooArgSet* poi = (RooArgSet*)m_mc->GetParametersOfInterest();
-  RooRealVar* firstPoI = (RooRealVar*)poi->first();
   RooArgSet* poiAndNuis = new RooArgSet();
   poiAndNuis->add(*nuisanceParameters);
   poiAndNuis->add(*poi);
@@ -482,8 +495,18 @@ double TestStat::getFitNLL(TString datasetName, double valPoI, bool fixPoI,
   // the global observables should be fixed to the nominal values...
   statistics::constSet(globalObservables, true);
   
-  firstPoI->setVal(valPoI);
-  firstPoI->setConstant(fixPoI);
+  // Set the values of parameters of interest as specified in the input.
+  for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
+       iterPoI != namesAndValsPoI.end(); iterPoI++) {
+    if (m_workspace->var(iterPoI->first)) {
+      m_workspace->var(iterPoI->first)->setVal(iterPoI->second);
+      m_workspace->var(iterPoI->first)->setConstant(fixPoI);
+    }
+    else {
+      printer(Form("TestStat: ERROR! %s parameter missing",
+		   (iterPoI->first).Data()), true);
+    }
+  }
   
   // Check if other parameter settings have been specified for fit:
   for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
@@ -523,14 +546,13 @@ double TestStat::getFitNLL(TString datasetName, double valPoI, bool fixPoI,
     else plotFits("MuFree", datasetName);
   }
   
-  profiledValPoI = firstPoI->getVal();
   double nllValue = varNLL->getVal();
   delete varNLL;
   
   // Save names and values of nuisance parameters, globs, other parameters:
   storeParams(nuisanceParameters, m_mapNP);
   storeParams(globalObservables, m_mapGlobs);
-  storeParams((RooArgSet*)m_workspace->set("nonSysParameters"), m_mapPars);
+  storeParams(poi, m_mapPoI);
   
   // Release nuisance parameters after fit and recover the default values:
   if (m_doResetParamsAfterFit) {
@@ -593,11 +615,11 @@ std::map<std::string,double> TestStat::getNuisanceParameters() {
 
 /**
    -----------------------------------------------------------------------------
-   Get a map of non-systematic parameter names to values from most recent fit.
-   @return - A map of parameter names and most recent fit values.
+   Get a map of parameter of interest names to values from most recent fit.
+   @return - A map of PoI names and most recent fit values.
 */
-std::map<std::string,double> TestStat::getParameters() {
-  return m_mapPars;
+std::map<std::string,double> TestStat::getPoIs() {
+  return m_mapPoI;
 }
 
 /**
@@ -768,8 +790,9 @@ void TestStat::loadStatsFromFile() {
   
   // If the input files don't exist, create from scratch:
   if (!textCL || !textP0) {
-    calculateNewCL();
-    calculateNewP0();
+    printer("TestStat: ERROR! Stats don't exist. Exiting.", true);
+    //calculateNewCL();
+    //calculateNewP0();
     return;
   }
   

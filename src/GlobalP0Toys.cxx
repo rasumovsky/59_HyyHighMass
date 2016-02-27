@@ -49,14 +49,12 @@ void mapToVectors(std::map<std::string,double> map,
    @param seed - The random seed for pseudoexperiment creation.
    @param toysPerJob - The number of pseudoexperiments to create per job.
    @param poiVal - The value of the parameter of interest to use.
-   @param resonanceMass - The mass of the resonance.
-   @param resonanceWidth - The width of the resonance.
 */
 int main(int argc, char **argv) {
-  if (argc < 8) {
+  if (argc < 6) {
     std::cout << "Usage: " << argv[0] 
 	      << " <configFile> <options> <seed> <toysPerJob> <poiVal> " 
-	      << "<resonanceMass> <resonanceWidth>" << std::endl;
+	      << std::endl;
     exit(0);
   }
   
@@ -66,8 +64,6 @@ int main(int argc, char **argv) {
   int seed = atoi(argv[3]);
   int nToysPerJob = atoi(argv[4]);
   int inputPoIVal = atoi(argv[5]);
-  int resonanceMass = atoi(argv[6]);
-  double resonanceWidth = atof(argv[7]);
   
   // Load the analysis configurations from file:
   Config *config = new Config(configFile);
@@ -106,9 +102,9 @@ int main(int argc, char **argv) {
   std::vector<double> valuesGlobsMu1; valuesGlobsMu1.clear();
   std::vector<double> valuesGlobsMuFree; valuesGlobsMuFree.clear();
   std::vector<string> namesPars; namesPars.clear();
-  std::vector<double> valuesParsMu0; valuesParsMu0.clear();
-  std::vector<double> valuesParsMu1; valuesParsMu1.clear();
-  std::vector<double> valuesParsMuFree; valuesParsMuFree.clear();
+  std::vector<double> valuesPoIsMu0; valuesPoIsMu0.clear();
+  std::vector<double> valuesPoIsMu1; valuesPoIsMu1.clear();
+  std::vector<double> valuesPoIsMuFree; valuesPoIsMuFree.clear();
   std::vector<double> numEventsPerCate; numEventsPerCate.clear();
   
   fOutputTree.Branch("seed", &seed, "seed/I");
@@ -133,9 +129,20 @@ int main(int argc, char **argv) {
   fOutputTree.Branch("valuesGlobsMu0", &valuesGlobsMu0);
   fOutputTree.Branch("valuesGlobsMuFree", &valuesGlobsMuFree);
   fOutputTree.Branch("namesPars", &namesPars);
-  fOutputTree.Branch("valuesParsMu1", &valuesParsMu1);
-  fOutputTree.Branch("valuesParsMu0", &valuesParsMu0);
-  fOutputTree.Branch("valuesParsMuFree", &valuesParsMuFree);
+  fOutputTree.Branch("valuesPoIsMu1", &valuesPoIsMu1);
+  fOutputTree.Branch("valuesPoIsMu0", &valuesPoIsMu0);
+  fOutputTree.Branch("valuesPoIsMuFree", &valuesPoIsMuFree);
+  
+  // Set the mass and width according to the given hypothesis:
+  std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
+  std::vector<double> inValPoIMu0 = config->getNumV("PoIValuesMu0");
+  std::vector<double> inValPoIMu1 = config->getNumV("PoIValuesMu1");
+  std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
+  std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
+  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+    mapPoIMu0[listPoI[i_p]] = inValPoIMu0[i_p];
+    mapPoIMu1[listPoI[i_p]] = inValPoIMu1[i_p];
+  }
   
   //----------------------------------------//
   // Loop to generate pseudo experiments:
@@ -148,60 +155,50 @@ int main(int argc, char **argv) {
     RooWorkspace *workspace
       = (RooWorkspace*)inputFile.Get(config->getStr("WorkspaceName"));
     
+    // The statistics class, for calculating qMu etc. 
     TestStat *testStat = new TestStat(configFile, "new", workspace);
-    
-    /////// HERE WE NEED TO SET MASS WIDTH...
-    
-    //testStat->setParam(config->getStr("CLScanVar"), crossSection, true);
-
-    ////////
-    
-    //////// THEN CREATE ASIMOV DATA IN WORKSPACE!
-    
     
     // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
     // for every toy job, since the signal hypothesis can change!
     testStat->saveSnapshots(true);
-    TString dataToProf = config->getBool("WorkspaceObsData");
+    TString dataToProf = config->getStr("WorkspaceObsData");
     if (inputPoIVal == 0) {
-      testStat->getFitNLL(dataToProf, 0, true, profiledPOIVal);
+      testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu0);
     }
-    else testStat->getFitNLL(dataToProf, 1, true, profiledPOIVal);
+    else {
+      testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
+    }
     testStat->saveSnapshots(false);
     
     // Create the pseudo data:
-    RooDataSet *newToyData = testStat->createPseudoData(seed, inputPoIVal);
+    RooDataSet *newToyData
+      = testStat->createPseudoData(seed, inputPoIVal, mapPoIMu0);
     numEvents = workspace->data("toyData")->sumEntries();
     numEventsPerCate = testStat->getNEventsToys();
-
-    // Globs are only set once for each dataset:
+    
+    // Globs are only randomized once for each dataset:
     mapToVectors(testStat->getGlobalObservables(), namesGlobs, valuesGlobsMu0);
     mapToVectors(testStat->getGlobalObservables(), namesGlobs, valuesGlobsMu1);
     mapToVectors(testStat->getGlobalObservables(), namesGlobs, 
 		 valuesGlobsMuFree);
     
-    // Mu = 0 fits:
-    nllMu0 = testStat->getFitNLL("toyData", 0, true, profiledPOIVal, false);
+    // Mu = 0 fits (reset the PoI first):
+    nllMu0 = testStat->getFitNLL("toyData", 0, true, mapPoIMu0, false);
     convergedMu0 = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
-    mapToVectors(testStat->getParameters(), namesPars, valuesParsMu0);
+    mapToVectors(testStat->getPoIs(), namesPars, valuesPoIsMu0);
     
-    // Mu = 1 fits:
-    nllMu1 = testStat->getFitNLL("toyData", 1, true, profiledPOIVal, false);
+    // Mu = 1 fits (reset the PoI first):
+    nllMu1 = testStat->getFitNLL("toyData", 1, true, mapPoIMu1, false);
     convergedMu1 = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu1);
-    mapToVectors(testStat->getParameters(), namesPars, valuesParsMu1);
+    mapToVectors(testStat->getPoIs(), namesPars, valuesPoIsMu1);
     
-    
-    //////
-    //     FREE THE WIDTH AND MASS
-    //////
-
-    // Mu free fits:
-    nllMuFree = testStat->getFitNLL("toyData", 1, false, profiledPOIVal, false);
+    // Mu free fits (reset the PoI first):
+    nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
     convergedMuFree = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMuFree);
-    mapToVectors(testStat->getParameters(), namesPars, valuesParsMuFree);
+    mapToVectors(testStat->getPoIs(), namesPars, valuesPoIsMuFree);
     
     // Calculate profile likelihood ratios:
     llrL1L0 = nllMu1 - nllMu0;

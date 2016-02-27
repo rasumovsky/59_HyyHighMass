@@ -29,11 +29,12 @@ class TestStat {
   virtual ~TestStat() {};
   
   double accessValue(TString testStat, bool observed, int N);
-  void calculateNewCL();
-  void calculateNewP0();
+  //void calculateNewCL(TString type);
+  //void calculateNewP0(TString type);
   void clearData();
   void clearFitParamSettings();
-  RooDataSet* createPseudoData(int seed, int valPoI);
+  RooDataSet* createPseudoData(int seed, int valPoI,
+			       std::map<TString,double> namesAndValsPoI);
   bool fitsAllConverged();
   double functionQMu(double x);
   double functionQMuTilde(double x, double asimovTestStat);
@@ -41,12 +42,13 @@ class TestStat {
   double getCLsFromCL(double CL);
   double getCLFromQMu(double qMu, double N);
   double getCLsFromQMu(double qMu, double N);
-  double getFitNLL(TString datasetName, double muVal, bool fixMu,
-		   double &profiledMu, bool resetParams=true);
+  double getFitNLL(TString datasetName, int valPoI, bool fixPoI,
+		   std::map<TString,double> namesAndValsPoI,
+		   bool resetParams=true);
   std::map<std::string,double> getGlobalObservables();
   std::vector<double> getNEventsToys();
   std::map<std::string,double> getNuisanceParameters();
-  std::map<std::string,double> getParameters();
+  std::map<std::string,double> getPoIs();
   double getP0FromQ0(double q0);
   double getPbFromN(double N);
   double getPbFromQMu(double qMu, double sigma, double mu);
@@ -124,7 +126,7 @@ class TestStat {
   // Store fit parameters from NLL calculation:
   std::map<std::string,double> m_mapGlobs;
   std::map<std::string,double> m_mapNP;
-  std::map<std::string,double> m_mapPars;
+  std::map<std::string,double> m_mapPoI;
   
   // Store number of toy MC events generated:
   std::vector<double> m_numEventsPerCate;
