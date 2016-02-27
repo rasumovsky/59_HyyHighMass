@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [[ $# -lt 8 ]]; then
-    echo "USAGE: toy_jobfile.sh <jobname> <configfile> <input_file> <exe_name> <option> <seed> <toysperjob> <resonanceMass>"
+if [[ $# -lt 7 ]]; then
+    echo "USAGE: toy_jobfile.sh <jobname> <configfile> <input_file> <exe_name> <option> <seed> <toysperjob>"
     
 else
     jobname=$1
@@ -11,19 +11,22 @@ else
     option=$5
     seed=$6
     toysperjob=$7
-    resonanceMass=$8
 
     date
     echo
     
-    echo $jobname $configfile $input_file $exe_name $option $seed $toysperjob $resonanceMass
+    echo $jobname $configfile $input_file $exe_name $option $seed $toysperjob
     
     out="${jobname}_${seed}"
-    output_dir="/afs/cern.ch/user/a/ahard/work_directory/files_Hbbgg/FullAnalysis/${jobname}/DHPseudoExp"
+    output_dir="/afs/cern.ch/work/a/ahard/files_HighMass/FullAnalysis/${jobname}/GlobalP0Toys"
     
     # setup ROOT:
+    #source /afs/cern.ch/sw/lcg/contrib/gcc/4.6/x86_64-slc6/setup.sh 
+    #source /afs/cern.ch/sw/lcg/app/releases/ROOT/5.34.09/x86_64-slc6-gcc46-opt/root/bin/thisroot.sh
+    
+    # setup the HSG7 patched ROOT:
     source /afs/cern.ch/sw/lcg/contrib/gcc/4.6/x86_64-slc6/setup.sh 
-    source /afs/cern.ch/sw/lcg/app/releases/ROOT/5.34.09/x86_64-slc6-gcc46-opt/root/bin/thisroot.sh
+    source /afs/cern.ch/atlas/project/HSG7/root/root_v5-34-32/x86_64-slc6-gcc48/bin/thisroot.sh
     
     export PATH=$ROOTSYS/bin:$PATH
     export LD_LIBRARY_PATH=$ROOTSYS/lib
@@ -47,8 +50,8 @@ else
     echo "Printing directory contents before running."
     ls
     
-    ./bin/${exe_name} ${configfile} ${option} ${seed} ${toysperjob} 0 ${resonanceMass} 1> ${out}_mu0.log 2>${out}_mu0.err;
-    ./bin/${exe_name} ${configfile} ${option} ${seed} ${toysperjob} 1 ${resonanceMass} 1> ${out}_mu1.log 2>${out}_mu1.err;
+    ./bin/${exe_name} ${configfile} ${option} ${seed} ${toysperjob} 0 1> ${out}_mu0.log 2>${out}_mu0.err;
+#    ./bin/${exe_name} ${configfile} ${option} ${seed} ${toysperjob} 1 1> ${out}_mu1.log 2>${out}_mu1.err;
     
     mv *.log ${output_dir}/log/
     mv *.err ${output_dir}/err/

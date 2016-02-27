@@ -4,7 +4,7 @@
 //                                                                            //
 //  Created: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
-//  Date: 25/02/2016                                                          //
+//  Date: 27/02/2016                                                          //
 //                                                                            //
 //  This program is useful as an interface to the high-mass diphoton analysis //
 //  tools. It centralizes the commands for creating inputs, plots, workspaces,//
@@ -13,8 +13,8 @@
 //  system commands to submit jobs to various clusters.                       //
 //                                                                            //
 //  MasterOption:                                                             //
-//    - TossPseudoExp                                                         //
-//    - PlotPseudoExp                                                         //
+//    - TossGlobalP0Toys                                                      //
+//    - PlotGlobalP0Toys                                                      //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -27,10 +27,9 @@
    @param exeOption - the job options for the executable.
    @param exeSeed - the seed for the randomized dataset generation.
    @param exeToysPerJob - the number of toy datasets to create per job.
-   @param resonanceMass - The mass of the resonance (resonant analysis only)
 */
 void submitPEViaBsub(TString exeConfigFile, TString exeOption, int exeSeed, 
-		     int exeToysPerJob, int resonanceMass) {
+		     int exeToysPerJob) {
   //@param exeSignal - the signal to process in the executable.
 
   // Make directories for job info:
@@ -68,12 +67,11 @@ void submitPEViaBsub(TString exeConfigFile, TString exeOption, int exeSeed,
 			     (m_config->getStr("JobName")).Data(), exeSeed);
   
   // Here you define the arguments for the job script:
-  TString nameJScript = Form("%s/jobFilePseudoExp.sh %s %s %s %s %s %d %d %d", 
+  TString nameJScript = Form("%s/jobFilePseudoExp.sh %s %s %s %s %s %d %d", 
 			     exe.Data(), (m_config->getStr("JobName")).Data(),
 			     exeConfigFile.Data(), inputFile.Data(),
 			     (m_config->getStr("exePseudoExp")).Data(),
-			     exeOption.Data(), exeSeed, exeToysPerJob,
-			     resonanceMass);
+			     exeOption.Data(), exeSeed, exeToysPerJob);
   
   // submit the job:
   system(Form("bsub -q wisc -o %s -e %s %s", nameOutFile.Data(), 
@@ -97,21 +95,20 @@ int main (int argc, char **argv) {
   TString masterOption = argv[1];
   TString configFileName = argv[2];
   
-  // Submit jobs to bsub or grid, etc.:
-  bool runInParallel = false;
+  // For grid/bsub submission:
   m_isFirstJob = true;
   
   // Load the config class and file:
   std::cout << "HMMaster: Loading the global config file." << std::endl;
   m_config = new Config(configFileName);
   m_config->printDB();
-  TString fullConfigPath
-    = Form("%s/%s", (m_config->getStr("PackageLocation")).Data(),
-	   configFileName.Data());
-
+  TString fullConfigPath = Form("%s/%s",
+				(m_config->getStr("PackageLocation")).Data(),
+				configFileName.Data());
+  
   //--------------------------------------//
   // Step 5.0: Create pseudoexperiment ensemble:
-  if (masterOption.Contains("TossPseudoExp")) {
+  if (masterOption.Contains("TossGlobalP0Toys")) {
     std::cout << "HMMaster: Step 5.1 - Create pseudoexperiments." << std::endl;
     
     int toySeed = m_config->getInt("toySeed");
@@ -122,7 +119,7 @@ int main (int argc, char **argv) {
     
     for (int i_s = toySeed; i_s < highestSeed; i_s += increment) {
       submitPEViaBsub(fullConfigPath, m_config->getStr("PseudoExpOptions"),
-		      i_s, nToysPerJob, 0);
+		      i_s, nToysPerJob);
       m_isFirstJob = false;
     }
     std::cout << "HMMaster: Submitted " << (int)(nToysTotal/nToysPerJob) 
@@ -131,12 +128,10 @@ int main (int argc, char **argv) {
   
   //--------------------------------------//
   // Step 5.2: Plot pseudo-experiment ensemble results:
-  if (masterOption.Contains("PlotPseudoExp")) {
+  if (masterOption.Contains("PlotGlobalP0Toys")) {
     std::cout << "HMMaster: Step 5.2 - Plot pseudoexperiment results."
 	      << std::endl;
-    std::vector<double> scanMXValues = m_config->getNumV("MXScanValues");
-    DHToyAnalysis *dhta
-      = new DHToyAnalysis(configFileName,"NONE", (int)(scanMXValues[0]));
+    //ToyAnalysis *ta = new ToyAnalysis(configFileName, "NONE");
   }
   
   return 0;
