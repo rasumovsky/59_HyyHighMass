@@ -18,6 +18,7 @@
 #include "CommonFunc.h"
 #include "Config.h"
 #include "TestStat.h"
+#include <time.h>
 #include "RooFitHead.h"
 #include "RooStatsHead.h"
 #include "statistics.h"
@@ -57,6 +58,10 @@ int main(int argc, char **argv) {
 	      << std::endl;
     exit(0);
   }
+  
+  // Clock the toys:
+  clock_t time;
+  time = clock();
   
   // Assign input parameters:
   TString configFile = argv[1];
@@ -145,30 +150,30 @@ int main(int argc, char **argv) {
   }
   
   //----------------------------------------//
+  //
+  // Load model, data, etc. from workspace:
+  TFile inputFile(copiedFile, "read");
+  RooWorkspace *workspace
+    = (RooWorkspace*)inputFile.Get(config->getStr("WorkspaceName"));
+  
+  // The statistics class, for calculating qMu etc. 
+  TestStat *testStat = new TestStat(configFile, "new", workspace);
+  
+  // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
+  // for every toy job, since the signal hypothesis can change!
+  testStat->saveSnapshots(true);
+  TString dataToProf = config->getStr("WorkspaceObsData");
+  if (inputPoIVal == 0) {
+    testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu0);
+  }
+  else testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
+  testStat->saveSnapshots(false);
+  
+  //----------------------------------------//
   // Loop to generate pseudo experiments:
   std::cout << "GlobalP0Toys: Generating " << nToysPerJob
 	    << " toys with mu_DH = " << inputPoIVal << endl;
   for (int i_t = 0; i_t < nToysPerJob; i_t++) {
-    
-    // Load model, data, etc. from workspace:
-    TFile inputFile(copiedFile, "read");
-    RooWorkspace *workspace
-      = (RooWorkspace*)inputFile.Get(config->getStr("WorkspaceName"));
-    
-    // The statistics class, for calculating qMu etc. 
-    TestStat *testStat = new TestStat(configFile, "new", workspace);
-    
-    // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
-    // for every toy job, since the signal hypothesis can change!
-    testStat->saveSnapshots(true);
-    TString dataToProf = config->getStr("WorkspaceObsData");
-    if (inputPoIVal == 0) {
-      testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu0);
-    }
-    else {
-      testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
-    }
-    testStat->saveSnapshots(false);
     
     // Create the pseudo data:
     RooDataSet *newToyData
@@ -189,10 +194,10 @@ int main(int argc, char **argv) {
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
     
     // Mu = 1 fits (reset the PoI first):
-    nllMu1 = testStat->getFitNLL("toyData", 1, true, mapPoIMu1, false);
-    convergedMu1 = testStat->fitsAllConverged();
-    mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu1);
-    mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu1);
+    //nllMu1 = testStat->getFitNLL("toyData", 1, true, mapPoIMu1, false);
+    //convergedMu1 = testStat->fitsAllConverged();
+    //mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu1);
+    //mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu1);
     
     // Mu free fits (reset the PoI first):
     nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
@@ -221,5 +226,14 @@ int main(int argc, char **argv) {
   fOutputTree.Write();
   fOutputFile.Close();
   system(Form("rm %s", copiedFile.Data()));
+  
+  // Clock the toys:
+  time = clock() - time;
+
+  if (config->getBool("Verbose")) {
+    std::cout << "\nGlobalP0Toys_Faster: Toy procedure concluded." << std::endl;
+    printf("\t%d toys required %d clock cycles (%f seconds).\n\n",
+	   nToysPerJob, (int)time, ((float)time/CLOCKS_PER_SEC));
+  }
   return 0;
 }

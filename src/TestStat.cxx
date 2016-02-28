@@ -268,20 +268,22 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
 	    true);
   }
   
-  RooAbsPdf* combPdf = (RooAbsPdf*)m_mc->GetPdf();
+  std::cout << "CHECK0" << std::endl;
+  //RooAbsPdf* combPdf = (RooAbsPdf*)m_mc->GetPdf();
+  RooSimultaneous* combPdf = (RooSimultaneous*)m_mc->GetPdf();
   RooArgSet* nuisanceParameters = (RooArgSet*)m_mc->GetNuisanceParameters();
   RooArgSet* globalObservables = (RooArgSet*)m_mc->GetGlobalObservables();
   RooArgSet* observables = (RooArgSet*)m_mc->GetObservables();
   RooArgSet* poi = (RooArgSet*)m_mc->GetParametersOfInterest();
-  
+  std::cout << "CHECK1" << std::endl;
   RooRandom::randomGenerator()->SetSeed(seed);
   statistics::constSet(nuisanceParameters, true);
   statistics::constSet(globalObservables, false);
-      
+  std::cout << "CHECK2" << std::endl;
   // Randomize the global observables and set them constant for now:
   statistics::randomizeSet(combPdf, globalObservables, seed); 
   statistics::constSet(globalObservables, true);
-    
+  std::cout << "CHECK3" << std::endl;
   // Set the values of parameters of interest as specified in the input.
   for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
        iterPoI != namesAndValsPoI.end(); iterPoI++) {
@@ -294,7 +296,8 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
 		   (iterPoI->first).Data()), true);
     }
   }
-  
+  std::cout << "CHECK4" << std::endl;
+
   // Check if other parameter settings have been specified for toys:
   // WARNING! This overrides the randomization settings above!
   for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
@@ -310,20 +313,26 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
       printer(Form("TestStat: Error! Parameter %s not found in workspace! See printout above for clues...", (iterParam->first).Data()), true);
     }
   }
+  std::cout << "CHECK5" << std::endl;
   
   // Store the toy dataset and number of events per dataset:
   map<string,RooDataSet*> toyDataMap; toyDataMap.clear();
   m_numEventsPerCate.clear();
   
+  std::cout << "CHECK6" << std::endl;
   // Iterate over the categories:
-  RooSimultaneous *simPdf = (RooSimultaneous*)m_workspace->pdf("combinedPdfSB");
-  TIterator *cateIter = simPdf->indexCat().typeIterator();
+  printer("TestStat: Iterate over categories to generate toy data.", false);
+  //RooSimultaneous *simPdf = (RooSimultaneous*)m_workspace->pdf("combinedPdf");
+  //TIterator *cateIter = simPdf->indexCat().typeIterator();
+  TIterator *cateIter = combPdf->indexCat().typeIterator();
   RooCatType *cateType = NULL;
+  std::cout << "CHECK6.1" << std::endl;
   while ((cateType = (RooCatType*)cateIter->Next())) {
-    //RooAbsPdf *currPdf = combPdf->getPdf(cateType->GetName());
-    RooAbsPdf *currPdf = simPdf->getPdf(cateType->GetName());
+    std::cout << "CHECK6.4" << std::endl;
+    RooAbsPdf *currPdf = combPdf->getPdf(cateType->GetName());
+    //RooAbsPdf *currPdf = simPdf->getPdf(cateType->GetName());
     RooArgSet *currObs = currPdf->getObservables(observables);
-        
+    std::cout << "CHECK6.3" << std::endl;
     // If you want to bin the pseudo-data (speeds up calculation):
     if (m_options.Contains("Binned")) {
       currPdf->setAttribute("PleaseGenerateBinned");
@@ -341,12 +350,24 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
       toyDataMap[(std::string)cateType->GetName()]
 	= (RooDataSet*)currPdf->generate(*currObs,Extended(true));
     }
+    std::cout << "CHECK6.4" << std::endl;
     double currEvt = toyDataMap[(std::string)cateType->GetName()]->sumEntries();
     m_numEventsPerCate.push_back(currEvt);
+    std::cout << "CHECK6.5" << std::endl;
   }
-  
+  std::cout << "CHECK7" << std::endl;
+
   // Create the combined toy RooDataSet:
-  RooCategory *categories = (RooCategory*)m_workspace->obj("categories");
+  //RooCategory *categories = (RooCategory*)m_workspace->obj("categories");
+  RooCategory *categories = NULL;
+  TString nameRooCategory = m_config->getStr("WorkspaceRooCategory");
+  if (m_workspace->obj(nameRooCategory)) {
+    categories = (RooCategory*)m_workspace->obj(nameRooCategory);
+  }
+  else {
+    printer(Form("TestStat: RooCategory object %s not found",
+		 nameRooCategory.Data()), true);
+  }
   RooDataSet* pseudoData = new RooDataSet("toyData", "toyData", *observables, 
 					  RooFit::Index(*categories),
 					  RooFit::Import(toyDataMap));
