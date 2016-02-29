@@ -33,7 +33,7 @@ class TestStat {
   //void calculateNewP0(TString type);
   void clearData();
   void clearFitParamSettings();
-  RooDataSet* createPseudoData(int seed, int valPoI,
+  RooDataSet* createPseudoData(int seed, int valPoI, TString snapshotName,
 			       std::map<TString,double> namesAndValsPoI);
   bool fitsAllConverged();
   double functionQMu(double x);
@@ -50,7 +50,7 @@ class TestStat {
   std::map<std::string,double> getNuisanceParameters();
   std::map<std::string,double> getPoIs();
   double getP0FromQ0(double q0);
-  double getPbFromN(double N);
+  double getPFromN(double N);
   double getPbFromQMu(double qMu, double sigma, double mu);
   double getPMuFromQMu(double qMu);
   double getQ0FromNLL(double nllMu0, double nllMuHat, double muHat);
@@ -58,6 +58,9 @@ class TestStat {
 		       double muTest);
   double getQMuTildeFromNLL(double nllMu, double nllMu0, double nllMuHat,
 			    double muHat, double muTest);
+  double getZ0FromQ0(double q0);
+  double getZFromP(double p);
+  double getZMuFromQMu(double qMu);
   double graphIntercept(TGraph *graph, double valueToIntercept);
   void loadStatsFromFile();
   TGraph *nllScanGraph();
@@ -91,7 +94,6 @@ class TestStat {
 
   // From the initialization:
   TString m_anaType;    // The analysis type ("Res", "NonRes").
-  TString m_DHSignal;   // The specific signal under study.
   TString m_jobName;    // The name of the group of jobs (for I/O purposes).
   TString m_options;    // Job options.
   TString m_outputDir;  // The output directory for statistics.

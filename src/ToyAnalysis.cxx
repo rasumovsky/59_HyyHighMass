@@ -4,7 +4,7 @@
 //                                                                            //
 //  Author: Andrew Hard                                                       //
 //  Email: ahard@cern.ch                                                      //
-//  Date: 26/02/2016                                                          //
+//  Date: 29/02/2016                                                          //
 //                                                                            //
 //  This program compares test statistic values from pseudo-experiment        //
 //  ensembles and asymptotic formulae.                                        //
@@ -20,49 +20,20 @@
    Constructor for the ToyAnalysis class.
    @param newConfigFile - The name of the analysis config file.
    @param options - Options for the toy analysis: ForcePlot, CLScan
-   @param resonanceMass - The resonance mass (resonant analysis only).
 */
-ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options, 
-			 int resonanceMass) {
+ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   
   // Load the config file:
   m_config = new Config(newConfigFile);
   TString jobName = m_config->getStr("JobName");
   TString anaType = m_config->getStr("AnalysisType");
-  m_resonanceMass = resonanceMass;
-
+  
   printer(Form("ToyAnalysis::ToyAnalysis(%s)",newConfigFile.Data()),false);
 
-  // set input and output directories:
-  if (anaType.EqualTo("Resonant")) {
-    m_outputDir = Form("%s/%s/ToyAnalysis/MX%d",
-		       (m_config->getStr("MasterOutput")).Data(),
-		       jobName.Data(), m_resonanceMass);
-  }
-  else {
-    m_outputDir = Form("%s/%s/ToyAnalysis",
-		       (m_config->getStr("MasterOutput")).Data(),
-		       jobName.Data());
-  }
-
-  TString toyDir = Form("%s/%s/DHPseudoExp", 
-			(m_config->getStr("MasterOutput")).Data(), 
-			jobName.Data());
-  if (options.Contains("CLScan")) {
-    if (anaType.EqualTo("Resonant")) {
-      toyDir = Form("%s/%s/DHPseudoExpForCLScan/MX%d", 
-		    (m_config->getStr("MasterOutput")).Data(), jobName.Data(),
-		    m_resonanceMass);
-    }
-    else {
-      toyDir = Form("%s/%s/DHPseudoExpForCLScan", 
-		    (m_config->getStr("MasterOutput")).Data(), jobName.Data());
-    }
-  }
-  
-  TString wsFileName = Form("%s/%s/DHWorkspace/rootfiles/workspaceDH_%s.root",
-			    (m_config->getStr("MasterOutput")).Data(),
-			    jobName.Data(), anaType.Data());
+  // Set output directory:
+  setOutputDir(Form("%s/%s/ToyAnalysis", 
+		    (m_config->getStr("MasterOutput")).Data(),
+		    jobName.Data()));
   
   // Set the internal (private) variable initial conditions:
   m_nBins = 500;
@@ -71,107 +42,36 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options,
   
   m_valuesQMu_Mu0.clear();
   m_valuesQMu_Mu1.clear();
+  m_valuesBestFit_AsymZ0_Mu0.clear();
+  m_valuesBestFit_AsymCL_Mu0.clear();
+  m_valuesBestFit_AsymZ0_Mu1.clear();
+  m_valuesBestFit_AsymCL_Mu1.clear();
   
-  // Set the fit types:
+  // Set the default fit types:
   m_fitTypes.clear();
   m_fitTypes.push_back("0"); 
   m_fitTypes.push_back("1");
   m_fitTypes.push_back("Free");
-  
-  // Create output directory:
-  system(Form("mkdir -vp %s", m_outputDir.Data()));
-  
+    
   // Set ATLAS style template:
   CommonFunc::SetAtlasStyle();
   
-  // Add all of the individual pseudoexperiment files together:
-  TString toyFileMu0 = Form("%s/toy_mu0.root", toyDir.Data());
-  TString toyFileMu1 = Form("%s/toy_mu1.root", toyDir.Data());
-  if (options.Contains("CLScan")) {
-    // Get the integer number from the option:
-    TString jobIndex = options;
-    jobIndex.ReplaceAll("CLScan","");
-    jobIndex.ReplaceAll("ForcePlot","");
-    system(Form("hadd -f %s %s/single_files/toy_mu0_%d_*",
-		toyFileMu0.Data(), toyDir.Data(), jobIndex.Atoi()));
-    system(Form("hadd -f %s %s/single_files/toy_mu1_%d_*", 
-		toyFileMu1.Data(), toyDir.Data(), jobIndex.Atoi()));
-  }
-  else {
-    system(Form("hadd -f %s %s/single_files/toy_mu0*",
-		toyFileMu0.Data(), toyDir.Data()));
-    system(Form("hadd -f %s %s/single_files/toy_mu1*", 
-		toyFileMu1.Data(), toyDir.Data()));
+  // Load the workspace and model config from file:
+  //TFile workspaceFile(m_config->getStr("WorkspaceFile"), "read");
+  m_workspaceFile = new TFile(m_config->getStr("WorkspaceFile"), "read");
+  //m_workspace
+  //= (RooWorkspace*)workspaceFile.Get(m_config->getStr("WorkspaceName"));
+  m_workspace
+    = (RooWorkspace*)m_workspaceFile->Get(m_config->getStr("WorkspaceName"));
+  if (m_workspace->obj(m_config->getStr("WorkspaceModelConfig"))) {
+    m_mc = (ModelConfig*)m_workspace
+      ->obj(m_config->getStr("WorkspaceModelConfig"));
   }
   
-  // Create temporary file lists:
-  TString listMu0 = "temp_list_mu0.txt";
-  TString listMu1 = "temp_list_mu1.txt";
-  system(Form("echo %s | tee %s", toyFileMu0.Data(), listMu0.Data()));
-  system(Form("echo %s | tee %s", toyFileMu1.Data(), listMu1.Data()));
-  
-  // Create TChain of ntuples:
-  TChain* chainMu0 = CommonFunc::MakeChain("toy", listMu0, "badfile");
-  TChain* chainMu1 = CommonFunc::MakeChain("toy", listMu1, "badfile");
-  ToyTree *treeMu0 = new ToyTree(chainMu0);
-  ToyTree *treeMu1 = new ToyTree(chainMu1);
-  
-  if (!(treeMu0->fChain->GetEntries() > 0) ||
-      !(treeMu1->fChain->GetEntries() > 0)) {
-    m_filesLoaded = false;
-  }
-  else m_filesLoaded = true;
-  
-  // Get the Asimov form of the test statistic:
-  TFile workspaceFile(wsFileName, "read");
-  m_workspace = (RooWorkspace*)workspaceFile.Get("combinedWS");
+  // Create the test statistic class:
   m_ts = new TestStat(newConfigFile, "new", m_workspace);
   if (!m_workspace) m_filesLoaded = false;
-  
-  // Be sure to set the value of the resonance mass for fitting!
-  if ((m_config->getStr("AnalysisType")).EqualTo("Resonant")) {
-    m_ts->setParam("mResonance", resonanceMass, true);
-  }
-  
-  // Store the toy data:
-  fillToyHistograms(0, treeMu0);
-  fillToyHistograms(1, treeMu1);
-  
-  if (options.Contains("ForcePlot") || !options.Contains("CLScan")) {
-    // Get the asymptotic test statistic distribution:
-    getAsymptoticForm("QMu");// THIS SHOULD BE GENERALIZED!!!
-    
-    // Plot the results:
-    plotProfiledMu();
-    plotTestStat("QMu");
-    plotTestStat("Q0");
-    plotTestStatComparison("QMu");
-    plotTestStatComparison("Q0");
-    
-    // Then plot the nuis, globs, and other parameters:
-    for (int i_g = 0; i_g < (int)m_namesGlobs.size(); i_g++) {
-      plotHist(m_namesGlobs[i_g], 0);
-      plotHist(m_namesGlobs[i_g], 1);
-    }
-    for (int i_n = 0; i_n < (int)m_namesNuis.size(); i_n++) {
-      plotHist(m_namesNuis[i_n], 0);
-      plotHist(m_namesNuis[i_n], 1);
-    }
-    for (int i_p = 0; i_p < (int)m_namesPars.size(); i_p++) {
-      plotHist(m_namesPars[i_p], 0);
-      plotHist(m_namesPars[i_p], 1);
-    }
-  }
-  
-  // Remove the temporary file lists:
-  system(Form("rm %s", listMu0.Data()));
-  system(Form("rm %s", listMu1.Data()));
-  
-  std::cout << "ToyAnalysis: Finished!" << std::endl;
-  std::cout << "\t" << treeMu0->fChain->GetEntries()
-	    << " mu=0 pseudo experiments were analyzed" << std::endl;
-  std::cout << "\t" << treeMu1->fChain->GetEntries()
-	    << " mu=1 pseudo experiments were analyzed" << std::endl;
+  else m_filesLoaded = true;
 }
 
 /**
@@ -343,37 +243,58 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
 			     m_nBins, m_binMin, m_binMax);
   m_hQ0[muValue] = new TH1F(Form("hQ0%d",muValue),Form("hQ0%d",muValue),
 			    m_nBins, m_binMin, m_binMax);
+  m_hZ0[muValue] = new TH1F(Form("hZ0%d",muValue),Form("hZ0%d",muValue),
+			    m_nBins, 0, 5);
+  m_hCL[muValue] = new TH1F(Form("hCL%d",muValue),Form("hCL%d",muValue),
+			    m_nBins, 0, 1);
   
   // Store names and numbers of parameters:
   m_namesGlobs.clear();
   m_namesNuis.clear();
-  m_namesPars.clear();
+  m_namesPoIs.clear();
   
   // Clear the qMu storage for pMu calculation if looking at Mu1 toy:
-  if (muValue > 0) m_valuesQMu_Mu1.clear();
-  else  m_valuesQMu_Mu0.clear();
+  if (muValue > 0) {
+    m_valuesQMu_Mu1.clear();
+    m_valuesBestFit_AsymZ0_Mu1.clear();
+    m_valuesBestFit_AsymCL_Mu1.clear();
+  }
+  else  {
+    m_valuesQMu_Mu0.clear();
+    m_valuesBestFit_AsymZ0_Mu0.clear();
+    m_valuesBestFit_AsymCL_Mu0.clear();
+  }
   
-  // Get names of NP (and Globs):
-  RooArgSet *setNuis = (RooArgSet*)m_workspace->set("nuisanceParameters");
+  // Get names of NP:
+  RooArgSet *setNuis = (RooArgSet*)m_mc->GetNuisanceParameters();
   RooRealVar *nuis = NULL;
   TIterator *iterNuis = setNuis->createIterator();
   while ((nuis = (RooRealVar*)iterNuis->Next())) {
     TString nameNuis = nuis->GetName();
-    TString nameGlob = Form("RNDM_%s",nameNuis.Data());
     for (int i_f = 0; i_f < (int)m_fitTypes.size(); i_f++) {
       TString nuisKey = Form("%s_Mu%sFit_Mu%dData",
 			     nameNuis.Data(), m_fitTypes[i_f].Data(), muValue);
       m_histStorage[nuisKey] = new TH1F(nuisKey, nuisKey, 100, -5, 5);
-      TString globKey = Form("%s_Mu%sFit_Mu%dData",
-			     nameGlob.Data(), m_fitTypes[i_f].Data(), muValue);
-      m_histStorage[globKey] = new TH1F(globKey, globKey, 100, -5, 5);
     }
     m_namesNuis.push_back(nameNuis);
-    m_namesNuis.push_back(nameGlob);
+  }
+  
+  // Get names of Globs:
+  RooArgSet *setGlobs = (RooArgSet*)m_mc->GetGlobalObservables();
+  RooRealVar *globs = NULL;
+  TIterator *iterGlobs = setGlobs->createIterator();
+  while ((globs = (RooRealVar*)iterGlobs->Next())) {
+    TString nameGlobs = globs->GetName();
+    for (int i_f = 0; i_f < (int)m_fitTypes.size(); i_f++) {
+      TString globsKey = Form("%s_Mu%sFit_Mu%dData",
+			      nameGlobs.Data(),m_fitTypes[i_f].Data(), muValue);
+      m_histStorage[globsKey] = new TH1F(globsKey, globsKey, 100, -5, 5);
+    }
+    m_namesGlobs.push_back(nameGlobs);
   }
   
   // Also get names of non-systematic parameters:
-  RooArgSet *setPars = (RooArgSet*)m_workspace->set("nonSysParameters");
+  RooArgSet *setPars = (RooArgSet*)m_mc->GetParametersOfInterest();
   RooRealVar *pars = NULL;
   TIterator *iterPars = setPars->createIterator();
   while ((pars = (RooRealVar*)iterPars->Next())) {
@@ -384,7 +305,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
       m_histStorage[parsKey]
 	= new TH1F(parsKey, parsKey, 100, pars->getMin(), pars->getMax());
     }
-    m_namesPars.push_back(namePars);
+    m_namesPoIs.push_back(namePars);
   }
   
   //----------------------------------------//
@@ -396,31 +317,46 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     toyTree->fChain->GetEntry(i_e);
     
     // Only plot successful fits:
-    if (!(toyTree->convergedMu0 && toyTree->convergedMu1 &&
-	  toyTree->convergedMuFree)) continue;
+    //if (!(toyTree->convergedMu0 && toyTree->convergedMu1 &&
+    //toyTree->convergedMuFree)) continue;
     
     // Get the test statistic values:
     double valueQMu = m_ts->getQMuFromNLL(toyTree->nllMu1, toyTree->nllMuFree,
 					    toyTree->profiledPOIVal, 1);
     double valueQ0 = m_ts->getQ0FromNLL(toyTree->nllMu0, toyTree->nllMuFree,
 					  toyTree->profiledPOIVal);
+    double valueZ0 = m_ts->getZ0FromQ0(valueQ0);
+    double valueCL = m_ts->getCLFromQMu(valueQMu, 0);
+    
+    //std::cout << "valueZ0=" << valueZ0 << std::endl;
+    //std::cout << "valueCL=" << valueCL << std::endl;
     
     // Fill histograms for the test statistics and POI:
     m_hQMu[muValue]->Fill(valueQMu);
     m_hQ0[muValue]->Fill(valueQ0);
     m_hMuProfiled[muValue]->Fill(toyTree->profiledPOIVal);
-    
+    m_hZ0[muValue]->Fill(valueZ0);
+    m_hCL[muValue]->Fill(valueCL);
+  
     // Also fill the QMu vector for pMu calculation:
-    if (muValue > 0) m_valuesQMu_Mu1.push_back(valueQMu);
-    else m_valuesQMu_Mu0.push_back(valueQMu);
+    if (muValue > 0) {
+      m_valuesQMu_Mu1.push_back(valueQMu);
+      m_valuesBestFit_AsymZ0_Mu1.push_back(valueZ0);
+      m_valuesBestFit_AsymCL_Mu1.push_back(valueCL);
+    }
+    else {
+      m_valuesQMu_Mu0.push_back(valueQMu);
+      m_valuesBestFit_AsymZ0_Mu0.push_back(valueZ0);
+      m_valuesBestFit_AsymCL_Mu0.push_back(valueCL);
+    }
     
     // Loop over the nuis:
     for (int i_n = 0; i_n < (int)((*toyTree->namesNP).size()); i_n++) {
       TString currNPName = (*toyTree->namesNP)[i_n];
       m_histStorage[Form("%s_Mu0Fit_Mu%dData", currNPName.Data(), muValue)]
 	->Fill((*toyTree->valuesNPMu0)[i_n]);
-      m_histStorage[Form("%s_Mu1Fit_Mu%dData", currNPName.Data(), muValue)]
-	->Fill((*toyTree->valuesNPMu1)[i_n]);
+      //m_histStorage[Form("%s_Mu1Fit_Mu%dData", currNPName.Data(), muValue)]
+      //->Fill((*toyTree->valuesNPMu1)[i_n]);
       m_histStorage[Form("%s_MuFreeFit_Mu%dData", currNPName.Data(), muValue)]
 	->Fill((*toyTree->valuesNPMuFree)[i_n]);
     }
@@ -430,27 +366,30 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
       TString currGlobName = (*toyTree->namesGlobs)[i_g];
       m_histStorage[Form("%s_Mu0Fit_Mu%dData", currGlobName.Data(), muValue)]
 	->Fill((*toyTree->valuesGlobsMu0)[i_g]);
-      m_histStorage[Form("%s_Mu1Fit_Mu%dData", currGlobName.Data(), muValue)]
-	->Fill((*toyTree->valuesGlobsMu1)[i_g]);
+      //m_histStorage[Form("%s_Mu1Fit_Mu%dData", currGlobName.Data(), muValue)]
+      //->Fill((*toyTree->valuesGlobsMu1)[i_g]);
       m_histStorage[Form("%s_MuFreeFit_Mu%dData", currGlobName.Data(), muValue)]
 	->Fill((*toyTree->valuesGlobsMuFree)[i_g]);
     }
     
     // Loop over the non-systematic parameters:
-    for (int i_p = 0; i_p < (int)((*toyTree->namesPars).size()); i_p++) {
-      TString currParsName = (*toyTree->namesPars)[i_p];
-      m_histStorage[Form("%s_Mu0Fit_Mu%dData", currParsName.Data(), muValue)]
-	->Fill((*toyTree->valuesParsMu0)[i_p]);
-      m_histStorage[Form("%s_Mu1Fit_Mu%dData", currParsName.Data(), muValue)]
-	->Fill((*toyTree->valuesParsMu1)[i_p]);
-      m_histStorage[Form("%s_MuFreeFit_Mu%dData", currParsName.Data(), muValue)]
-	->Fill((*toyTree->valuesParsMuFree)[i_p]);
+    for (int i_p = 0; i_p < (int)((*toyTree->namesPoIs).size()); i_p++) {
+      TString currPoIName = (*toyTree->namesPoIs)[i_p];
+      m_histStorage[Form("%s_Mu0Fit_Mu%dData", currPoIName.Data(), muValue)]
+	->Fill((*toyTree->valuesPoIsMu0)[i_p]);
+      //m_histStorage[Form("%s_Mu1Fit_Mu%dData", currPoIName.Data(), muValue)]
+      //->Fill((*toyTree->valuesPoIsMu1)[i_p]);
+      m_histStorage[Form("%s_MuFreeFit_Mu%dData", currPoIName.Data(), muValue)]
+	->Fill((*toyTree->valuesPoIsMuFree)[i_p]);
     }
   }
   
   // Then scale the statistics histograms:
   m_hQMu[muValue]->Scale(1.0 / m_hQMu[muValue]->Integral(1, m_nBins));
   m_hQ0[muValue]->Scale(1.0 / m_hQ0[muValue]->Integral(1, m_nBins));
+  m_hZ0[muValue]->Scale(1.0 / m_hZ0[muValue]->Integral(1, m_nBins));
+  m_hCL[muValue]->Scale(1.0 / m_hCL[muValue]->Integral(1, m_nBins));
+  
 }
 
 /**
@@ -458,7 +397,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
    Get the asymptotic form of the test statistic. Stored in the m_hAsymptotic
    histogram.
    @param statistic - the test statistic for asymptotic formula.
-*/
+
 void ToyAnalysis::getAsymptoticForm(TString statistic) {
   std::cout << "ToyAnalysis: Constructing Asymptotic form of "
 	    << statistic << "." << std::endl;
@@ -498,6 +437,7 @@ void ToyAnalysis::getAsymptoticForm(TString statistic) {
   m_hAsymptotic->SetBinContent(1,1+m_hAsymptotic->GetBinContent(1));// WHY?
   m_hAsymptotic->Scale(1.0 / m_hAsymptotic->Integral(1,m_nBins));
 }
+*/
 
 /**
    -----------------------------------------------------------------------------
@@ -505,6 +445,14 @@ void ToyAnalysis::getAsymptoticForm(TString statistic) {
 */
 TH1F* ToyAnalysis::getAsymptoticHist() {
   return m_hAsymptotic;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get a list of fits performed for each toy:
+*/
+std::vector<TString> ToyAnalysis::getFitTypes() {
+  return m_fitTypes;
 }
 
 /**
@@ -534,13 +482,43 @@ TH1F* ToyAnalysis::getMuHist(int toyMu) {
 
 /**
    -----------------------------------------------------------------------------
+   Get a list of global observable names.
+   @return - A vector of global observable names.
+*/
+std::vector<TString> ToyAnalysis::getNamesGlobalObservables() {
+  return m_namesGlobs;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get a list of nuisance parameter names.
+   @return - A vector of nuisance parameter names.
+*/
+std::vector<TString> ToyAnalysis::getNamesNuisanceParameters() {
+  return m_namesNuis;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get a list of parameter of interest names.
+   @return - A vector of parameter of interest names.
+*/
+std::vector<TString> ToyAnalysis::getNamesPoI() {
+  return m_namesPoIs;
+}
+
+/**
+   -----------------------------------------------------------------------------
    Get the test statistic histogram.
-   @param statistic - the name of the test statistic: Q0, QMu, QMuTilde.
-   @param toyMu - the mu value used to generate the toy data that was fitted.
+   @param statistic - The name of the test statistic: Q0, QMu, QMuTilde, Z0, CL.
+   @param toyMu - The mu value used to generate the toy data that was fitted.
+   @return - A histogram with the statistical values.
 */
 TH1F* ToyAnalysis::getStatHist(TString statistic, int toyMu) {
   if (statistic.EqualTo("Q0")) return m_hQ0[toyMu];
   else if (statistic.EqualTo("QMu")) return m_hQMu[toyMu];
+  else if (statistic.EqualTo("Z0")) return m_hZ0[toyMu];
+  else if (statistic.EqualTo("CL")) return m_hCL[toyMu];
   //else if (statistic.EqualTo("QMuTilde")) return m_hQMuTilde[toyMu];
   else printer(Form("ToyAnalysis: ERROR! no %s", statistic.Data()), true);
   return NULL;
@@ -548,9 +526,70 @@ TH1F* ToyAnalysis::getStatHist(TString statistic, int toyMu) {
 
 /**
    -----------------------------------------------------------------------------
+   Get the vector of statistics values.
+   @param statistic - The name of the test statistic: Q0, QMu, QMuTilde, Z0, CL.
+   @param toyMu - The mu value used to generate the toy data that was fitted.
+   @return - A vector of the given statistics values for the specified ensemble.
+*/
+std::vector<double> ToyAnalysis::getStatValues(TString statistic, int toyMu) {
+
+  if (statistic.EqualTo("QMu")) {
+    if (toyMu == 0) return m_valuesQMu_Mu0;
+    else if (toyMu == 1) return m_valuesQMu_Mu1;
+  }
+  else if (statistic.EqualTo("Z0")) {
+    if (toyMu == 0) return m_valuesBestFit_AsymZ0_Mu0;
+    else if (toyMu == 1) return m_valuesBestFit_AsymZ0_Mu1;
+  }
+  else if (statistic.EqualTo("CL")) {
+    if (toyMu == 0) return m_valuesBestFit_AsymCL_Mu0;
+    else if (toyMu == 1) return m_valuesBestFit_AsymCL_Mu1;
+  }
+  std::cout << "ToyAnalysis: could not return stat value for statistic=" 
+	    << statistic << " and toyMu=" << toyMu << std::endl;
+  exit(0);
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Load a toy ensemble from file. 
+   @param toyMu - The mu value used to generate this toy dataset.
+   @param toyFileForm - The form of the toy file names (incuding wildcarding).
+*/
+
+void ToyAnalysis::loadToy(int toyMu, TString toyFileForm) {
+  
+  // Add all of the individual pseudoexperiment files together:
+  TString toyFile = Form("toy_mu%d.root", toyMu);
+  system(Form("hadd -f %s %s", toyFile.Data(), toyFileForm.Data()));
+  
+  // Create temporary file lists:
+  TString list = Form("temp_list_mu%d.txt", toyMu);
+  system(Form("echo %s | tee %s", toyFile.Data(), list.Data()));
+  
+  // Create TChain of ntuples:
+  TChain* chain = CommonFunc::MakeChain("toy", list, "badfile");
+  ToyTree *tree = new ToyTree(chain);
+  
+  if (!(tree->fChain->GetEntries() > 0)) m_filesLoaded = false;
+  
+  // Store tree info in histograms:
+  fillToyHistograms(toyMu, tree);
+  
+  // Remove the temporary file list:
+  system(Form("rm %s", list.Data()));
+  
+  std::cout << "ToyAnalysis::loadToy(" << toyMu << ", " << toyFileForm 
+	    << ") Finished!" << std::endl;
+  std::cout << "\t" << tree->fChain->GetEntries()
+	    << " mu=" << toyMu << " toy experiments were analyzed" << std::endl;
+}
+
+/**
+   -----------------------------------------------------------------------------
    Plot the distributions of nuisance parameters and global observables
-   @param paramName - the name of the global observable.
-   @param toyMu - the mu value used to generate the toy data that was fitted.
+   @param paramName - The name of the global observable.
+   @param toyMu - The mu value used to generate the toy data that was fitted.
 */
 void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   printer(Form("ToyAnalysis::plotHist(%s, %d)",paramName.Data(),toyMu),false);
@@ -891,4 +930,26 @@ TString ToyAnalysis::printStatName(TString statistic) {
   else if (statistic.EqualTo("QMu")) return TString("q_{#mu}");
   else if (statistic.EqualTo("QMuTilde")) return TString("#tilde{q}_{#mu}");
   else return TString("q");
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Set the fit types that are used in the analysis.
+   @param fitTypes - A vector of fit types to be analyzed for each toy.
+*/
+void ToyAnalysis::setFitTypes(std::vector<TString> fitTypes) {
+  m_fitTypes.clear();
+  m_fitTypes = fitTypes;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Change the output directory for this class.
+   @param outputDirectory - The new output directory.
+*/
+void ToyAnalysis::setOutputDir(TString outputDirectory) {
+  // Set output directory:
+  m_outputDir = outputDirectory;
+  // Create output directory:
+  system(Form("mkdir -vp %s", m_outputDir.Data()));
 }

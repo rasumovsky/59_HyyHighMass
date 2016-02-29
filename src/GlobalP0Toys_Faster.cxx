@@ -150,34 +150,50 @@ int main(int argc, char **argv) {
   }
   
   //----------------------------------------//
-  //
-  // Load model, data, etc. from workspace:
-  TFile inputFile(copiedFile, "read");
-  RooWorkspace *workspace
-    = (RooWorkspace*)inputFile.Get(config->getStr("WorkspaceName"));
-  
-  // The statistics class, for calculating qMu etc. 
-  TestStat *testStat = new TestStat(configFile, "new", workspace);
-  
-  // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
-  // for every toy job, since the signal hypothesis can change!
-  testStat->saveSnapshots(true);
-  TString dataToProf = config->getStr("WorkspaceObsData");
-  if (inputPoIVal == 0) {
-    testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu0);
-  }
-  else testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
-  testStat->saveSnapshots(false);
-  
-  //----------------------------------------//
   // Loop to generate pseudo experiments:
   std::cout << "GlobalP0Toys: Generating " << nToysPerJob
 	    << " toys with mu_DH = " << inputPoIVal << endl;
   for (int i_t = 0; i_t < nToysPerJob; i_t++) {
+    std::cout << "GlobalP0Toys: Starting toy " << i_t << " of " << nToysPerJob
+	      << std::endl;
+    
+    // Load model, data, etc. from workspace:
+    TFile inputFile(copiedFile, "read");
+    RooWorkspace *workspace
+      = (RooWorkspace*)inputFile.Get(config->getStr("WorkspaceName"));
+    
+    // The statistics class, for calculating qMu etc. 
+    TestStat *testStat = new TestStat(configFile, "new", workspace);
+    
+    // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
+    // for every toy job, since the signal hypothesis can change!
+    //testStat->saveSnapshots(true);
+    //TString dataToProf = config->getStr("WorkspaceObsData");
+    //if (inputPoIVal == 0) {
+    //testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu0);
+    //}
+    //else testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
+    //testStat->saveSnapshots(false);
+    
+    // Set the PoI ranges for this study:
+    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+      std::vector<double> currRange
+	= config->getNumV(Form("PoIRange_%s", (listPoI[i_p]).Data()));
+      if (testStat->theWorkspace()->var(listPoI[i_p])) {
+	testStat->theWorkspace()->var(listPoI[i_p])
+	  ->setRange(currRange[0], currRange[1]);
+      }
+      else {
+	std::cout << "GlobalP0Toys: Workspace has no variable " << listPoI[i_p]
+		  << std::endl;
+	exit(0);
+      }
+    }
     
     // Create the pseudo data:
+    TString snapshotName = config->getStr("WorkspaceSnapshot");
     RooDataSet *newToyData
-      = testStat->createPseudoData(seed, inputPoIVal, mapPoIMu0);
+      = testStat->createPseudoData(seed, inputPoIVal, snapshotName, mapPoIMu0);
     numEvents = workspace->data("toyData")->sumEntries();
     numEventsPerCate = testStat->getNEventsToys();
     
@@ -187,24 +203,27 @@ int main(int argc, char **argv) {
     mapToVectors(testStat->getGlobalObservables(), namesGlobs, 
 		 valuesGlobsMuFree);
     
-    // Mu = 0 fits (reset the PoI first):
+    // Mu = 0 fits:
+    std::cout << "GlobalP0Toys: Mu=0 fit starting" << std::endl;
     nllMu0 = testStat->getFitNLL("toyData", 0, true, mapPoIMu0, false);
     convergedMu0 = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
     
-    // Mu = 1 fits (reset the PoI first):
+    // Mu = 1 fits:
+    //std::cout << "GlobalP0Toys: Mu=1 fit starting" << std::endl;
     //nllMu1 = testStat->getFitNLL("toyData", 1, true, mapPoIMu1, false);
     //convergedMu1 = testStat->fitsAllConverged();
     //mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu1);
     //mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu1);
     
-    // Mu free fits (reset the PoI first):
+    // Mu free fits:
+    std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
     nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
     convergedMuFree = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMuFree);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
-    
+        
     // Calculate profile likelihood ratios:
     llrL1L0 = nllMu1 - nllMu0;
     llrL1Lfree = profiledPOIVal > 1.0 ? 0.0 : (nllMu1 - nllMuFree);

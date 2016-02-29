@@ -1,8 +1,8 @@
 //////////////////////////////////////////////////////////
 // This class has been automatically generated on
-// Sat Jan 23 16:36:33 2016 by ROOT version 5.34/09
+// Mon Feb 29 11:15:50 2016 by ROOT version 5.34/32
 // from TTree toy/toy
-// found on file: toy_mu1_63237.root
+// found on file: toy_mu0_19343.root
 //////////////////////////////////////////////////////////
 
 #ifndef ToyTree_h
@@ -28,6 +28,7 @@ public :
    // Declaration of leaf types
    Int_t           seed;
    Double_t        numEvents;
+   vector<double>  *numEventsPerCate;
    Double_t        profiledPOIVal;
    Bool_t          convergedMu0;
    Bool_t          convergedMu1;
@@ -46,14 +47,15 @@ public :
    vector<double>  *valuesGlobsMu1;
    vector<double>  *valuesGlobsMu0;
    vector<double>  *valuesGlobsMuFree;
-   vector<string>  *namesPars;
-   vector<double>  *valuesParsMu1;
-   vector<double>  *valuesParsMu0;
-   vector<double>  *valuesParsMuFree;
+   vector<string>  *namesPoIs;
+   vector<double>  *valuesPoIsMu1;
+   vector<double>  *valuesPoIsMu0;
+   vector<double>  *valuesPoIsMuFree;
 
    // List of branches
    TBranch        *b_seed;   //!
    TBranch        *b_numEvents;   //!
+   TBranch        *b_numEventsPerCate;   //!
    TBranch        *b_profiledPOIVal;   //!
    TBranch        *b_convergedMu0;   //!
    TBranch        *b_convergedMu1;   //!
@@ -72,10 +74,10 @@ public :
    TBranch        *b_valuesGlobsMu1;   //!
    TBranch        *b_valuesGlobsMu0;   //!
    TBranch        *b_valuesGlobsMuFree;   //!
-   TBranch        *b_namesPars;   //!
-   TBranch        *b_valuesParsMu1;   //!
-   TBranch        *b_valuesParsMu0;   //!
-   TBranch        *b_valuesParsMuFree;   //!
+   TBranch        *b_namesPoIs;   //!
+   TBranch        *b_valuesPoIsMu1;   //!
+   TBranch        *b_valuesPoIsMu0;   //!
+   TBranch        *b_valuesPoIsMuFree;   //!
 
    ToyTree(TTree *tree=0);
    virtual ~ToyTree();
@@ -96,9 +98,9 @@ ToyTree::ToyTree(TTree *tree) : fChain(0)
 // if parameter tree is not specified (or zero), connect the file
 // used to generate this class and read the Tree.
    if (tree == 0) {
-      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("toy_mu1_63237.root");
+      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("toy_mu0_19343.root");
       if (!f || !f->IsOpen()) {
-         f = new TFile("toy_mu1_63237.root");
+         f = new TFile("toy_mu0_19343.root");
       }
       f->GetObject("toy",tree);
 
@@ -142,6 +144,7 @@ void ToyTree::Init(TTree *tree)
    // (once per file to be processed).
 
    // Set object pointer
+   numEventsPerCate = 0;
    namesNP = 0;
    valuesNPMu0 = 0;
    valuesNPMu1 = 0;
@@ -150,10 +153,10 @@ void ToyTree::Init(TTree *tree)
    valuesGlobsMu1 = 0;
    valuesGlobsMu0 = 0;
    valuesGlobsMuFree = 0;
-   namesPars = 0;
-   valuesParsMu1 = 0;
-   valuesParsMu0 = 0;
-   valuesParsMuFree = 0;
+   namesPoIs = 0;
+   valuesPoIsMu1 = 0;
+   valuesPoIsMu0 = 0;
+   valuesPoIsMuFree = 0;
    // Set branch addresses and branch pointers
    if (!tree) return;
    fChain = tree;
@@ -162,6 +165,7 @@ void ToyTree::Init(TTree *tree)
 
    fChain->SetBranchAddress("seed", &seed, &b_seed);
    fChain->SetBranchAddress("numEvents", &numEvents, &b_numEvents);
+   fChain->SetBranchAddress("numEventsPerCate", &numEventsPerCate, &b_numEventsPerCate);
    fChain->SetBranchAddress("profiledPOIVal", &profiledPOIVal, &b_profiledPOIVal);
    fChain->SetBranchAddress("convergedMu0", &convergedMu0, &b_convergedMu0);
    fChain->SetBranchAddress("convergedMu1", &convergedMu1, &b_convergedMu1);
@@ -180,10 +184,10 @@ void ToyTree::Init(TTree *tree)
    fChain->SetBranchAddress("valuesGlobsMu1", &valuesGlobsMu1, &b_valuesGlobsMu1);
    fChain->SetBranchAddress("valuesGlobsMu0", &valuesGlobsMu0, &b_valuesGlobsMu0);
    fChain->SetBranchAddress("valuesGlobsMuFree", &valuesGlobsMuFree, &b_valuesGlobsMuFree);
-   fChain->SetBranchAddress("namesPars", &namesPars, &b_namesPars);
-   fChain->SetBranchAddress("valuesParsMu1", &valuesParsMu1, &b_valuesParsMu1);
-   fChain->SetBranchAddress("valuesParsMu0", &valuesParsMu0, &b_valuesParsMu0);
-   fChain->SetBranchAddress("valuesParsMuFree", &valuesParsMuFree, &b_valuesParsMuFree);
+   fChain->SetBranchAddress("namesPoIs", &namesPoIs, &b_namesPoIs);
+   fChain->SetBranchAddress("valuesPoIsMu1", &valuesPoIsMu1, &b_valuesPoIsMu1);
+   fChain->SetBranchAddress("valuesPoIsMu0", &valuesPoIsMu0, &b_valuesPoIsMu0);
+   fChain->SetBranchAddress("valuesPoIsMuFree", &valuesPoIsMuFree, &b_valuesPoIsMuFree);
    Notify();
 }
 

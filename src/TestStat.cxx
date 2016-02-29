@@ -248,15 +248,18 @@ void TestStat::clearFitParamSettings() {
    Create a pseudo-dataset with a given value of DM and SM signal strength.
    @param seed - The random seed for dataset generation.
    @param valPoI - The value of the parameter of interest.
+   @param snapshotName - The name of the parameter snapshot to load.
+   @param namesAndValsPoI - The names and values of the parameters of interest.
    @return - A pseudo-dataset.
 */
-RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
+RooDataSet* TestStat::createPseudoData(int seed, int valPoI, 
+				       TString snapshotName,
 				     std::map<TString,double> namesAndValsPoI) {
-  printer(Form("TestStat::createPseudoData(seed=%d, PoI=%d)", seed, valPoI), 
-	  false);
+  printer(Form("TestStat::createPseudoData(seed=%d, PoI=%d, snapshot=%s)", 
+	       seed, valPoI, snapshotName.Data()), false);
   
   // Load the parameters from profiling data to create UNCONDITIONAL ENSEMBLE:
-  TString snapshotName = Form("paramsProfilePoI%d", valPoI);
+  //TString snapshotName = Form("paramsProfilePoI%d", valPoI);
   if (m_workspace->getSnapshot(snapshotName)) {
     m_workspace->loadSnapshot(snapshotName);
     printer(Form("TestStat: Loaded snapshot %s",snapshotName.Data()), false);
@@ -268,22 +271,21 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
 	    true);
   }
   
-  std::cout << "CHECK0" << std::endl;
   //RooAbsPdf* combPdf = (RooAbsPdf*)m_mc->GetPdf();
   RooSimultaneous* combPdf = (RooSimultaneous*)m_mc->GetPdf();
   RooArgSet* nuisanceParameters = (RooArgSet*)m_mc->GetNuisanceParameters();
   RooArgSet* globalObservables = (RooArgSet*)m_mc->GetGlobalObservables();
   RooArgSet* observables = (RooArgSet*)m_mc->GetObservables();
   RooArgSet* poi = (RooArgSet*)m_mc->GetParametersOfInterest();
-  std::cout << "CHECK1" << std::endl;
+  
   RooRandom::randomGenerator()->SetSeed(seed);
   statistics::constSet(nuisanceParameters, true);
   statistics::constSet(globalObservables, false);
-  std::cout << "CHECK2" << std::endl;
+  
   // Randomize the global observables and set them constant for now:
   statistics::randomizeSet(combPdf, globalObservables, seed); 
   statistics::constSet(globalObservables, true);
-  std::cout << "CHECK3" << std::endl;
+  
   // Set the values of parameters of interest as specified in the input.
   for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
        iterPoI != namesAndValsPoI.end(); iterPoI++) {
@@ -296,8 +298,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
 		   (iterPoI->first).Data()), true);
     }
   }
-  std::cout << "CHECK4" << std::endl;
-
+  
   // Check if other parameter settings have been specified for toys:
   // WARNING! This overrides the randomization settings above!
   for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
@@ -313,33 +314,34 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
       printer(Form("TestStat: Error! Parameter %s not found in workspace! See printout above for clues...", (iterParam->first).Data()), true);
     }
   }
-  std::cout << "CHECK5" << std::endl;
   
   // Store the toy dataset and number of events per dataset:
   map<string,RooDataSet*> toyDataMap; toyDataMap.clear();
   m_numEventsPerCate.clear();
   
-  std::cout << "CHECK6" << std::endl;
   // Iterate over the categories:
   printer("TestStat: Iterate over categories to generate toy data.", false);
   //RooSimultaneous *simPdf = (RooSimultaneous*)m_workspace->pdf("combinedPdf");
   //TIterator *cateIter = simPdf->indexCat().typeIterator();
   TIterator *cateIter = combPdf->indexCat().typeIterator();
   RooCatType *cateType = NULL;
-  std::cout << "CHECK6.1" << std::endl;
+  
   while ((cateType = (RooCatType*)cateIter->Next())) {
-    std::cout << "CHECK6.4" << std::endl;
+    
     RooAbsPdf *currPdf = combPdf->getPdf(cateType->GetName());
     //RooAbsPdf *currPdf = simPdf->getPdf(cateType->GetName());
     RooArgSet *currObs = currPdf->getObservables(observables);
-    std::cout << "CHECK6.3" << std::endl;
+    
     // If you want to bin the pseudo-data (speeds up calculation):
-    if (m_options.Contains("Binned")) {
+    if (m_config->getBool("DoBinnedFit")) {
       currPdf->setAttribute("PleaseGenerateBinned");
       TIterator *iterObs = currObs->createIterator();
       RooRealVar *currObs = NULL;
+      
       // Bin each of the observables:
-      while ((currObs = (RooRealVar*)iterObs->Next())) currObs->setBins(120);
+      while ((currObs = (RooRealVar*)iterObs->Next())) {
+	currObs->setBins(m_config->getInt("WorkspaceObsBins"));
+      }
       toyDataMap[(std::string)cateType->GetName()]
 	= (RooDataSet*)currPdf->generate(*currObs, AutoBinned(true),
 					 Extended(currPdf->canBeExtended()),
@@ -350,12 +352,10 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
       toyDataMap[(std::string)cateType->GetName()]
 	= (RooDataSet*)currPdf->generate(*currObs,Extended(true));
     }
-    std::cout << "CHECK6.4" << std::endl;
+    
     double currEvt = toyDataMap[(std::string)cateType->GetName()]->sumEntries();
     m_numEventsPerCate.push_back(currEvt);
-    std::cout << "CHECK6.5" << std::endl;
   }
-  std::cout << "CHECK7" << std::endl;
 
   // Create the combined toy RooDataSet:
   //RooCategory *categories = (RooCategory*)m_workspace->obj("categories");
@@ -473,7 +473,7 @@ double TestStat::getCLFromQMu(double qMu, double N) {
 double TestStat::getCLsFromQMu(double qMu, double N) {
   // N = 0 for exp and obs
   double pMu = getPMuFromQMu(qMu);
-  double pB = getPbFromN(N);
+  double pB = getPFromN(N);
   double CLs = pMu / (1.0 - pB);
   return CLs;
 }
@@ -655,11 +655,11 @@ double TestStat::getP0FromQ0(double q0) {
 
 /**
    -----------------------------------------------------------------------------
-   Calculate pB based on the standard deviation.
+   Calculate p-value based on the standard deviation.
    @param N - The standard deviation.
-   @return - The value of pB.
+   @return - The p-value.
 */
-double TestStat::getPbFromN(double N) {
+double TestStat::getPFromN(double N) {
   return (1 - ROOT::Math::gaussian_cdf(N));
 }
 
@@ -732,6 +732,36 @@ double TestStat::getQMuTildeFromNLL(double nllMu, double nllMu0,
   else if (muHat > 0 && muHat <= muTest) qMuTilde = 2 * (nllMu - nllMuHat);
   else if (muHat > muTest) qMuTilde = 0;
   return qMuTilde;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the value of z0 based on the test statistic q0.
+   @param q0 - The test statistic q0.
+   @return - The value of z0 (significance).
+*/
+double TestStat::getZ0FromQ0(double q0) {
+  return sqrt(q0);
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the value of zMu based on the test statistic qMu.
+   @param qMu - The test statistic qMu.
+   @return - The value of zMu (significance).
+*/
+double TestStat::getZMuFromQMu(double qMu) {
+  return sqrt(qMu);
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate Z (significance) based on the p-value.
+   @param p - The p-value.
+   @return - The significance (# standard deviations).
+*/
+double TestStat::getZFromP(double p) {
+  return TMath::NormQuantile(1.0 - p);
 }
 
 /**

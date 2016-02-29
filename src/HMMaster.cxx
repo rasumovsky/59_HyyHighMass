@@ -50,9 +50,7 @@ void submitPEViaBsub(TString exeConfigFile, TString exeOption, int exeSeed,
     system(Form("tar zcf Cocoon.tar bin/%s", 
 		(m_config->getStr("exePseudoExp")).Data()));
     system(Form("chmod +x %s",(m_config->getStr("jobScriptPseudoExp")).Data()));
-    system(Form("chmod +x %s/%s/DHWorkspace/rootfiles/workspaceDH_%s.root", 
-		(m_config->getStr("MasterOutput")).Data(), 
-		(m_config->getStr("JobName")).Data(), exeAna.Data()));
+    system(Form("chmod +x %s",(m_config->getStr("WorkspaceFile")).Data()));
     system(Form("cp -f %s/%s %s/jobFilePseudoExp.sh", 
 		(m_config->getStr("PackageLocation")).Data(), 
 		(m_config->getStr("jobScriptPseudoExp")).Data(), exe.Data()));
