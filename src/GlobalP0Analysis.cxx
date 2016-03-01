@@ -9,8 +9,7 @@
 //  Calculates the global significance from a background-only toy MC ensemble.//
 //                                                                            //
 //  Macro options:                                                            //
-//  - "New"        Calculate everything from scratch.                         //
-//  - "FromFile"   Load CL values from file.                                  //
+//  - PlotGauss                                                               //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -18,6 +17,7 @@
 #include "CommonHead.h"
 #include "Config.h"
 #include "ToyAnalysis.h"
+#include "TPolyLine.h"
 
 /**
    -----------------------------------------------------------------------------
@@ -138,8 +138,25 @@ int main(int argc, char **argv) {
   hMaxZ0->SetLineColor(kBlue-1);
   hMaxZ0->SetFillColor(kBlue-10);
   hMaxZ0->GetYaxis()->SetTitle("Fraction of toy MC");
-  hMaxZ0->GetXaxis()->SetTitle("Z_{0}^{Local}");
+  hMaxZ0->GetXaxis()->SetTitle("Z_{0}^{Local} [#sigma]");
+  hMaxZ0->GetXaxis()->SetTitleSize(0.07);
+  hMaxZ0->GetXaxis()->SetLabelSize(0.06);
+  hMaxZ0->GetYaxis()->SetTitleSize(0.07);
+  hMaxZ0->GetYaxis()->SetTitleOffset(0.9);
+  hMaxZ0->GetYaxis()->SetLabelSize(0.06);
+  hMaxZ0->GetYaxis()->SetRangeUser(0.0001, 0.014);
   hMaxZ0->Draw("hist");
+  
+  // Also fit the histogram with a Gaussian:
+  TF1 *fGauss = new TF1("fGauss", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
+  			hMaxZ0->GetXaxis()->GetXmax());
+  if (options.Contains("PlotGauss")) {
+    hMaxZ0->Fit(fGauss, "0");
+    fGauss->SetLineWidth(2);
+    fGauss->SetLineStyle(1);
+    fGauss->SetLineColor(kBlue);
+    fGauss->Draw("LSAME");
+  }
   
   // Draw a line at the me
   std::vector<double> valsZ0 = toyAna->getStatValues("Z0", 0);
@@ -156,12 +173,22 @@ int main(int argc, char **argv) {
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.07);
-  t.DrawLatex(0.62, 0.84, "ATLAS");
+  t.DrawLatex(0.58, 0.84, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.07);
-  t.DrawLatex(0.74, 0.84, config->getStr("ATLASLabel"));
-  t.DrawLatex(0.62, 0.76, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+  t.DrawLatex(0.70, 0.84, config->getStr("ATLASLabel"));
+  t.DrawLatex(0.58, 0.76, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			       (config->getNum("AnalysisLuminosity")/1000.0)));
   
+  // Legend:
+  TLegend leg1(0.58, 0.55, 0.90, 0.70);
+  leg1.SetTextFont(42); 
+  leg1.SetTextSize(0.07);
+  leg1.SetBorderSize(0);
+  leg1.SetFillColor(0);
+  leg1.AddEntry(line1, Form("Median Z_{0}^{Local}=%2.2f",medianZ0), "l");
+  if (options.Contains("PlotGauss")) leg1.AddEntry(fGauss, "Gaussian fit", "l");
+  leg1.Draw("SAME");
+
   //----------//
   // Pad 2:
   
@@ -186,11 +213,11 @@ int main(int argc, char **argv) {
     }
   }
   gZGlobal->SetLineWidth(2);
-  gZGlobal->SetLineColor(kRed+1);
-  gZGlobal->SetFillColor(kRed+1);
+  gZGlobal->SetLineColor(kOrange+4);
+  gZGlobal->SetFillColor(kOrange+1);
 
-  gZGlobal->GetYaxis()->SetTitle("Z_{0}^{Global}");
-  gZGlobal->GetXaxis()->SetTitle("Z_{0}^{Local}");
+  gZGlobal->GetYaxis()->SetTitle("Z_{0}^{Global} [#sigma]");
+  gZGlobal->GetXaxis()->SetTitle("Z_{0}^{Local} [#sigma]");
   gZGlobal->GetXaxis()->SetRangeUser(hMaxZ0->GetXaxis()->GetXmin(),
 				     hMaxZ0->GetXaxis()->GetXmax());
   
@@ -198,14 +225,19 @@ int main(int argc, char **argv) {
 			    hMaxZ0->GetXaxis()->GetXmin(),
 			    hMaxZ0->GetXaxis()->GetXmax());
   hForAxis->GetYaxis()->SetRangeUser(-2.0, 5.2);
-  hForAxis->GetYaxis()->SetTitle("Z_{0}^{Global}");
-  hForAxis->GetXaxis()->SetTitle("Z_{0}^{Local}");
+  hForAxis->GetYaxis()->SetTitle("Z_{0}^{Global} [#sigma]");
+  hForAxis->GetXaxis()->SetTitle("Z_{0}^{Local} [#sigma]");
+  hForAxis->GetXaxis()->SetTitleSize(0.07);
+  hForAxis->GetXaxis()->SetLabelSize(0.06);
+  hForAxis->GetYaxis()->SetTitleSize(0.07);
+  hForAxis->GetYaxis()->SetTitleOffset(0.9);
+  hForAxis->GetYaxis()->SetLabelSize(0.06);
   hForAxis->SetLineColor(0);
   hForAxis->Draw();
   
   TLine *line2 = new TLine();
-  line2->SetLineStyle(2);
-  line2->SetLineWidth(3);
+  line2->SetLineStyle(1);
+  line2->SetLineWidth(2);
   line2->DrawLine(hForAxis->GetYaxis()->GetXmin(), 0,
 		  hForAxis->GetXaxis()->GetXmax(), 0);
   line2->SetLineWidth(1);
@@ -224,62 +256,79 @@ int main(int argc, char **argv) {
   // Also fit the graph:
   TF1 *fZGlobal = new TF1("fZGlobal", "pol1", hForAxis->GetXaxis()->GetXmin(), 
 			  hForAxis->GetXaxis()->GetXmax());
-  gZGlobal->Fit(fZGlobal);
+  gZGlobal->Fit(fZGlobal, "0");
   fZGlobal->SetLineWidth(2);
+  fZGlobal->SetLineStyle(2);
   fZGlobal->SetLineColor(1);
-  fZGlobal->Draw("LSAME");
   
-  //gZGlobal->Draw("LSAME");
   gZGlobal->Draw("2SAME");
   //gZGlobal->Draw("E1SAME");
   
+  fZGlobal->Draw("LSAME");
+    
+  // Now get a global significance just from the Gaussian fit:
+  TGraph *gFromGauss = new TGraph();
+  //double totalIntegral = fGauss->Integral(hMaxZ0->GetXaxis()->GetXmin(),
+  //					  hMaxZ0->GetXaxis()->GetXmax());
+  double totalIntegral = fGauss->Integral(-5, hMaxZ0->GetXaxis()->GetXmax());
+  for (int i_p = 0; i_p < gZGlobal->GetN(); i_p++) {
+    double xCurr = 0.0; double yCurr = 0.0;
+    gZGlobal->GetPoint(i_p, xCurr, yCurr);
+    double gaussIntegral 
+      = fGauss->Integral(xCurr, hMaxZ0->GetXaxis()->GetXmax());
+    gFromGauss->SetPoint(i_p, xCurr, getZFromP(gaussIntegral/totalIntegral));
+  }
+  gFromGauss->SetLineWidth(2);
+  gFromGauss->SetLineColor(kBlue);
+  if (options.Contains("PlotGauss")) gFromGauss->Draw("LSAME");
+  
+  // Draw excluded region:
+  Double_t xExcl[3] = {hMaxZ0->GetXaxis()->GetXmin(), 
+		       hMaxZ0->GetXaxis()->GetXmin(),
+		       hMaxZ0->GetXaxis()->GetXmax()};
+  Double_t yExcl[3] = {hMaxZ0->GetXaxis()->GetXmax(), 
+		       hMaxZ0->GetXaxis()->GetXmin(), 
+		       hMaxZ0->GetXaxis()->GetXmax()};
+  TPolyLine *lineExcl = new TPolyLine(3, xExcl, yExcl);
+  lineExcl->SetFillColor(kRed-7);
+  lineExcl->SetFillStyle(3345);
+  lineExcl->SetLineColor(kRed);
+  lineExcl->SetLineWidth(2);
+  lineExcl->Draw("f");
+  hForAxis->Draw("axisSAME");
+  
+  // Print functional form:
   TString fText = Form("Z_{0}^{Global} = %2.2f Z_{0}^{Local} + %2.2f",
 		       fZGlobal->GetParameter(1), fZGlobal->GetParameter(0));
   fText.ReplaceAll("+ -","- ");
+  t.DrawLatex(0.58, 0.34, fText);
   
-  t.DrawLatex(0.2, 0.78, fText);
-  
+  // Print the chi^2 probability:
   double chi2 = fZGlobal->GetChisquare();
   double probChi2 = TMath::Prob(fZGlobal->GetChisquare(), gZGlobal->GetN());
-  t.DrawLatex(0.2, 0.68, Form("p(#chi^{2}) = %2.2f",probChi2));
-  
-  // Legend:
-  /*
-  TLegend leg(0.54,0.20,0.79,0.38);
-  leg.SetBorderSize(0);
-  leg.SetFillColor(0);
-  leg.SetTextSize(0.04);
-  if (!config->getBool("DoBlind")) leg.AddEntry(gCLObs_toy,"Obs. limit","l");
-  leg.AddEntry(gCLExp_toy,"Exp. limit","l");
-  leg.AddEntry(gCLExp_toy_1s,"Exp. limit #pm1#sigma_{exp}","F");
-  leg.AddEntry(gCLExp_toy_2s,"Exp. limit #pm2#sigma_{exp}","F");
-  
-  // Plotting options:
-  if (options.Contains("toy")) {
-    gCLExp_toy->Draw("AL");
-    gCLExp_toy_2s->Draw("3same");
-    gCLExp_toy_1s->Draw("3same");
-    gCLExp_toy->Draw("LSAME");
-    if (!config->getBool("DoBlind")) gCLObs_toy->Draw("LSAME");
+  t.DrawLatex(0.58, 0.24, Form("p(#chi^{2}) = %2.2f", probChi2));
+
+  // Legend for Pad 2:
+  TLegend leg2(0.18, 0.75, 0.61, 0.97);
+  leg2.SetTextFont(42); 
+  leg2.SetTextSize(0.07);
+  leg2.SetBorderSize(0);
+  leg2.SetFillColor(0);
+  leg2.AddEntry(gZGlobal, "Toy MC #pm error", "F");
+  leg2.AddEntry(fZGlobal, "Fit to Toy MC", "l");
+  if (options.Contains("PlotGauss")) {
+    leg2.AddEntry(gFromGauss, "Gaussian Fit", "l");
   }
-  gPad->RedrawAxis();
-  leg.Draw("SAME");
-  */
-    
+  leg2.AddEntry(lineExcl, "Upper bound on Z_{0}^{Global}", "F");
+  leg2.Draw("SAME");
+  
+  
   // Print the canvas:
   can->Print(Form("%s/plot_maxZ0_%s.eps", outputDir.Data(), anaType.Data()));
   can->Clear();
    
   // Delete pointers, close files, return:
   std::cout << "GlobalP0Analysis: Finished!" << std::endl;
-  //delete line;
-  //delete pad1;
-  //delete pad2;
-  //delete can;
-  //delete gZGlobal;
-  //delete hMaxZ0;
-  //delete workspace;
   delete config;
-  //wsFile.Close();
   return 0;
 }
