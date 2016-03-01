@@ -125,11 +125,12 @@ int main (int argc, char **argv) {
   }
   
   //--------------------------------------//
-  // Step 5.2: Plot pseudo-experiment ensemble results:
-  if (masterOption.Contains("PlotGlobalP0Toys")) {
-    std::cout << "HMMaster: Step 5.2 - Plot pseudoexperiment results."
+  // Step 5.1: Plot pseudo-experiment ensemble results:
+  if (masterOption.Contains("GlobalP0Analysis")) {
+    std::cout << "HMMaster: Step 5.1 - Plot pseudoexperiment results."
 	      << std::endl;
-    //ToyAnalysis *ta = new ToyAnalysis(configFileName, "NONE");
+    system(Form("./bin/GlobalP0Analysis %s %s", fullConfigPath.Data(),
+		m_config->getStr("GlobalP0AnalysisOptions").Data()));
   }
   
   return 0;

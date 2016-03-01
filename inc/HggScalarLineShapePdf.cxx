@@ -94,9 +94,9 @@ Double_t HggScalarLineShapePdf::PL(Double_t mgg) const {
     return pow((1-pow(mgg_norm, 1./3.)), 10.55)*pow(mgg_norm, -2.76)*(2.04e-6 - 1.9e-6*mgg_norm + 1.25e-5*mgg_norm*mgg_norm - 1.52e-5*mgg_norm*mgg_norm*mgg_norm);
   }
   else{
-    cerr<<"\tERROR: unknown center-of-mass-energy type "<<_cme
-	<<". Choose between 13 (TeV) and 8 (TeV). Aborting..."
-	<<endl;
+    std::cerr<<"\tERROR: unknown center-of-mass-energy type "<<_cme
+	     <<". Choose between 13 (TeV) and 8 (TeV). Aborting..."
+	     <<std::endl;
     exit(-1);
   }
 }

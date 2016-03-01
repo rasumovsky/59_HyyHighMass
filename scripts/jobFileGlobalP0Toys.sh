@@ -25,12 +25,13 @@ else
     #source /afs/cern.ch/sw/lcg/app/releases/ROOT/5.34.09/x86_64-slc6-gcc46-opt/root/bin/thisroot.sh
     
     # setup the HSG7 patched ROOT:
-    source /afs/cern.ch/sw/lcg/contrib/gcc/4.6/x86_64-slc6/setup.sh 
-    source /afs/cern.ch/atlas/project/HSG7/root/root_v5-34-32/x86_64-slc6-gcc48/bin/thisroot.sh
+    #source /afs/cern.ch/sw/lcg/contrib/gcc/4.6/x86_64-slc6/setup.sh 
+    #source /afs/cern.ch/atlas/project/HSG7/root/root_v5-34-32/x86_64-slc6-gcc48/bin/thisroot.sh
 
     # HSG7 patched ROOT on cvmfs:
     #source /cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/x86_64/Gcc/gcc493_x86_64_slc6/slc6/gcc49/setup.sh
-    #source /cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/x86_64/root/6.04.14-x86_64-slc6-gcc49-opt/bin/thisroot.sh
+    source /cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/x86_64/Gcc/gcc493_x86_64_slc6/slc6/x86_64-slc6-gcc49-opt/setup.sh
+    source /cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/x86_64/root/6.04.14-x86_64-slc6-gcc49-opt/bin/thisroot.sh
 
     export PATH=$ROOTSYS/bin:$PATH
     export LD_LIBRARY_PATH=$ROOTSYS/lib
