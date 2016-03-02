@@ -210,20 +210,43 @@ int main(int argc, char **argv) {
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
     
-    // Mu = 1 fits:
-    //std::cout << "GlobalP0Toys: Mu=1 fit starting" << std::endl;
-    //nllMu1 = testStat->getFitNLL("toyData", 1, true, mapPoIMu1, false);
-    //convergedMu1 = testStat->fitsAllConverged();
-    //mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu1);
-    //mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu1);
-    
+    /*
     // Mu free fits:
     std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
     nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
     convergedMuFree = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMuFree);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
-        
+    */
+    
+    // Mu free fits:
+    std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
+    int retry = 0; 
+    while (retry < config->getInt("NumRetries")) {
+      std::cout << "GlobalP0Toys: Retry " << retry << " for finding minimum"
+		<< std::endl;
+      //Randomize the starting point for the unconditional fit:
+      std::map<TString,double> mapPoIRandom; mapPoIRandom.clear();
+      for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+	std::vector<double> currRange 
+	  = config->getNumV(Form("PoIRange_%s", listPoI[i_p].Data()));
+	TRandom3 random = TRandom3(seed+2*retry+4*i_p);
+	double randomValue = random.Uniform(currRange[0], currRange[1]);
+	mapPoIRandom[listPoI[i_p]] = randomValue;
+      }
+      
+      double currNLL
+	= testStat->getFitNLL("toyData", 1, false, mapPoIRandom, false);
+      if (testStat->fitsAllConverged() && (currNLL < nllMuFree || retry == 0)) {
+	nllMuFree = currNLL;
+	convergedMuFree = testStat->fitsAllConverged();
+	mapToVectors(testStat->getNuisanceParameters(), namesNP,valuesNPMuFree);
+	mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
+	
+	retry++;
+      }
+    }
+    
     // Calculate profile likelihood ratios:
     llrL1L0 = nllMu1 - nllMu0;
     llrL1Lfree = profiledPOIVal > 1.0 ? 0.0 : (nllMu1 - nllMuFree);
