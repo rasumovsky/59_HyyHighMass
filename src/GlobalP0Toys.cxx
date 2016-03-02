@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
   
   // Copy the input workspace file locally:
   TString originFile = config->getStr("WorkspaceFile");
-  TString copiedFile = Form("workspaceDH_%s.root", anaType.Data());
+  TString copiedFile = Form("workspace_%s.root", anaType.Data());
   system(Form("cp %s %s", originFile.Data(), copiedFile.Data()));
   
   // Construct the output directories:

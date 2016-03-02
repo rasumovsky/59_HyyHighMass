@@ -250,11 +250,13 @@ void TestStat::clearFitParamSettings() {
    @param valPoI - The value of the parameter of interest.
    @param snapshotName - The name of the parameter snapshot to load.
    @param namesAndValsPoI - The names and values of the parameters of interest.
+   @param toyIndex - In case multiple toys are to be saved in this workspace.
    @return - A pseudo-dataset.
 */
 RooDataSet* TestStat::createPseudoData(int seed, int valPoI, 
 				       TString snapshotName,
-				     std::map<TString,double> namesAndValsPoI) {
+				       std::map<TString,double> namesAndValsPoI,
+				       int toyIndex) {
   printer(Form("TestStat::createPseudoData(seed=%d, PoI=%d, snapshot=%s)", 
 	       seed, valPoI, snapshotName.Data()), false);
   
@@ -368,9 +370,18 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
     printer(Form("TestStat: RooCategory object %s not found",
 		 nameRooCategory.Data()), true);
   }
-  RooDataSet* pseudoData = new RooDataSet("toyData", "toyData", *observables, 
-					  RooFit::Index(*categories),
-					  RooFit::Import(toyDataMap));
+  RooDataSet* pseudoData = NULL;
+  if (toyIndex < 0) {
+    pseudoData = new RooDataSet("toyData", "toyData", *observables, 
+				RooFit::Index(*categories),
+				RooFit::Import(toyDataMap));
+  }
+  else {
+    pseudoData = new RooDataSet(Form("toyData%d",toyIndex),
+				Form("toyData%d",toyIndex), *observables, 
+				RooFit::Index(*categories),
+				RooFit::Import(toyDataMap));
+  }
   
   // Save the parameters used to generate toys:
   storeParams(nuisanceParameters, m_mapNP);

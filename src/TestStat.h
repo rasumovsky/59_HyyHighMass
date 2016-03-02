@@ -34,7 +34,8 @@ class TestStat {
   void clearData();
   void clearFitParamSettings();
   RooDataSet* createPseudoData(int seed, int valPoI, TString snapshotName,
-			       std::map<TString,double> namesAndValsPoI);
+			       std::map<TString,double> namesAndValsPoI, 
+			       int toyIndex = -1);
   bool fitsAllConverged();
   double functionQMu(double x);
   double functionQMuTilde(double x, double asimovTestStat);
@@ -44,7 +45,7 @@ class TestStat {
   double getCLsFromQMu(double qMu, double N);
   double getFitNLL(TString datasetName, int valPoI, bool fixPoI,
 		   std::map<TString,double> namesAndValsPoI,
-		   bool resetParams=true);
+		   bool resetParams = true);
   std::map<std::string,double> getGlobalObservables();
   std::vector<double> getNEventsToys();
   std::map<std::string,double> getNuisanceParameters();
