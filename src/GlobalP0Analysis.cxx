@@ -146,23 +146,38 @@ int main(int argc, char **argv) {
   hMaxZ0->GetYaxis()->SetLabelSize(0.06);
   hMaxZ0->GetYaxis()->SetRangeUser(0.0001, 0.014);
   hMaxZ0->Draw("hist");
-  
+
+  // Find median Z0:
+  std::vector<double> valsZ0 = toyAna->getStatValues("Z0", 0);
+  std::sort(valsZ0.begin(), valsZ0.end());
+  double medianZ0 = valsZ0[(int)(((double)valsZ0.size())/2.0)];
+
   // Also fit the histogram with a Gaussian:
   TF1 *fGauss = new TF1("fGauss", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
   			hMaxZ0->GetXaxis()->GetXmax());
+  TF1 *fGaussP1 = new TF1("fGaussP1", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
+  			hMaxZ0->GetXaxis()->GetXmax());
+  TF1 *fGaussN1 = new TF1("fGaussN1", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
+  			hMaxZ0->GetXaxis()->GetXmax());
   if (options.Contains("PlotGauss")) {
+    //fGauss->FixParameter(1, medianZ0);
     hMaxZ0->Fit(fGauss, "0");
     fGauss->SetLineWidth(2);
     fGauss->SetLineStyle(1);
     fGauss->SetLineColor(kBlue);
     fGauss->Draw("LSAME");
+    
+    // Then set +/-1 sigma values from fit:
+    fGaussP1->SetParameter(0, fGauss->GetParameter(0));// + fGauss->GetParError(0));
+    fGaussP1->SetParameter(1, fGauss->GetParameter(1));// + fGauss->GetParError(1));
+    fGaussP1->SetParameter(2, fGauss->GetParameter(2) + fGauss->GetParError(2));
+    
+    fGaussN1->SetParameter(0, fGauss->GetParameter(0));// - fGauss->GetParError(0));
+    fGaussN1->SetParameter(1, fGauss->GetParameter(1));// - fGauss->GetParError(1));
+    fGaussN1->SetParameter(2, fGauss->GetParameter(2) - fGauss->GetParError(2));
   }
   
-  // Draw a line at the me
-  std::vector<double> valsZ0 = toyAna->getStatValues("Z0", 0);
-  std::sort(valsZ0.begin(), valsZ0.end());
-  double medianZ0 = valsZ0[(int)(((double)valsZ0.size())/2.0)];
-  
+  // Draw a line at the median:
   TLine *line1 = new TLine();
   line1->SetLineStyle(2);
   line1->SetLineWidth(3);
@@ -268,19 +283,37 @@ int main(int argc, char **argv) {
     
   // Now get a global significance just from the Gaussian fit:
   TGraph *gFromGauss = new TGraph();
+  TGraph *gFromGaussP1 = new TGraph();
+  TGraph *gFromGaussN1 = new TGraph();
+  
   //double totalIntegral = fGauss->Integral(hMaxZ0->GetXaxis()->GetXmin(),
   //					  hMaxZ0->GetXaxis()->GetXmax());
   double totalIntegral = fGauss->Integral(-5, hMaxZ0->GetXaxis()->GetXmax());
+  double totalIntegralP1 = fGaussP1->Integral(-5,hMaxZ0->GetXaxis()->GetXmax());
+  double totalIntegralN1 = fGaussN1->Integral(-5,hMaxZ0->GetXaxis()->GetXmax());
   for (int i_p = 0; i_p < gZGlobal->GetN(); i_p++) {
     double xCurr = 0.0; double yCurr = 0.0;
     gZGlobal->GetPoint(i_p, xCurr, yCurr);
     double gaussIntegral 
       = fGauss->Integral(xCurr, hMaxZ0->GetXaxis()->GetXmax());
+    double gaussIntegralP1
+      = fGaussP1->Integral(xCurr, hMaxZ0->GetXaxis()->GetXmax());
+    double gaussIntegralN1
+      = fGaussN1->Integral(xCurr, hMaxZ0->GetXaxis()->GetXmax());
     gFromGauss->SetPoint(i_p, xCurr, getZFromP(gaussIntegral/totalIntegral));
+    gFromGaussP1->SetPoint(i_p, xCurr,
+			   getZFromP(gaussIntegralP1/totalIntegralP1));
+    gFromGaussN1->SetPoint(i_p, xCurr,
+			   getZFromP(gaussIntegralN1/totalIntegralN1));
   }
-  gFromGauss->SetLineWidth(2);
-  gFromGauss->SetLineColor(kBlue);
-  if (options.Contains("PlotGauss")) gFromGauss->Draw("LSAME");
+  gFromGauss->SetLineWidth(2); gFromGauss->SetLineColor(kBlue);
+  gFromGaussP1->SetLineWidth(1); gFromGaussP1->SetLineColor(kBlue);
+  gFromGaussN1->SetLineWidth(1); gFromGaussN1->SetLineColor(kBlue);
+  if (options.Contains("PlotGauss")) {
+    gFromGauss->Draw("LSAME");
+    gFromGaussP1->Draw("LSAME");
+    gFromGaussN1->Draw("LSAME");
+  }
   
   // Draw excluded region:
   Double_t xExcl[3] = {hMaxZ0->GetXaxis()->GetXmin(), 
