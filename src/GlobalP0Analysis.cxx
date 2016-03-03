@@ -159,6 +159,7 @@ int main(int argc, char **argv) {
   			hMaxZ0->GetXaxis()->GetXmax());
   TF1 *fGaussN1 = new TF1("fGaussN1", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
   			hMaxZ0->GetXaxis()->GetXmax());
+  
   if (options.Contains("PlotGauss")) {
     //fGauss->FixParameter(1, medianZ0);
     hMaxZ0->Fit(fGauss, "0");
@@ -168,13 +169,10 @@ int main(int argc, char **argv) {
     fGauss->Draw("LSAME");
     
     // Then set +/-1 sigma values from fit:
-    fGaussP1->SetParameter(0, fGauss->GetParameter(0));// + fGauss->GetParError(0));
     fGaussP1->SetParameter(1, fGauss->GetParameter(1));// + fGauss->GetParError(1));
-    fGaussP1->SetParameter(2, fGauss->GetParameter(2) + fGauss->GetParError(2));
-    
-    fGaussN1->SetParameter(0, fGauss->GetParameter(0));// - fGauss->GetParError(0));
+    fGaussP1->SetParameter(2, 0.9*fGauss->GetParameter(2));
     fGaussN1->SetParameter(1, fGauss->GetParameter(1));// - fGauss->GetParError(1));
-    fGaussN1->SetParameter(2, fGauss->GetParameter(2) - fGauss->GetParError(2));
+    fGaussN1->SetParameter(2, 1.1*fGauss->GetParameter(2));
   }
   
   // Draw a line at the median:
@@ -359,9 +357,21 @@ int main(int argc, char **argv) {
   // Print the canvas:
   can->Print(Form("%s/plot_maxZ0_%s.eps", outputDir.Data(), anaType.Data()));
   can->Clear();
-   
+  
   // Delete pointers, close files, return:
   std::cout << "GlobalP0Analysis: Finished!" << std::endl;
+  
+  // Print the results:
+  double testSigma = config->getNum("GlobalP0AnalysisSigma");
+  std::cout << "\tFrom linear fit: Z0Global( " << testSigma << " ) = " 
+	    << fZGlobal->Eval(testSigma) << std::endl;
+  /*
+  std::cout << "\tFrom toy: Z0Global( " << testSigma << " ) = " 
+	    << gZGlobal->Eval(testSigma) << std::endl;
+
+  double valX = 0.0; double valY = 0.0; double errX = 0.0; double errY = 0.0;
+  gZGlobal->GetPoint(
+  */
   delete config;
   return 0;
 }
