@@ -54,6 +54,7 @@ RooFitResult* statistics::minimize(RooAbsReal* fcn, TString option, RooArgSet *m
   bool doHesse=option.Contains("hesse");
   bool doMinos=option.Contains("minos");
   bool m_2sigma=option.Contains("2sigma");
+  bool m_SingleStrategy = option.Contains("SingleStrategy");
 
   int printLevel = ROOT::Math::MinimizerOptions::DefaultPrintLevel();
   RooFit::MsgLevel msglevel = RooMsgService::instance().globalKillBelow();
@@ -68,23 +69,23 @@ RooFitResult* statistics::minimize(RooAbsReal* fcn, TString option, RooArgSet *m
   int status = minim.minimize(ROOT::Math::MinimizerOptions::DefaultMinimizerType().c_str(), ROOT::Math::MinimizerOptions::DefaultMinimizerAlgo().c_str());
   
 //up the strategy
-  if (status != 0 && status != 1 && strat < 2)
+  if (!m_SingleStrategy && status != 0 && status != 1 && strat < 2)
   {
     strat++;
-    cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << endl;
+    std::cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << std::endl;
     minim.setStrategy(strat);
     status = minim.minimize(ROOT::Math::MinimizerOptions::DefaultMinimizerType().c_str(), ROOT::Math::MinimizerOptions::DefaultMinimizerAlgo().c_str());
   }
 
-  if (status != 0 && status != 1 && strat < 2)
+  if (!m_SingleStrategy && status != 0 && status != 1 && strat < 2)
   {
     strat++;
-    cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << endl;
+    std::cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << std::endl;
     minim.setStrategy(strat);
     status = minim.minimize(ROOT::Math::MinimizerOptions::DefaultMinimizerType().c_str(), ROOT::Math::MinimizerOptions::DefaultMinimizerAlgo().c_str());
   }
 
-  cout << "status is " << status << endl;
+  std::cout << "status is " << status << std::endl;
 
 //switch minuit version and try again
   if (status != 0 && status != 1)
@@ -94,7 +95,7 @@ RooFitResult* statistics::minimize(RooAbsReal* fcn, TString option, RooArgSet *m
     if (minType == "Minuit2") newMinType = "Minuit";
     else newMinType = "Minuit2";
   
-    cout << "Switching minuit type from " << minType << " to " << newMinType << endl;
+    std::cout << "Switching minuit type from " << minType << " to " << newMinType << std::endl;
   
     ROOT::Math::MinimizerOptions::SetDefaultMinimizer(newMinType.c_str());
     strat = ROOT::Math::MinimizerOptions::DefaultStrategy();
@@ -103,18 +104,18 @@ RooFitResult* statistics::minimize(RooAbsReal* fcn, TString option, RooArgSet *m
     status = minim.minimize(ROOT::Math::MinimizerOptions::DefaultMinimizerType().c_str(), ROOT::Math::MinimizerOptions::DefaultMinimizerAlgo().c_str());
 
 
-    if (status != 0 && status != 1 && strat < 2)
+    if (!m_SingleStrategy && status != 0 && status != 1 && strat < 2)
     {
       strat++;
-      cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << endl;
+      std::cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << std::endl;
       minim.setStrategy(strat);
       status = minim.minimize(ROOT::Math::MinimizerOptions::DefaultMinimizerType().c_str(), ROOT::Math::MinimizerOptions::DefaultMinimizerAlgo().c_str());
     }
 
-    if (status != 0 && status != 1 && strat < 2)
+    if (!m_SingleStrategy && status != 0 && status != 1 && strat < 2)
     {
       strat++;
-      cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << endl;
+      std::cout << "Fit failed with status " << status << ". Retrying with strategy " << strat << std::endl;
       minim.setStrategy(strat);
       status = minim.minimize(ROOT::Math::MinimizerOptions::DefaultMinimizerType().c_str(), ROOT::Math::MinimizerOptions::DefaultMinimizerAlgo().c_str());
     }
@@ -123,7 +124,7 @@ RooFitResult* statistics::minimize(RooAbsReal* fcn, TString option, RooArgSet *m
   }
   if (status != 0 && status != 1)
   {
-    cout << "WARNING::Fit failure unresolved with status " << status << endl;
+    std::cout << "WARNING::Fit failure unresolved with status " << status << std::endl;
     return NULL;
   }
   
@@ -207,9 +208,9 @@ RooDataSet* statistics::histToDataSet(TH1* h, RooRealVar* x, RooRealVar* w, RooC
     histData -> add( RooArgSet(*x,*w) , weight, weighterr);
   }
   histData->Print(); 
-  cout<<c<<endl;
+  std::cout<<c<<std::endl;
   if(c){
-    cout<<"creating channel list"<<endl;
+    std::cout<<"creating channel list"<<std::endl;
     map<string,RooDataSet*> datamap;
     datamap[c->getLabel()]=histData;
     histData=new RooDataSet(h->GetName(),h->GetTitle(),RooArgSet(*x,*w),Index(*c),Import(datamap),WeightVar(*w));
@@ -237,8 +238,8 @@ double statistics::pvalueFromToy(vector<double> teststat, double threshold){
   int marker=-1;
 
   for(int itoy=0;itoy<ntoy;itoy++){
-//     cout<<toy[itoy]<<endl;
-//     if(!isfinite(toy[itoy])) cout<<"NaN!"<<endl; 
+//     std::cout<<toy[itoy]<<std::endl;
+//     if(!isfinite(toy[itoy])) std::cout<<"NaN!"<<std::endl; 
     if(teststat[itoy]>threshold){ marker=itoy; break;}
   }
   double pvalue=double(marker)/double(ntoy);

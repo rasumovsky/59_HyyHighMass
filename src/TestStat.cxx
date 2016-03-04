@@ -232,6 +232,7 @@ void TestStat::clearData() {
   m_plotDir = "";
   clearFitParamSettings();
   m_graphNLL = NULL;
+  m_fitOptions = ""; 
 }
 
 /**
@@ -561,7 +562,8 @@ double TestStat::getFitNLL(TString datasetName, int valPoI, bool fixPoI,
     = (RooNLLVar*)combPdf->createNLL(*m_workspace->data(datasetName),
 				     Extended(combPdf->canBeExtended()));
   
-  RooFitResult *fitResult = statistics::minimize(varNLL, "", NULL, true);
+  RooFitResult *fitResult
+    = statistics::minimize(varNLL, m_fitOptions, NULL, true);
   if (!fitResult || fitResult->status() != 0) m_allGoodFits = false;
     
   // Save a snapshot if requested:
@@ -1345,7 +1347,8 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   RooNLLVar* varMLNLL
     = (RooNLLVar*)combPdf->createNLL(*m_workspace->data(datasetName),
 				     Extended(combPdf->canBeExtended()));
-  RooFitResult *fitResultML = statistics::minimize(varMLNLL, "", NULL, true);
+  RooFitResult *fitResultML
+    = statistics::minimize(varMLNLL, m_fitOptions, NULL, true);
   if (!fitResultML || fitResultML->status() != 0) m_allGoodFits = false;
   m_workspace->saveSnapshot("paramsProfileML", *poiAndNuis);
   double minNLLVal = varMLNLL->getVal();
@@ -1432,7 +1435,8 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
       = (RooNLLVar*)combPdf->createNLL(*m_workspace->data(datasetName),
 				       Extended(combPdf->canBeExtended()));
     
-    RooFitResult *currFitResult = statistics::minimize(currNLL, "", NULL, true);
+    RooFitResult *currFitResult
+      = statistics::minimize(currNLL, m_fitOptions, NULL, true);
     if (!currFitResult || currFitResult->status() != 0) m_allGoodFits = false;
     double currNLLValue = currNLL->getVal();
     delete currFitResult;
@@ -1514,6 +1518,15 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   
   // Return the median and +/-1 sigma values:
   return result;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Choose the options for the fit, to be passed to "statistics" class minimizer.
+   @param fitOptions - The options for the fits done by this class.
+*/
+void TestStat::setFitOptions(TString fitOptions) {
+  m_fitOptions = fitOptions;
 }
 
 /**

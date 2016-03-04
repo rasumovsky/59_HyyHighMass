@@ -70,6 +70,7 @@ class TestStat {
   std::map<int,double> scanNLL(TString scanName, TString datasetName,
 			       TString varToScan,
 			       std::vector<TString> varsToFix);
+  void setFitOptions(TString fitOptions);
   void setPlotAxis(bool useLogScale, double yMin, double yMax, 
 		   double GeVPerBin);
   void setPlotDirectory(TString directory);
@@ -117,7 +118,8 @@ class TestStat {
   // Check whether all fits successful:
   bool m_allGoodFits;
   bool m_doResetParamsAfterFit;
-
+  TString m_fitOptions; 
+  
   // The workspace for the fits:
   RooWorkspace *m_workspace;
   ModelConfig *m_mc;

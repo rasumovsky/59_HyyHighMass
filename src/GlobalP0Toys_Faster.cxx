@@ -203,21 +203,17 @@ int main(int argc, char **argv) {
     mapToVectors(testStat->getGlobalObservables(), namesGlobs, 
 		 valuesGlobsMuFree);
     
+    // Strategy settings (if defined):
+    if (config->isDefined("FitOptions")) {
+      testStat->setFitOptions(config->getStr("FitOptions"));
+    }
+    
     // Mu = 0 fits:
     std::cout << "GlobalP0Toys: Mu=0 fit starting" << std::endl;
     nllMu0 = testStat->getFitNLL("toyData", 0, true, mapPoIMu0, false);
     convergedMu0 = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
-    
-    /*
-    // Mu free fits:
-    std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
-    nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
-    convergedMuFree = testStat->fitsAllConverged();
-    mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMuFree);
-    mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
-    */
     
     // Mu free fits:
     std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
