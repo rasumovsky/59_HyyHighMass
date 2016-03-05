@@ -359,19 +359,28 @@ int main(int argc, char **argv) {
   can->Clear();
   
   // Delete pointers, close files, return:
-  std::cout << "GlobalP0Analysis: Finished!" << std::endl;
+  std::cout << "\nGlobalP0Analysis: Finished!" << std::endl;
   
   // Print the results:
   double testSigma = config->getNum("GlobalP0AnalysisSigma");
   std::cout << "\tFrom linear fit: Z0Global( " << testSigma << " ) = " 
 	    << fZGlobal->Eval(testSigma) << std::endl;
-  /*
+  
+  
+  double xValue = 0.0; double yValue = 0.0;
+  double xError = 0.0; double yError = 0.0;
+  for (int i_p = 0; i_p < gZGlobal->GetN(); i_p++) {
+    gZGlobal->GetPoint(i_p, xValue, yValue);
+    xError = gZGlobal->GetErrorX(i_p);
+    yError = gZGlobal->GetErrorY(i_p);
+    if (((xValue + xError) >= testSigma) && ((xValue - xError) <= testSigma)) {
+      break;
+    }
+  }
+  
   std::cout << "\tFrom toy: Z0Global( " << testSigma << " ) = " 
-	    << gZGlobal->Eval(testSigma) << std::endl;
+	    << yValue << " +/- " << yError << std::endl;
 
-  double valX = 0.0; double valY = 0.0; double errX = 0.0; double errY = 0.0;
-  gZGlobal->GetPoint(
-  */
   delete config;
   return 0;
 }
