@@ -32,6 +32,7 @@ class ToyAnalysis {
   double calculateCLsFromToy(double qMu);
   double calculateCLFromToy(double qMu);
   double calculateErrorPVal(double pValue, int nToys);
+  double calculateErrorFromCounting(double pValue, int nToys);
   double calculateErrorCLVal(double qMu);
   double calculateBkgQMuForN(double N);
   double calculatePBFromToy(double qMu);

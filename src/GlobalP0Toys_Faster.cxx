@@ -94,6 +94,7 @@ int main(int argc, char **argv) {
   TTree fOutputTree("toy", "toy");
   
   // Variables to store in the TTree:
+  int bestFitUpdate;
   double numEvents;
   bool convergedMu1, convergedMu0, convergedMuFree;
   double profiledPOIVal;
@@ -113,6 +114,7 @@ int main(int argc, char **argv) {
   std::vector<double> numEventsPerCate; numEventsPerCate.clear();
   
   fOutputTree.Branch("seed", &seed, "seed/I");
+  fOutputTree.Branch("bestFitUpdate", &bestFitUpdate, "bestFitUpdate/I");
   fOutputTree.Branch("numEvents", &numEvents, "numEvents/D");
   fOutputTree.Branch("numEventsPerCate", &numEventsPerCate);
   fOutputTree.Branch("profiledPOIVal", &profiledPOIVal, "profiledPOIVal/D");
@@ -233,14 +235,19 @@ int main(int argc, char **argv) {
       
       double currNLL
 	= testStat->getFitNLL("toyData", 1, false, mapPoIRandom, false);
-      if (testStat->fitsAllConverged() && (currNLL < nllMuFree || retry == 0)) {
+      
+      // Update the best fit data if this is the first fit OR if the fit 
+      // converged and the fit had a lower NLL.
+      if (retry == 0 || 
+	  (testStat->fitsAllConverged() && (currNLL <= nllMuFree))) {
 	nllMuFree = currNLL;
 	convergedMuFree = testStat->fitsAllConverged();
 	mapToVectors(testStat->getNuisanceParameters(), namesNP,valuesNPMuFree);
 	mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
-	
-	retry++;
+	bestFitUpdate = retry;
       }
+      // ALWAYS increment the retry number, otherwise infinite loop!
+      retry++;
     }
     
     // Calculate profile likelihood ratios:

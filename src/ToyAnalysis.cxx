@@ -143,7 +143,8 @@ double ToyAnalysis::calculateCLFromToy(double qMu) {
 
 /**
    -----------------------------------------------------------------------------
-   Calculate the error from toy MC statistics on calculated p-value.
+   Calculate the error from toy MC statistics on calculated p-value, using 
+   binomial errors.
    @param pValue - The p-value for which we are computing the error.
    @param nToys - The number of toy MC used to compute the p-value.
    @return - The binomial error on the p-value.
@@ -154,7 +155,8 @@ double ToyAnalysis::calculateErrorPVal(double pValue, int nToys) {
 
 /**
    -----------------------------------------------------------------------------
-   Calculate the error from toy MC statistics on calculated CL value.
+   Calculate the error from toy MC statistics on calculated CL value, using the
+   binomial errors.
    @param qMu - The value of the test statistic.
    @return - The binomial error on the p-value.
 */
@@ -169,6 +171,23 @@ double ToyAnalysis::calculateErrorCLVal(double qMu) {
   
   // Finally, sum the errors in quadrature:
   return sqrt((pBErr * pBErr) + (pMuErr * pMuErr));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the error from toy MC statistics on calculated CL value, using 
+   counting errors on the p-value.
+   @param pValue - The p-value for which we are computing the error.
+   @param nToys - The number of toy MC used to compute the p-value.
+   @return - The number counting error on p.
+*/
+double ToyAnalysis::calculateErrorFromCounting(double pValue, int nToys) {
+  double nToysHi = pValue * ((double)nToys);
+  double errNumerator = sqrt(nToysHi) / nToysHi;
+  double errDenominator = sqrt((double)nToys) / ((double)nToys);
+  double fracErr = sqrt((errNumerator*errNumerator) + 
+			(errDenominator*errDenominator));
+  return fracErr * pValue;
 }
 
 /**
@@ -299,6 +318,13 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   TIterator *iterPars = setPars->createIterator();
   while ((pars = (RooRealVar*)iterPars->Next())) {
     TString namePars = pars->GetName();
+    
+    if (m_config->isDefined(Form("PoIRange_%s",namePars.Data()))) {
+      std::vector<double> currRange
+	= m_config->getNumV(Form("PoIRange_%s",namePars.Data()));
+      pars->setRange(currRange[0], currRange[1]);
+    }
+        
     for (int i_f = 0; i_f < (int)m_fitTypes.size(); i_f++) {
       TString parsKey = Form("%s_Mu%sFit_Mu%dData",
 			     namePars.Data(), m_fitTypes[i_f].Data(), muValue);
@@ -327,10 +353,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
 					  toyTree->profiledPOIVal);
     double valueZ0 = m_ts->getZ0FromQ0(valueQ0);
     double valueCL = m_ts->getCLFromQMu(valueQMu, 0);
-    
-    //std::cout << "valueZ0=" << valueZ0 << std::endl;
-    //std::cout << "valueCL=" << valueCL << std::endl;
-    
+        
     // Fill histograms for the test statistics and POI:
     m_hQMu[muValue]->Fill(valueQMu);
     m_hQ0[muValue]->Fill(valueQ0);
@@ -596,7 +619,7 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   
   // Retrieve the histograms for the parameter after various fits:
   TH1F *histMu0 = getHist(paramName, "0", toyMu);
-  TH1F *histMu1 = getHist(paramName, "1", toyMu);
+  //TH1F *histMu1 = getHist(paramName, "1", toyMu);
   TH1F *histMuFree = getHist(paramName, "Free", toyMu);
   
   TCanvas *can = new TCanvas("can", "can",800, 800);
@@ -607,16 +630,16 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   double min = 0.0001;
   double max = 10;
   histMu0->Scale(1.0 / histMu0->Integral());
-  histMu1->Scale(1.0 / histMu1->Integral());
+  //histMu1->Scale(1.0 / histMu1->Integral());
   histMuFree->Scale(1.0 / histMuFree->Integral());
   histMu0->SetLineColor(kRed);
-  histMu1->SetLineColor(kBlue);
-  histMuFree->SetLineColor(kGreen+2);
+  //histMu1->SetLineColor(kGreen+2);
+  histMuFree->SetLineColor(kBlue);
   histMu0->SetLineWidth(3);
-  histMu1->SetLineWidth(3);
+  //histMu1->SetLineWidth(3);
   histMuFree->SetLineWidth(3);
   histMu0->SetLineStyle(1);
-  histMu1->SetLineStyle(2);
+  //histMu1->SetLineStyle(2);
   histMuFree->SetLineStyle(4);
   
   // Format axis titles:
@@ -626,7 +649,7 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   
   // Draw histograms:
   histMu0->Draw("hist");
-  histMu1->Draw("histSAME");
+  //histMu1->Draw("histSAME");
   histMuFree->Draw("histSAME");
   
   // Create a legend:
@@ -635,7 +658,7 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   leg.SetTextSize(0.03);
   leg.SetFillColor(0);
   leg.AddEntry(histMu0,Form("#mu=0 fixed, mean=%f",histMu0->GetMean()),"l");
-  leg.AddEntry(histMu1,Form("#mu=1 fixed, mean=%f",histMu1->GetMean()),"l");
+  //leg.AddEntry(histMu1,Form("#mu=1 fixed, mean=%f",histMu1->GetMean()),"l");
   leg.AddEntry(histMuFree,Form("#hat{#mu}, mean=%f",histMuFree->GetMean()),"l");
   leg.Draw("SAME");
 

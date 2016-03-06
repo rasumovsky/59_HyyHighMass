@@ -95,6 +95,24 @@ TestStat::TestStat(TString newConfigFile, TString newOptions,
 
 /**
    -----------------------------------------------------------------------------
+   Add ghost events to a dataset.
+   @param dataset - A pointer to the dataset w/o ghosts.
+   @param observable - A pointer to the RooRealVar observable in the dataset.
+   @param weight - A pointer to the RooRealVar weight variable in the dataset.
+*/
+void TestStat::addGhostEvents(RooAbsData *dataset, RooRealVar* observable,
+			      RooRealVar* weight) {
+  for(double obsVal = observable->getMin(); obsVal < observable->getMax(); 
+      obsVal += (observable->getMax() - observable->getMin())/1000.0) {
+    double obsWeight = 0.0000001;
+    observable->setVal(obsVal);
+    weight->setVal(obsWeight);
+    dataset->add(RooArgSet(*observable, *weight), obsWeight);
+  }
+}
+
+/**
+   -----------------------------------------------------------------------------
    Get the value of one of the test statistics.
    @param testStat - The test stat. name (p0, CL, CLs).
    @param observed - True iff observed, false if expected. 
@@ -106,6 +124,40 @@ double TestStat::accessValue(TString testStat, bool observed, int N) {
   // Check that corresponding entry exists:
   if (mapValueExists(currMapKey)) return m_calculatedValues[currMapKey];
   else return 0;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Create a binned dataset from an unbinned dataset. 
+   @param binnedDataName - A name for the new binned dataset.
+   @param unbinnedDataSet - A pointer to the unbinned dataset.
+   @param observable - A pointer to the RooRealVar observable in the dataset.
+   @param weight - A pointer to the RooRealVar weight variable in the dataset.
+   @return - A binned version of the unbinned dataset that was provided. 
+*/
+RooAbsData *TestStat::binDataSet(TString binnedDataName, 
+				 RooAbsData *unbinnedDataSet, 
+				 RooRealVar* observable, RooRealVar* weight) {
+  
+  // Convert dataset into TH1F:
+  TH1F *hDataTemp = (TH1F*)unbinnedDataSet
+    ->createHistogram("hDataTemp", *observable,
+		      RooFit::Binning(observable->getBins(),
+				      observable->getMin(),
+				      observable->getMax()));
+  
+  // Create a dataset to fill with binned entries:
+  RooDataSet* binnedData = new RooDataSet(binnedDataName, binnedDataName,
+					  RooArgSet(*observable, *weight),
+					  RooFit::WeightVar(*weight));
+  for (int i_b = 1; i_b <= hDataTemp->GetNbinsX(); i_b++) {
+    observable->setVal(hDataTemp->GetXaxis()->GetBinCenter(i_b));
+    weight->setVal(hDataTemp->GetBinContent(i_b));
+    binnedData->add(RooArgSet(*observable, *weight),
+		    hDataTemp->GetBinContent(i_b));
+  }
+  
+  return binnedData;
 }
 
 /**
@@ -321,6 +373,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
   // Store the toy dataset and number of events per dataset:
   map<string,RooDataSet*> toyDataMap; toyDataMap.clear();
   m_numEventsPerCate.clear();
+  RooRealVar *wt = new RooRealVar("wt","wt",1.0);
   
   // Iterate over the categories:
   printer("TestStat: Iterate over categories to generate toy data.", false);
@@ -338,18 +391,22 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
     // If you want to bin the pseudo-data (speeds up calculation):
     if (m_config->getBool("DoBinnedFit")) {
       currPdf->setAttribute("PleaseGenerateBinned");
-      TIterator *iterObs = currObs->createIterator();
-      RooRealVar *currObs = NULL;
-      
-      // Bin each of the observables:
-      while ((currObs = (RooRealVar*)iterObs->Next())) {
-	currObs->setBins(m_config->getInt("WorkspaceObsBins"));
-      }
       toyDataMap[(std::string)cateType->GetName()]
 	= (RooDataSet*)currPdf->generate(*currObs, AutoBinned(true),
 					 Extended(currPdf->canBeExtended()),
 					 GenBinned("PleaseGenerateBinned"));
+      std::cout << "TOYNEVENTS = " 
+		<< toyDataMap[(std::string)cateType->GetName()]->numEntries()
+		<< std::endl;
     }
+    /*
+    // If you want to manually bin the pseudo-data (speeds up calculation):
+    if (m_config->getBool("DoBinnedFit")) {
+    RooAbsData *TestStat::binDataSet(RooAbsData *unbinnedDataSet, 
+				       RooRealVar* observable, 
+				       RooRealVar* weight);
+    */ 
+    
     // Construct unbinned pseudo-data by default:
     else {
       toyDataMap[(std::string)cateType->GetName()]
@@ -358,8 +415,29 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
     
     double currEvt = toyDataMap[(std::string)cateType->GetName()]->sumEntries();
     m_numEventsPerCate.push_back(currEvt);
-  }
 
+    // Add ghost events if requested:
+    if (m_config->isDefined("AddGhostEvents") &&
+	m_config->getStr("AddGhostEvents")) {
+      addGhostEvents(toyDataMap[(std::string)cateType->GetName()],
+		     (RooRealVar*)(currObs->first()), wt);
+      currObs->add(*wt);
+    }
+    
+    /*
+    TCanvas *can = new TCanvas("can", "can", 800, 800);
+    can->cd();
+    RooPlot* frame = ((RooRealVar*)(currObs->first()))->frame(115);
+    toyDataMap[(std::string)cateType->GetName()]->plotOn(frame);
+    frame->SetXTitle(currObs->GetName());
+    frame->SetYTitle(Form("Events / %2.1f GeV", m_geVPerBin));
+    frame->Draw();
+    gPad->SetLogy(); 
+    frame->GetYaxis()->SetRangeUser(0.1, 10000);
+    can->Print("data.eps");
+    */
+  }
+  
   // Create the combined toy RooDataSet:
   //RooCategory *categories = (RooCategory*)m_workspace->obj("categories");
   RooCategory *categories = NULL;
@@ -372,14 +450,16 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
 		 nameRooCategory.Data()), true);
   }
   RooDataSet* pseudoData = NULL;
-  if (toyIndex < 0) {
-    pseudoData = new RooDataSet("toyData", "toyData", *observables, 
+  TString newDataName = (toyIndex < 0) ? "toyData" : Form("toyData%d",toyIndex);
+  if (m_config->isDefined("AddGhostEvents") &&
+      m_config->getStr("AddGhostEvents")) {
+    pseudoData = new RooDataSet(newDataName, newDataName, *observables, 
 				RooFit::Index(*categories),
-				RooFit::Import(toyDataMap));
+				RooFit::Import(toyDataMap),
+				RooFit::WeightVar(*wt));
   }
   else {
-    pseudoData = new RooDataSet(Form("toyData%d",toyIndex),
-				Form("toyData%d",toyIndex), *observables, 
+    pseudoData = new RooDataSet(newDataName, newDataName, *observables, 
 				RooFit::Index(*categories),
 				RooFit::Import(toyDataMap));
   }
@@ -565,7 +645,8 @@ double TestStat::getFitNLL(TString datasetName, int valPoI, bool fixPoI,
   RooFitResult *fitResult
     = statistics::minimize(varNLL, m_fitOptions, NULL, true);
   if (!fitResult || fitResult->status() != 0) m_allGoodFits = false;
-    
+  else m_allGoodFits = true;
+
   // Save a snapshot if requested:
   if (m_doSaveSnapshot) {
     TString textValPoI = fixPoI ? (Form("%d",(int)valPoI)) : "Free";
@@ -1001,28 +1082,29 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
   can->cd();
   pad1->Draw();
   pad2->Draw();
-    
-  // Loop over categories:
-  std::vector<TString> cateNames = m_config->getStrV("WorkspaceCateNames");
-  for (int i_c = 0; i_c < (int)cateNames.size(); i_c++) {
+
+  RooSimultaneous* combPdf = (RooSimultaneous*)m_mc->GetPdf();
+  RooArgSet* observables = (RooArgSet*)m_mc->GetObservables();
+  TIterator *cateIter = combPdf->indexCat().typeIterator();
+  RooCatType *cateType = NULL;
+  while ((cateType = (RooCatType*)cateIter->Next())) {
     pad1->cd();
     pad1->Clear();
-
-    std::vector<TString> obsNames = m_config->getStrV("WorkspaceObsNames");
-    TString obsName = obsNames[i_c];
-    double obsMin = (*m_workspace->var(obsName)).getMin();
-    double obsMax = (*m_workspace->var(obsName)).getMax();
+    RooAbsData *currData 
+      = m_workspace->data(datasetName)->getSimData(cateType->GetName());
+    RooAbsPdf *currPdf = combPdf->getPdf(cateType->GetName());
+    RooArgSet *currObsSet = currPdf->getObservables(observables);
+    RooRealVar *currObs = (RooRealVar*)currObsSet->first();
     
     // Set the resonant analysis plot binning and axis scale to paper settings:
-    int nBinsForPlot = (int)((obsMax - obsMin) / m_geVPerBin);
+    int nBinsForPlot = currObs->getBins();
+    //      = (int)((currObs->getMax() - currObs->getMin()) / m_geVPerBin);
     
     // Plot everything on RooPlot:
-    RooPlot* frame = (*m_workspace->var(obsName)).frame(nBinsForPlot);
-    if ((m_workspace->pdf("model_"+cateNames[i_c]))) {
-      (*m_workspace->data(Form("%s_%s",datasetName.Data(),cateNames[i_c].Data()))).plotOn(frame);
-      (*m_workspace->pdf("model_"+cateNames[i_c])).plotOn(frame, LineColor(2), LineStyle(1));
-    }
-    frame->SetXTitle(obsName);
+    RooPlot* frame = currObs->frame(nBinsForPlot);
+    currData->plotOn(frame);
+    currPdf->plotOn(frame, LineColor(2), LineStyle(1));
+    frame->SetXTitle(currObs->GetName());
     frame->SetYTitle(Form("Events / %2.1f GeV", m_geVPerBin));
     frame->Draw();
     
@@ -1068,7 +1150,7 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
 				  1000.0)));
     
     TString printCateName 
-      = m_config->getStr(Form("PrintCateName_%s", cateNames[i_c].Data()));
+      = m_config->getStr(Form("PrintCateName_%s", cateType->GetName()));
     t.DrawLatex(0.20, 0.76, printCateName);
     
     // Second pad on the canvas (Ratio Plot):
@@ -1077,7 +1159,8 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
     
     double ratioMin = 0.0;//-0.2
     double ratioMax = 2.0;//2.2
-    TH1F *medianHist = new TH1F("median","median",nBinsForPlot,obsMin,obsMax);
+    TH1F *medianHist = new TH1F("median", "median", nBinsForPlot, 
+				currObs->getMin(), currObs->getMax());
     for (int i_b = 1; i_b <= nBinsForPlot; i_b++) {
       if (m_ratioOrSubtraction.EqualTo("Ratio")) {
 	medianHist->SetBinContent(i_b, 1.0);
@@ -1088,7 +1171,7 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
     }
     medianHist->SetLineColor(kRed);
     medianHist->SetLineWidth(2);
-    medianHist->GetXaxis()->SetTitle(obsName);
+    medianHist->GetXaxis()->SetTitle(currObs->GetName());
     if (m_ratioOrSubtraction.EqualTo("Ratio")) {
       medianHist->GetYaxis()->SetTitle("Data / Fit");
     }
@@ -1109,10 +1192,9 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
     
     TGraphErrors* subData = NULL;
     if (m_ratioOrSubtraction.EqualTo("Ratio")) {
-      subData 
-	= plotDivision(Form("%s_%s",datasetName.Data(),cateNames[i_c].Data()),
-		       Form("model_%s", cateNames[i_c].Data()), obsName, obsMin,
-		       obsMax, nBinsForPlot);
+      subData = plotDivision(currData->GetName(), currPdf->GetName(),
+			     currObs->GetName(), currObs->getMin(),
+			     currObs->getMax(), nBinsForPlot);
       
       TLine *line = new TLine();
       line->SetLineStyle(1);
@@ -1120,16 +1202,17 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
       line->SetLineColor(kBlack);
       line->SetLineWidth(1);
       line->SetLineStyle(2);
-      line->DrawLine(obsMin,((1.0+ratioMin)/2.0), obsMax,((1.0+ratioMin)/2.0));
-      line->DrawLine(obsMin,((1.0+ratioMax)/2.0), obsMax,((1.0+ratioMax)/2.0));
+      line->DrawLine(currObs->getMin(), ((1.0+ratioMin)/2.0),
+		     currObs->getMax(), ((1.0+ratioMin)/2.0));
+      line->DrawLine(currObs->getMin(), ((1.0+ratioMax)/2.0),
+		     currObs->getMax(), ((1.0+ratioMax)/2.0));
       
       subData->Draw("EPSAME");
     }
     else {
-      subData
-	= plotSubtract(Form("%s_%s",datasetName.Data(),cateNames[i_c].Data()),
-		       Form("model_%s", cateNames[i_c].Data()), obsName,
-		       obsMin, obsMax, nBinsForPlot);
+      subData = plotSubtract(currData->GetName(), currPdf->GetName(),
+			     currObs->GetName(), currObs->getMin(),
+			     currObs->getMax(), nBinsForPlot);
       medianHist->GetYaxis()->SetRangeUser(subData->GetYaxis()->GetXmin(),
 					   subData->GetYaxis()->GetXmax());
       medianHist->Draw();
@@ -1137,9 +1220,9 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
     }
     
     can->Print(Form("%s/fitPlot_%s_%s_%s.eps", m_plotDir.Data(),
-		    m_anaType.Data(), fitType.Data(), cateNames[i_c].Data()));
+		    m_anaType.Data(), fitType.Data(), cateType->GetName()));
     can->Print(Form("%s/fitPlot_%s_%s_%s.C", m_plotDir.Data(),
-		    m_anaType.Data(), fitType.Data(), cateNames[i_c].Data()));
+		    m_anaType.Data(), fitType.Data(), cateType->GetName()));
     delete histDH;
     delete histSH;
     delete histBkg;
@@ -1299,8 +1382,7 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   
   // A map to store the scan results (median = 0, sigmas are +/-1, +/-2, etc...)
   std::map<int,double> result; result.clear();
-  
-  // Load objects for fitting:
+    // Load objects for fitting:
   RooAbsPdf* combPdf = m_mc->GetPdf();
   RooArgSet* nuisanceParameters = (RooArgSet*)m_mc->GetNuisanceParameters();
   RooArgSet* globalObservables = (RooArgSet*)m_mc->GetGlobalObservables();
@@ -1318,7 +1400,10 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
     printer(Form("TestStat: Error! Requested data not available: %s",
 		 datasetName.Data()), true);
   }
-  
+
+  // Reset bool to check for failed fits:
+  m_allGoodFits = true;
+
   // Allow the PoI to float:
   firstPoI->setConstant(false);
   

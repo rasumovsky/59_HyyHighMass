@@ -29,6 +29,11 @@ class TestStat {
   virtual ~TestStat() {};
   
   double accessValue(TString testStat, bool observed, int N);
+  void addGhostEvents(RooAbsData *dataset, RooRealVar *observable, 
+		      RooRealVar *weight);
+  RooAbsData *binDataSet(TString binnedDataName, RooAbsData *unbinnedDataSet, 
+			 RooRealVar* observable, RooRealVar* weight);
+  
   //void calculateNewCL(TString type);
   //void calculateNewP0(TString type);
   void clearData();

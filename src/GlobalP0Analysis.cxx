@@ -57,15 +57,9 @@ int main(int argc, char **argv) {
 			   (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s", outputDir.Data()));
   
-  /*
-  // Open the workspace:
-  TFile wsFile(config->getStr("WorkspaceFile"), "read");
-  RooWorkspace *workspace
-    = (RooWorkspace*)wsFile.Get(config->getStr("WorkspaceName"));
-  */
-
+  // Load the toy analysis class, which does the analysis of toy MC jobs:
   ToyAnalysis *toyAna = new ToyAnalysis(configFile, "None");
-
+  
   toyAna->setOutputDir(Form("%s/%s/ToyAnalysis", 
 			  (config->getStr("MasterOutput")).Data(),
 			  jobName.Data()));
@@ -82,33 +76,20 @@ int main(int argc, char **argv) {
     exit(0);
   }
     
-  /*
-  // Get the asymptotic test statistic distribution:
-  getAsymptoticForm("QMu");// THIS SHOULD BE GENERALIZED!!!
-  
-    // Plot the results:
-    plotProfiledMu();
-    plotTestStat("QMu");
-    plotTestStat("Q0");
-    plotTestStatComparison("QMu");
-    plotTestStatComparison("Q0");
-    
-    // Then plot the nuis, globs, and other parameters:
-    for (int i_g = 0; i_g < (int)m_namesGlobs.size(); i_g++) {
-      plotHist(m_namesGlobs[i_g], 0);
-      plotHist(m_namesGlobs[i_g], 1);
-    }
-    for (int i_n = 0; i_n < (int)m_namesNuis.size(); i_n++) {
-      plotHist(m_namesNuis[i_n], 0);
-      plotHist(m_namesNuis[i_n], 1);
-    }
-    for (int i_p = 0; i_p < (int)m_namesPars.size(); i_p++) {
-      plotHist(m_namesPars[i_p], 0);
-      plotHist(m_namesPars[i_p], 1);
-    }
+  // Plot the toy MC nuisance parameter, global observables, and PoI:
+  std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
+  std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
+  std::vector<TString> namesPars = toyAna->getNamesPoI();
+  for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
+    toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data only
   }
-  */
-  
+  for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
+    toyAna->plotHist(namesNuis[i_n], 0);
+  }
+  for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
+    toyAna->plotHist(namesPars[i_p], 0);
+  }
+    
   //----------------------------------------//
   // Start the plotting!
   
@@ -169,9 +150,9 @@ int main(int argc, char **argv) {
     fGauss->Draw("LSAME");
     
     // Then set +/-1 sigma values from fit:
-    fGaussP1->SetParameter(1, fGauss->GetParameter(1));// + fGauss->GetParError(1));
+    fGaussP1->SetParameter(1, fGauss->GetParameter(1));
     fGaussP1->SetParameter(2, 0.9*fGauss->GetParameter(2));
-    fGaussN1->SetParameter(1, fGauss->GetParameter(1));// - fGauss->GetParError(1));
+    fGaussN1->SetParameter(1, fGauss->GetParameter(1));
     fGaussN1->SetParameter(2, 1.1*fGauss->GetParameter(2));
   }
   
@@ -218,6 +199,7 @@ int main(int argc, char **argv) {
       double zLocalErr = hMaxZ0->GetBinWidth(i_b);
       int nToys = (int)valsZ0.size();
       double pGlobalErr = toyAna->calculateErrorPVal(pValue, nToys);
+      //double pGlobalErr = toyAna->calculateErrorFromCounting(pValue, nToys);
       double zValueHi = getZFromP(pValue+pGlobalErr);
       double zGlobalErr = fabs(zValueHi - zValue);
       gZGlobal->SetPoint(pointIndex, hMaxZ0->GetBinCenter(i_b), zValue);
