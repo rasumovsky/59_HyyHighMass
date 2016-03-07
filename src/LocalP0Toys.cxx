@@ -169,6 +169,10 @@ int main(int argc, char **argv) {
     // The statistics class, for calculating qMu etc. 
     TestStat *testStat = new TestStat(configFile, "new", workspace);
     
+
+
+
+
     // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
     // for every toy job, since the signal hypothesis can change!
     //testStat->saveSnapshots(true);
@@ -179,6 +183,11 @@ int main(int argc, char **argv) {
     //else testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
     //testStat->saveSnapshots(false);
     
+
+
+
+
+
     // Set the PoI ranges for this study:
     for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
       std::vector<double> currRange
@@ -236,42 +245,19 @@ int main(int argc, char **argv) {
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
     
+    // Mu = 1 fits:
+    std::cout << "GlobalP0Toys: Mu=1 fit starting" << std::endl;
+    nllMu1 = testStat->getFitNLL("toyData", 1, true, mapPoIMu1, false);
+    convergedMu1 = testStat->fitsAllConverged();
+    mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu1);
+    mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu1);
+    
     // Mu free fits:
     std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
-    int retry = 0; nllPerRetry.clear();
-    while (retry < config->getInt("NumRetries")) {
-      std::cout << "GlobalP0Toys: Retry " << retry << " for finding minimum"
-		<< std::endl;
-      //Randomize the starting point for the unconditional fit:
-      std::map<TString,double> mapPoIRandom; mapPoIRandom.clear();
-      for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
-	std::vector<double> currRange 
-	  = config->getNumV(Form("PoIRange_%s", listPoI[i_p].Data()));
-	TRandom3 random = TRandom3(seed+2*retry+4*i_p);
-	double randomValue = random.Uniform(currRange[0], currRange[1]);
-	mapPoIRandom[listPoI[i_p]] = randomValue;
-      }
-      
-      // Perform the fit:
-      double currNLL
-	= testStat->getFitNLL("toyData", 1, false, mapPoIRandom, false);
-      
-      // Track the NLL for each retry:
-      nllPerRetry.push_back(currNLL);
-      
-      // Update the best fit data if this is the first fit OR if the fit 
-      // converged and the fit had a lower NLL.
-      if (retry == 0 || 
-	  (testStat->fitsAllConverged() && (currNLL < nllMuFree))) {
-	nllMuFree = currNLL;
-	convergedMuFree = testStat->fitsAllConverged();
-	mapToVectors(testStat->getNuisanceParameters(), namesNP,valuesNPMuFree);
-	mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
-	bestFitUpdate = retry;
-      }
-      // ALWAYS increment the retry number, otherwise infinite loop!
-      retry++;
-    }
+    nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
+    convergedMuFree = testStat->fitsAllConverged();
+    mapToVectors(testStat->getNuisanceParameters(), namesNP,valuesNPMuFree);
+    mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
     
     // Calculate profile likelihood ratios:
     llrL1L0 = nllMu1 - nllMu0;

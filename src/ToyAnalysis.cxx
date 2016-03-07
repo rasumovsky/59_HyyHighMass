@@ -57,10 +57,7 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   CommonFunc::SetAtlasStyle();
   
   // Load the workspace and model config from file:
-  //TFile workspaceFile(m_config->getStr("WorkspaceFile"), "read");
   m_workspaceFile = new TFile(m_config->getStr("WorkspaceFile"), "read");
-  //m_workspace
-  //= (RooWorkspace*)workspaceFile.Get(m_config->getStr("WorkspaceName"));
   m_workspace
     = (RooWorkspace*)m_workspaceFile->Get(m_config->getStr("WorkspaceName"));
   if (m_workspace->obj(m_config->getStr("WorkspaceModelConfig"))) {
@@ -255,6 +252,8 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   printer(Form("ToyAnalysis::fillToyHistograms(%d)",muValue), false);
   
   // Instantiate the histograms:
+  m_hRetries[muValue] = new TH1F(Form("hRetries%d",muValue),
+				 Form("hRetries%d",muValue), 10, -0.5, 9.5);
   m_hMuProfiled[muValue] = new TH1F(Form("hMuProfiled%d",muValue),
 				    Form("hMuProfiled%d",muValue), 
 				    m_nBins, -2.0, 4.0);
@@ -343,9 +342,9 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     toyTree->fChain->GetEntry(i_e);
     
     // Only plot successful fits:
-    //if (!(toyTree->convergedMu0 && toyTree->convergedMu1 &&
-    //toyTree->convergedMuFree)) continue;
-    
+    if (!(toyTree->convergedMu0 && //toyTree->convergedMu1 &&
+	  toyTree->convergedMuFree)) continue;
+        
     // Get the test statistic values:
     double valueQMu = m_ts->getQMuFromNLL(toyTree->nllMu1, toyTree->nllMuFree,
 					    toyTree->profiledPOIVal, 1);
@@ -360,7 +359,9 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     m_hMuProfiled[muValue]->Fill(toyTree->profiledPOIVal);
     m_hZ0[muValue]->Fill(valueZ0);
     m_hCL[muValue]->Fill(valueCL);
-  
+    
+    m_hRetries[muValue]->Fill(toyTree->bestFitUpdate);
+    
     // Also fill the QMu vector for pMu calculation:
     if (muValue > 0) {
       m_valuesQMu_Mu1.push_back(valueQMu);
@@ -638,9 +639,9 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   histMu0->SetLineWidth(3);
   //histMu1->SetLineWidth(3);
   histMuFree->SetLineWidth(3);
-  histMu0->SetLineStyle(1);
-  //histMu1->SetLineStyle(2);
-  histMuFree->SetLineStyle(4);
+  histMu0->SetLineStyle(2);
+  //histMu1->SetLineStyle(4);
+  histMuFree->SetLineStyle(1);
   
   // Format axis titles:
   histMu0->GetYaxis()->SetTitle("Fraction of toys");
@@ -730,6 +731,28 @@ void ToyAnalysis::plotProfiledMu() {
   can->Print(Form("%s/plot_profiledMu.eps", m_outputDir.Data()));
   can->Clear();
   gPad->SetLogy(0);  
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Plot the number of retries before the minimum NLL was found.
+   @param muValue - The mu-value of the histogram.
+*/
+void ToyAnalysis::plotRetries(int muValue) {
+  
+  TCanvas *can = new TCanvas("can", "can", 800, 800);
+  can->cd();
+  
+  m_hRetries[muValue]->SetLineColor(kRed+2);
+  m_hRetries[muValue]->SetFillColor(kRed-10);
+  m_hRetries[muValue]->SetLineWidth(2);
+  m_hRetries[muValue]->GetXaxis()->SetTitle("#mu_{profiled}");
+  m_hRetries[muValue]->GetYaxis()->SetTitle("Fraction of toys");
+  //gPad->SetLogy();
+  m_hRetries[muValue]->Draw("hist");
+  can->Print(Form("%s/plot_Retries.eps", m_outputDir.Data()));
+  can->Clear();
+  //gPad->SetLogy(0);  
 }
 
 /**

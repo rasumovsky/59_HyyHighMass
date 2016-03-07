@@ -53,6 +53,7 @@ class ToyAnalysis {
   void loadToy(int toyMu, TString toyFileForm);
   void plotHist(TString paramName, int toyMu);
   void plotProfiledMu(); 
+  void plotRetries(int muValue);
   void plotTestStat(TString statistic);
   void plotTestStatComparison(TString statistic);
   void setFitTypes(std::vector<TString> fitTypes);
@@ -94,6 +95,7 @@ class ToyAnalysis {
   std::vector<double> m_valuesBestFit_AsymCL_Mu1;
   
   // Histograms:
+  TH1F *m_hRetries[2];
   TH1F *m_hAsymptotic;
   TH1F *m_hMuProfiled[2];
   TH1F *m_hQ0[2];

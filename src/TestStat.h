@@ -38,6 +38,9 @@ class TestStat {
   //void calculateNewP0(TString type);
   void clearData();
   void clearFitParamSettings();
+  //RooDataSet* createOneCatPseudoData(int seed, int valPoI, TString snapshotName,
+  //				     std::map<TString,double> namesAndValsPoI, 
+  //				     int toyIndex = -1);
   RooDataSet* createPseudoData(int seed, int valPoI, TString snapshotName,
 			       std::map<TString,double> namesAndValsPoI, 
 			       int toyIndex = -1);

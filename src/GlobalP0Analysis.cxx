@@ -81,15 +81,21 @@ int main(int argc, char **argv) {
   std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
   std::vector<TString> namesPars = toyAna->getNamesPoI();
   for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
-    toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data only
+    if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
+      toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data only
+    }
   }
   for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
-    toyAna->plotHist(namesNuis[i_n], 0);
+    if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
+      toyAna->plotHist(namesNuis[i_n], 0);
+    }
   }
   for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
     toyAna->plotHist(namesPars[i_p], 0);
   }
-    
+  // Also plot the retries:
+  toyAna->plotRetries(0);
+
   //----------------------------------------//
   // Start the plotting!
   
@@ -249,8 +255,9 @@ int main(int argc, char **argv) {
 		  hForAxis->GetXaxis()->GetXmax(), 4);
     
   // Also fit the graph:
-  TF1 *fZGlobal = new TF1("fZGlobal", "pol1", hForAxis->GetXaxis()->GetXmin(), 
-			  hForAxis->GetXaxis()->GetXmax());
+  TF1 *fZGlobal = new TF1("fZGlobal", "pol1", hForAxis->GetXaxis()->GetXmin(),
+  hForAxis->GetXaxis()->GetXmax());
+  
   gZGlobal->Fit(fZGlobal, "0");
   fZGlobal->SetLineWidth(2);
   fZGlobal->SetLineStyle(2);
