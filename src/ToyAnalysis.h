@@ -95,16 +95,25 @@ class ToyAnalysis {
   std::vector<double> m_valuesBestFit_AsymCL_Mu1;
   
   // Histograms:
-  TH1F *m_hRetries[2];
   TH1F *m_hAsymptotic;
   TH1F *m_hMuProfiled[2];
   TH1F *m_hQ0[2];
   TH1F *m_hQMu[2];
+  //TH1F *m_hQMuTilde[2];
   TH1F *m_hZ0[2];
   TH1F *m_hCL[2];
-  
-  //TH1F *m_hQMuTilde[2];
-  
+
+  // For investigations:
+  TH1F *m_hRetries[2];
+  TH1F *m_hImprovement[2];
+  TH1F *m_hMedImprovement[2];
+  TH1F *m_hCounter[2];
+  TH2F *m_h2RetriesZ[2];
+  TH2F *m_h2ZImprovement[2];
+  TH1F *m_hImpAtThisStep[2];
+
+  TH1F *m_hZ0Retries[2][50];
+
   // For the nuis, globs, and regular parameters:
   std::map<TString,TH1F*> m_histStorage;
   

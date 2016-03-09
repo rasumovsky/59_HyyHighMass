@@ -252,8 +252,6 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   printer(Form("ToyAnalysis::fillToyHistograms(%d)",muValue), false);
   
   // Instantiate the histograms:
-  m_hRetries[muValue] = new TH1F(Form("hRetries%d",muValue),
-				 Form("hRetries%d",muValue), 10, -0.5, 9.5);
   m_hMuProfiled[muValue] = new TH1F(Form("hMuProfiled%d",muValue),
 				    Form("hMuProfiled%d",muValue), 
 				    m_nBins, -2.0, 4.0);
@@ -265,6 +263,38 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
 			    m_nBins, 0, 5);
   m_hCL[muValue] = new TH1F(Form("hCL%d",muValue),Form("hCL%d",muValue),
 			    m_nBins, 0, 1);
+  
+  // For investigations:
+  m_hRetries[muValue] = new TH1F(Form("hRetries%d",muValue),
+				 Form("hRetries%d",muValue), 50, 0, 50);
+  m_hImprovement[muValue] = new TH1F(Form("hImprove%d",muValue),
+				     Form("hImprove%d",muValue), 50, 0, 50);
+  m_hMedImprovement[muValue] = new TH1F(Form("hMedImprove%d",muValue),
+					Form("hMedImprove%d",muValue),
+					50, 0, 50);
+  m_hCounter[muValue] = new TH1F(Form("hCounter%d",muValue),
+				 Form("hCounter%d",muValue), 50, 0, 50);
+  
+  m_h2RetriesZ[muValue] = new TH2F(Form("h2RetriesZ%d",muValue),
+				   Form("h2RetriesZ%d",muValue),
+				   50, 0, 50, 50, 0, 5);
+  m_h2ZImprovement[muValue] = new TH2F(Form("h2ZImprove%d",muValue),
+				       Form("h2ZImprove%d",muValue),
+				       50, 0, 5, 50, 0.001, 5);
+  m_hImpAtThisStep[muValue] = new TH1F(Form("hImpAtThisStep%d",muValue),
+				       Form("hImpAtThisStep%d",muValue),
+				       50, 0, 50);
+  
+  // Plot the Gaussian Z0 as a function of # retries:
+  for (int i_r = 0; i_r < 50; i_r++) {
+    m_hZ0Retries[muValue][i_r] = new TH1F(Form("hZ0%d_%d", muValue, i_r), 
+					  Form("hZ0%d_%d", muValue, i_r), 
+					  m_nBins, 0, 5);
+  }
+  
+  
+  std::map<int,std::vector<double> > nllMap; nllMap.clear();
+  for (int i_b = 1; i_b <= 50; i_b++) (nllMap[i_b]).clear();
   
   // Store names and numbers of parameters:
   m_namesGlobs.clear();
@@ -342,8 +372,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     toyTree->fChain->GetEntry(i_e);
     
     // Only plot successful fits:
-    if (!(toyTree->convergedMu0 && //toyTree->convergedMu1 &&
-	  toyTree->convergedMuFree)) continue;
+    if (!(toyTree->convergedMu0 && toyTree->convergedMuFree)) continue;
         
     // Get the test statistic values:
     double valueQMu = m_ts->getQMuFromNLL(toyTree->nllMu1, toyTree->nllMuFree,
@@ -361,6 +390,54 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     m_hCL[muValue]->Fill(valueCL);
     
     m_hRetries[muValue]->Fill(toyTree->bestFitUpdate);
+    m_h2RetriesZ[muValue]->Fill(toyTree->bestFitUpdate, valueZ0);
+    
+    // See how big the change is as a function of:
+    double currMinimum=0.0; double prevMinimum=0.0; double improvement=0.0;
+    for (int i_r = 0; i_r < (int)((*toyTree->nllPerRetry).size()); i_r++) { 
+      
+      if (i_r == 0) {
+	currMinimum = (*toyTree->nllPerRetry)[i_r];
+      }
+      else if ((*toyTree->nllPerRetry)[i_r] < currMinimum) {
+	prevMinimum = currMinimum;
+	currMinimum = (*toyTree->nllPerRetry)[i_r];
+	improvement = fabs(prevMinimum-currMinimum);
+	m_hImpAtThisStep[muValue]->Fill(i_r, improvement);
+
+	if (i_r == toyTree->bestFitUpdate) {
+	  m_hImprovement[muValue]->Fill(i_r, improvement);
+	  (nllMap[i_r]).push_back(improvement);
+	}
+      }
+    }
+
+    m_h2ZImprovement[muValue]->Fill(valueZ0, improvement);
+    
+
+    // For each event, find the best significance below a certain point:
+    for (int i_r = 0; i_r < 50; i_r++) {
+      
+      // Loop over the stored NLLs and find the 
+      double currMinNll = 0.0;
+      for (int i_b = 0; i_b <= i_r; i_b++) {
+	if (currMinNll > (*toyTree->nllPerRetry)[i_b]) {
+	  currMinNll = (*toyTree->nllPerRetry)[i_b];
+	}
+      }
+      
+      double currValueQ0 = m_ts->getQ0FromNLL(toyTree->nllMu0, currMinNll,
+					      toyTree->profiledPOIVal);
+      double currValueZ0 = m_ts->getZ0FromQ0(currValueQ0);
+      
+      m_hZ0Retries[muValue][i_r]->Fill(currValueZ0);
+    }
+    
+    
+
+
+    
+    
     
     // Also fill the QMu vector for pMu calculation:
     if (muValue > 0) {
@@ -413,6 +490,28 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   m_hQ0[muValue]->Scale(1.0 / m_hQ0[muValue]->Integral(1, m_nBins));
   m_hZ0[muValue]->Scale(1.0 / m_hZ0[muValue]->Integral(1, m_nBins));
   m_hCL[muValue]->Scale(1.0 / m_hCL[muValue]->Integral(1, m_nBins));
+  
+  for (int i_r = 0; i_r < 50; i_r++) {
+    m_hZ0Retries[muValue][i_r]->Scale(1.0 / m_hZ0Retries[muValue][i_r]->Integral());
+  }
+
+  // Also calculate median improvement:
+  for (int i_b = 1; i_b <= 50; i_b++) {
+    int size = (int)((nllMap[i_b]).size());
+    if (size > 0) {
+      double medianVal = (nllMap[i_b][(int)((double)size/2.0)]);
+      m_hMedImprovement[muValue]->SetBinContent(i_b, medianVal);
+      m_hMedImprovement[muValue]
+	->SetBinError(i_b, (medianVal * sqrt((double)size)/((double)size)));
+    }
+  }
+  
+  // And calculate the averages:
+  for (int i_b = 1; i_b <= 50; i_b++) {
+    m_hImpAtThisStep[muValue]->SetBinContent(i_b, (m_hImpAtThisStep[muValue]->GetBinContent(i_b) / m_hRetries[muValue]->GetBinContent(i_b)));
+    
+    m_hImprovement[muValue]->SetBinContent(i_b, (m_hImprovement[muValue]->GetBinContent(i_b) / m_hRetries[muValue]->GetBinContent(i_b)));
+  }
   
 }
 
@@ -639,9 +738,9 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   histMu0->SetLineWidth(3);
   //histMu1->SetLineWidth(3);
   histMuFree->SetLineWidth(3);
-  histMu0->SetLineStyle(2);
+  histMu0->SetLineStyle(1);
   //histMu1->SetLineStyle(4);
-  histMuFree->SetLineStyle(1);
+  histMuFree->SetLineStyle(2);
   
   // Format axis titles:
   histMu0->GetYaxis()->SetTitle("Fraction of toys");
@@ -740,19 +839,117 @@ void ToyAnalysis::plotProfiledMu() {
 */
 void ToyAnalysis::plotRetries(int muValue) {
   
-  TCanvas *can = new TCanvas("can", "can", 800, 800);
+  TCanvas *can = new TCanvas("can", "can", 800, 600);
   can->cd();
   
   m_hRetries[muValue]->SetLineColor(kRed+2);
   m_hRetries[muValue]->SetFillColor(kRed-10);
   m_hRetries[muValue]->SetLineWidth(2);
-  m_hRetries[muValue]->GetXaxis()->SetTitle("#mu_{profiled}");
+  m_hRetries[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
   m_hRetries[muValue]->GetYaxis()->SetTitle("Fraction of toys");
   //gPad->SetLogy();
   m_hRetries[muValue]->Draw("hist");
   can->Print(Form("%s/plot_Retries.eps", m_outputDir.Data()));
   can->Clear();
   //gPad->SetLogy(0);  
+  
+  m_hImprovement[muValue]->SetLineColor(kRed+2);
+  m_hImprovement[muValue]->SetFillColor(kRed-10);
+  m_hImprovement[muValue]->SetLineWidth(2);
+  m_hImprovement[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
+  m_hImprovement[muValue]->GetYaxis()->SetTitle("Mean change in NLL");
+  gPad->SetLogy();
+  m_hImprovement[muValue]->Draw("hist");
+  can->Print(Form("%s/plot_Improvement.eps", m_outputDir.Data()));
+  can->Clear();
+  gPad->SetLogy(0);
+  
+  m_hMedImprovement[muValue]->SetLineColor(kRed+2);
+  m_hMedImprovement[muValue]->SetFillColor(kRed-10);
+  m_hMedImprovement[muValue]->SetLineWidth(2);
+  m_hMedImprovement[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
+  m_hMedImprovement[muValue]->GetYaxis()->SetTitle("Median change in NLL");
+  gPad->SetLogy();
+  m_hMedImprovement[muValue]->Draw("hist");
+  //m_hMedImprovement[muValue]->Draw("E1");
+  can->Print(Form("%s/plot_MedImprovement.eps", m_outputDir.Data()));
+  can->Clear();
+  gPad->SetLogy(0);
+
+  
+  m_hImpAtThisStep[muValue]->SetLineColor(kRed+2);
+  m_hImpAtThisStep[muValue]->SetFillColor(kRed-10);
+  m_hImpAtThisStep[muValue]->SetLineWidth(2);
+  m_hImpAtThisStep[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
+  m_hImpAtThisStep[muValue]->GetYaxis()->SetTitle("Avg. Improvement at step");
+  gPad->SetLogy();
+  m_hImpAtThisStep[muValue]->Draw("hist");
+  can->Print(Form("%s/plot_AvgImprovementPerRetry.eps", m_outputDir.Data()));
+  can->Clear();
+  gPad->SetLogy(0);
+  
+
+  m_h2RetriesZ[muValue];
+  m_h2RetriesZ[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
+  m_h2RetriesZ[muValue]->GetYaxis()->SetTitle("Z_{0}^{Local} [#sigma]");
+  m_h2RetriesZ[muValue]->Draw("colz");
+  can->Print(Form("%s/plot_2D_RetriesVsZ0.eps", m_outputDir.Data()));
+  can->Clear();
+  
+
+  m_h2ZImprovement[muValue];
+  m_h2ZImprovement[muValue];
+  m_h2ZImprovement[muValue]->GetYaxis()->SetTitle("Improvement on minimum");
+  m_h2ZImprovement[muValue]->GetXaxis()->SetTitle("Z_{0}^{Local} [#sigma]");
+  m_h2ZImprovement[muValue]->Draw("colz");
+  can->Print(Form("%s/plot_2D_Z0VsImprovement.eps", m_outputDir.Data()));
+  can->Clear();
+ 
+  
+  ///////////////////////
+  TGraph *gGaussMean = new TGraph();
+  TGraph *gGaussSigma = new TGraph();
+  TGraph *gGaussZ0 = new TGraph();
+  // m_hZ0Retries[muValue][i_r]->Fill(currValueZ0);
+  for (int i_r = 0; i_r < 50; i_r++) {
+    TF1 *fGauss = new TF1("fGauss", "gaus", 
+			  m_hZ0Retries[muValue][i_r]->GetXaxis()->GetXmin(), 
+			  m_hZ0Retries[muValue][i_r]->GetXaxis()->GetXmax());
+    m_hZ0Retries[muValue][i_r]->Fit(fGauss, "0");
+    gGaussMean->SetPoint(i_r, i_r, fGauss->GetParameter(1));
+    gGaussSigma->SetPoint(i_r, i_r, fGauss->GetParameter(2));
+    
+    
+    double totalIntegral 
+      = fGauss->Integral(m_hZ0Retries[muValue][i_r]->GetXaxis()->GetXmin(), 
+			 m_hZ0Retries[muValue][i_r]->GetXaxis()->GetXmax());
+    double gaussIntegral 
+      = fGauss->Integral(m_config->getNum("GlobalP0AnalysisSigma"),
+			 m_hZ0Retries[muValue][i_r]->GetXaxis()->GetXmax());
+    gGaussZ0->SetPoint(i_r, i_r,
+		       TMath::NormQuantile(1.0-(gaussIntegral/totalIntegral)));
+    
+    delete fGauss;
+  }
+  
+  gGaussMean->GetXaxis()->SetTitle("Retry");
+  gGaussMean->GetYaxis()->SetTitle("Z_{0} Mean");
+  gGaussMean->Draw("AEP");
+  can->Print(Form("%s/graph_Z0MeanVsRetry.eps", m_outputDir.Data()));
+  can->Clear();
+
+  gGaussSigma->GetXaxis()->SetTitle("Retry");
+  gGaussSigma->GetYaxis()->SetTitle("Z_{0} Standard deviation");
+  gGaussSigma->Draw("AEP");
+  can->Print(Form("%s/graph_Z0SigmaVsRetry.eps", m_outputDir.Data()));
+  can->Clear();
+  
+  gGaussZ0->GetXaxis()->SetTitle("Retry");
+  gGaussZ0->GetYaxis()->SetTitle("Z_{0}^{Global}");
+  gGaussZ0->Draw("AEP");
+  can->Print(Form("%s/graph_GlobalZ0VsRetry.eps", m_outputDir.Data()));
+  can->Clear();
+  
 }
 
 /**

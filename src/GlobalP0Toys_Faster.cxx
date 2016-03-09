@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: GlobalP0Toys.cxx                                                    //
+//  Name: GlobalP0Toys_Faster.cxx                                             //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
@@ -8,6 +8,10 @@
 //                                                                            //
 //  This program tosses background-only toys, finds the best-fit mass and     //
 //  width, then calculates the p0 at that point.                              //
+//                                                                            //
+//  The tricky point is that, in order to speed up the calculation, a maximum //
+//  likelihood fit is used instead of a scan to get the best fit point and    //
+//  the minimum p0 value. This requires many retries, from observation.       //
 //                                                                            //
 //  Options:                                                                  //
 //                                                                            //
@@ -143,15 +147,21 @@ int main(int argc, char **argv) {
   fOutputTree.Branch("valuesPoIsMuFree", &valuesPoIsMuFree);
   
   // Set the mass and width according to the given hypothesis:
+  // Note: the mapPoIFromMuFree is added below. Will use the best-fit values
+  // from the ML fit (EXCEPT FOR CROSS-SECTION!), so that spurious signal mass 
+  // is properly set for the background-only fit.
   std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
   std::vector<double> inValPoIMu0 = config->getNumV("PoIValuesMu0");
   std::vector<double> inValPoIMu1 = config->getNumV("PoIValuesMu1");
   std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
   std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
+  std::map<TString,double> mapPoIFromMuFree; mapPoIFromMuFree.clear();
   for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
     mapPoIMu0[listPoI[i_p]] = inValPoIMu0[i_p];
     mapPoIMu1[listPoI[i_p]] = inValPoIMu1[i_p];
+    mapPoIFromMuFree[listPoI[i_p]] = inValPoIMu0[i_p];// same as mu0 for now
   }
+  
   
   //----------------------------------------//
   // Loop to generate pseudo experiments:
@@ -194,7 +204,9 @@ int main(int argc, char **argv) {
       }
     }
     
+    // Set the nominal snapshot:
     TString snapshotName = config->getStr("WorkspaceSnapshot");
+    testStat->setNominalSnapshot(snapshotName);
     
     // Also turn off MC stat errors if:
     if (config->isDefined("TurnOffTemplateStat") && 
@@ -210,6 +222,20 @@ int main(int argc, char **argv) {
 	  testStat->setParam(currName, nuisCurr->getVal(), true);
 	}
       }
+    }
+    
+    // Randomize the mass for the spurious signal: 
+    if (config->isDefined("DoRandomizeSpuriousSignal") && 
+	config->getBool("DoRandomizeSpuriousSignal")) {
+      TString spuriousMassName = config->getStr("MassVarForSpuriousSignal");
+      std::vector<double> spuriousRange
+	= config->getNumV(Form("PoIRange_%s", spuriousMassName.Data()));
+      TRandom3 randomSpurious = TRandom3(9*seed+7);
+      double randomSpuriousMass
+	= randomSpurious.Uniform(spuriousRange[0], spuriousRange[1]);
+      mapPoIMu0[spuriousMassName] = randomSpuriousMass;
+      std::cout << "Setting spurious mass " << spuriousMassName << " to "
+		<< randomSpuriousMass << std::endl;
     }
     
     // Create the pseudo data:
@@ -228,15 +254,8 @@ int main(int argc, char **argv) {
     if (config->isDefined("FitOptions")) {
       testStat->setFitOptions(config->getStr("FitOptions"));
     }
-    
-    // Mu = 0 fits:
-    std::cout << "GlobalP0Toys: Mu=0 fit starting" << std::endl;
-    nllMu0 = testStat->getFitNLL("toyData", 0, true, mapPoIMu0, false);
-    convergedMu0 = testStat->fitsAllConverged();
-    mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
-    mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
-    
-    // Mu free fits:
+        
+    //---------- Mu free fits ----------//
     std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
     int retry = 0; nllPerRetry.clear();
     while (retry < config->getInt("NumRetries")) {
@@ -267,12 +286,47 @@ int main(int argc, char **argv) {
 	convergedMuFree = testStat->fitsAllConverged();
 	mapToVectors(testStat->getNuisanceParameters(), namesNP,valuesNPMuFree);
 	mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
+	
+	// Set the normalization PoI
+	if (config->isDefined("PoIForNormalization")) {
+	  profiledPOIVal = testStat->theWorkspace()
+	    ->var(config->getStr("PoIForNormalization"))->getVal();
+	  std::cout << "profiledPoIVal = " << profiledPOIVal << std::endl;
+	}
+	
 	bestFitUpdate = retry;
       }
       // ALWAYS increment the retry number, otherwise infinite loop!
       retry++;
     }
     
+    // Set the parameters of interest after the mu-free fit, so that spurious
+    // signal is at the correct location.
+    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+
+      for (int i_v = 0; i_v < (int)valuesPoIsMuFree.size(); i_v++) {
+	if ((listPoI[i_p]).EqualTo((TString)(namesPoIs[i_v]))) {
+	  
+	  // Make sure you don't also set the normalization!
+	  if (!listPoI[i_p].EqualTo(config->getStr("PoIForNormalization"))) {
+	    mapPoIFromMuFree[listPoI[i_p]] = valuesPoIsMuFree[i_v];
+	    std::cout << "Setting POI " << listPoI[i_p] << " = " 
+		      << namesPoIs[i_v] << " = " << valuesPoIsMuFree[i_v]
+		      << std::endl;
+	  }
+	}
+      }
+    }
+    
+    //---------- Mu = 0 fits ----------//
+    // Do the mu = 0 fit after the mu=1 fit, so that the spurious signal mass 
+    // can be found:
+    std::cout << "GlobalP0Toys: Mu=0 fit starting" << std::endl;
+    nllMu0 = testStat->getFitNLL("toyData", 0, true, mapPoIFromMuFree, false);
+    convergedMu0 = testStat->fitsAllConverged();
+    mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
+    mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
+
     // Calculate profile likelihood ratios:
     llrL1L0 = nllMu1 - nllMu0;
     llrL1Lfree = profiledPOIVal > 1.0 ? 0.0 : (nllMu1 - nllMuFree);

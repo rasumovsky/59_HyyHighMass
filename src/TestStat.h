@@ -79,6 +79,7 @@ class TestStat {
 			       TString varToScan,
 			       std::vector<TString> varsToFix);
   void setFitOptions(TString fitOptions);
+  void setNominalSnapshot(TString nominalSnapshot);
   void setPlotAxis(bool useLogScale, double yMin, double yMax, 
 		   double GeVPerBin);
   void setPlotDirectory(TString directory);
@@ -132,6 +133,7 @@ class TestStat {
   RooWorkspace *m_workspace;
   ModelConfig *m_mc;
   TGraph *m_graphNLL;
+  TString m_nominalSnapshot;
   
   // Store the calculated values:
   std::map<TString,double> m_calculatedValues;

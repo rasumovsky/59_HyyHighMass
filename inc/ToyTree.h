@@ -1,8 +1,8 @@
 //////////////////////////////////////////////////////////
 // This class has been automatically generated on
-// Mon Feb 29 11:15:50 2016 by ROOT version 5.34/32
+// Tue Mar  8 11:22:22 2016 by ROOT version 6.04/14
 // from TTree toy/toy
-// found on file: toy_mu0_19343.root
+// found on file: toy_mu0.root
 //////////////////////////////////////////////////////////
 
 #ifndef ToyTree_h
@@ -13,22 +13,24 @@
 #include <TFile.h>
 
 // Header file for the classes stored in the TTree if any.
-#include <vector>
+#include "vector"
 
 using namespace std;
 using std::vector;
-
-// Fixed size dimensions of array or collections stored in the TTree if any.
 
 class ToyTree {
 public :
    TTree          *fChain;   //!pointer to the analyzed TTree or TChain
    Int_t           fCurrent; //!current Tree number in a TChain
 
+// Fixed size dimensions of array or collections stored in the TTree if any.
+
    // Declaration of leaf types
    Int_t           seed;
+   Int_t           bestFitUpdate;
    Double_t        numEvents;
    vector<double>  *numEventsPerCate;
+   vector<double>  *nllPerRetry;
    Double_t        profiledPOIVal;
    Bool_t          convergedMu0;
    Bool_t          convergedMu1;
@@ -54,8 +56,10 @@ public :
 
    // List of branches
    TBranch        *b_seed;   //!
+   TBranch        *b_bestFitUpdate;   //!
    TBranch        *b_numEvents;   //!
    TBranch        *b_numEventsPerCate;   //!
+   TBranch        *b_nllPerRetry;   //!
    TBranch        *b_profiledPOIVal;   //!
    TBranch        *b_convergedMu0;   //!
    TBranch        *b_convergedMu1;   //!
@@ -98,9 +102,9 @@ ToyTree::ToyTree(TTree *tree) : fChain(0)
 // if parameter tree is not specified (or zero), connect the file
 // used to generate this class and read the Tree.
    if (tree == 0) {
-      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("toy_mu0_19343.root");
+      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("toy_mu0.root");
       if (!f || !f->IsOpen()) {
-         f = new TFile("toy_mu0_19343.root");
+         f = new TFile("toy_mu0.root");
       }
       f->GetObject("toy",tree);
 
@@ -145,6 +149,7 @@ void ToyTree::Init(TTree *tree)
 
    // Set object pointer
    numEventsPerCate = 0;
+   nllPerRetry = 0;
    namesNP = 0;
    valuesNPMu0 = 0;
    valuesNPMu1 = 0;
@@ -164,8 +169,10 @@ void ToyTree::Init(TTree *tree)
    fChain->SetMakeClass(1);
 
    fChain->SetBranchAddress("seed", &seed, &b_seed);
+   fChain->SetBranchAddress("bestFitUpdate", &bestFitUpdate, &b_bestFitUpdate);
    fChain->SetBranchAddress("numEvents", &numEvents, &b_numEvents);
    fChain->SetBranchAddress("numEventsPerCate", &numEventsPerCate, &b_numEventsPerCate);
+   fChain->SetBranchAddress("nllPerRetry", &nllPerRetry, &b_nllPerRetry);
    fChain->SetBranchAddress("profiledPOIVal", &profiledPOIVal, &b_profiledPOIVal);
    fChain->SetBranchAddress("convergedMu0", &convergedMu0, &b_convergedMu0);
    fChain->SetBranchAddress("convergedMu1", &convergedMu1, &b_convergedMu1);

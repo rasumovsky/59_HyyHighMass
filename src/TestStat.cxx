@@ -285,6 +285,7 @@ void TestStat::clearData() {
   clearFitParamSettings();
   m_graphNLL = NULL;
   m_fitOptions = ""; 
+  m_nominalSnapshot = "paramsOrigin";
 }
 
 /**
@@ -321,7 +322,7 @@ RooDataSet* TestStat::createOneCatPseudoData(int seed, int valPoI,
   }
   else {
     // Load the original parameters from profiling:
-    //m_workspace->loadSnapshot("paramsOrigin");
+    //m_workspace->loadSnapshot(m_nominalSnapshot);
     printer(Form("TestStat: ERROR! No snapshot %s", snapshotName.Data()),
 	    true);
   }
@@ -422,7 +423,7 @@ RooDataSet* TestStat::createOneCatPseudoData(int seed, int valPoI,
   storeParams(poi, m_mapPoI);
 
   // release nuisance parameters (but don't change the values!):
-  //m_workspace->loadSnapshot("paramsOrigin");
+  //m_workspace->loadSnapshot(m_nominalSnapshot);
   statistics::constSet(nuisanceParameters, false);
   statistics::constSet(globalObservables, true);
   
@@ -457,7 +458,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
   }
   else {
     // Load the original parameters from profiling:
-    //m_workspace->loadSnapshot("paramsOrigin");
+    //m_workspace->loadSnapshot(m_nominalSnapshot);
     printer(Form("TestStat: ERROR! No snapshot %s", snapshotName.Data()),
 	    true);
   }
@@ -610,7 +611,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
   storeParams(poi, m_mapPoI);
 
   // release nuisance parameters (but don't change the values!):
-  //m_workspace->loadSnapshot("paramsOrigin");
+  //m_workspace->loadSnapshot(m_nominalSnapshot);
   statistics::constSet(nuisanceParameters, false);
   statistics::constSet(globalObservables, true);
   
@@ -730,8 +731,9 @@ double TestStat::getFitNLL(TString datasetName, int valPoI, bool fixPoI,
   RooAbsPdf* combPdf = m_mc->GetPdf();
   RooArgSet* nuisanceParameters = (RooArgSet*)m_mc->GetNuisanceParameters();
   RooArgSet* globalObservables = (RooArgSet*)m_mc->GetGlobalObservables();
-  if (resetParams) m_workspace->loadSnapshot("paramsOrigin");
-  RooArgSet* origValNP = (RooArgSet*)m_workspace->getSnapshot("paramsOrigin");
+  if (resetParams) m_workspace->loadSnapshot(m_nominalSnapshot);
+  RooArgSet* origValNP
+    = (RooArgSet*)m_workspace->getSnapshot(m_nominalSnapshot);
   RooArgSet* poi = (RooArgSet*)m_mc->GetParametersOfInterest();
   RooArgSet* poiAndNuis = new RooArgSet();
   poiAndNuis->add(*nuisanceParameters);
@@ -1526,14 +1528,15 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   RooAbsPdf* combPdf = m_mc->GetPdf();
   RooArgSet* nuisanceParameters = (RooArgSet*)m_mc->GetNuisanceParameters();
   RooArgSet* globalObservables = (RooArgSet*)m_mc->GetGlobalObservables();
-  RooArgSet* origValNP = (RooArgSet*)m_workspace->getSnapshot("paramsOrigin");
+  RooArgSet* origValNP
+    = (RooArgSet*)m_workspace->getSnapshot(m_nominalSnapshot);
   RooArgSet* poi = (RooArgSet*)m_mc->GetParametersOfInterest();
   RooRealVar* firstPoI = (RooRealVar*)poi->first();
   RooArgSet* poiAndNuis = new RooArgSet();
   poiAndNuis->add(*nuisanceParameters);
   poiAndNuis->add(*poi);
   
-  m_workspace->loadSnapshot("paramsOrigin");
+  m_workspace->loadSnapshot(m_nominalSnapshot);
   
   // Look for dataset:
   if (!m_workspace->data(datasetName)) {
@@ -1752,6 +1755,16 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
 */
 void TestStat::setFitOptions(TString fitOptions) {
   m_fitOptions = fitOptions;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Set the name of the snapshot to load by default in calls to getFitNLL()
+   @param nominalSnapshot - The name of the nominal snapshot to load before
+   running getFitNLL();
+*/
+void TestStat::setNominalSnapshot(TString nominalSnapshot) {
+  m_nominalSnapshot = nominalSnapshot;
 }
 
 /**
