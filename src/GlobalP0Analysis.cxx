@@ -173,20 +173,20 @@ int main(int argc, char **argv) {
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.07);
-  t.DrawLatex(0.58, 0.84, "ATLAS");
+  t.DrawLatex(0.20, 0.84, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.07);
-  t.DrawLatex(0.70, 0.84, config->getStr("ATLASLabel"));
-  t.DrawLatex(0.58, 0.76, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+  t.DrawLatex(0.32, 0.84, config->getStr("ATLASLabel"));
+  t.DrawLatex(0.20, 0.76, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			       (config->getNum("AnalysisLuminosity")/1000.0)));
   
   // Legend:
-  TLegend leg1(0.58, 0.55, 0.90, 0.70);
+  TLegend leg1(0.2, 0.55, 0.45, 0.70);
   leg1.SetTextFont(42); 
   leg1.SetTextSize(0.07);
   leg1.SetBorderSize(0);
   leg1.SetFillColor(0);
-  leg1.AddEntry(line1, Form("Median Z_{0}^{Local}=%2.2f",medianZ0), "l");
-  if (options.Contains("PlotGauss")) leg1.AddEntry(fGauss, "Gaussian fit", "l");
+  leg1.AddEntry(line1, Form("Med. Z_{0}^{Local}=%2.2f",medianZ0), "l");
+  if (options.Contains("PlotGauss")) leg1.AddEntry(fGauss, "Gaussian", "l");
   leg1.Draw("SAME");
 
   //----------//

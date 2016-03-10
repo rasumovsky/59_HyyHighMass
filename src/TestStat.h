@@ -45,6 +45,7 @@ class TestStat {
 			       std::map<TString,double> namesAndValsPoI, 
 			       int toyIndex = -1);
   bool fitsAllConverged();
+  double functionQ0(double x);
   double functionQMu(double x);
   double functionQMuTilde(double x, double asimovTestStat);
   double getCLFromCLs(double CLs);

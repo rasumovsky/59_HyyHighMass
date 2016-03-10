@@ -1,13 +1,12 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: GlobalP0Toys.cxx                                                    //
+//  Name: LocalP0Toys.cxx                                                    //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
-//  Date: 26/02/2016                                                          //
+//  Date: 09/03/2016                                                          //
 //                                                                            //
-//  This program tosses background-only toys, finds the best-fit mass and     //
-//  width, then calculates the p0 at that point.                              //
+//  This program tosses signal-plus-background or background-only toy MC.     //
 //                                                                            //
 //  Options:                                                                  //
 //                                                                            //
@@ -80,7 +79,7 @@ int main(int argc, char **argv) {
   system(Form("cp %s %s", originFile.Data(), copiedFile.Data()));
   
   // Construct the output directories:
-  TString outputDir = Form("%s/%s/GlobalP0Toys", 
+  TString outputDir = Form("%s/%s/LocalP0Toys", 
 			   (config->getStr("MasterOutput")).Data(),
 			   (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s/err", outputDir.Data()));
@@ -142,23 +141,15 @@ int main(int argc, char **argv) {
   fOutputTree.Branch("valuesPoIsMu0", &valuesPoIsMu0);
   fOutputTree.Branch("valuesPoIsMuFree", &valuesPoIsMuFree);
   
-  // Set the mass and width according to the given hypothesis:
-  std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
-  std::vector<double> inValPoIMu0 = config->getNumV("PoIValuesMu0");
-  std::vector<double> inValPoIMu1 = config->getNumV("PoIValuesMu1");
-  std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
-  std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
-  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
-    mapPoIMu0[listPoI[i_p]] = inValPoIMu0[i_p];
-    mapPoIMu1[listPoI[i_p]] = inValPoIMu1[i_p];
-  }
+  // Get the name of the normalization parameter:
+  TString normalizationPoI = config->getStr("PoIForNormalization");
   
   //----------------------------------------//
   // Loop to generate pseudo experiments:
-  std::cout << "GlobalP0Toys: Generating " << nToysPerJob
+  std::cout << "LocalP0Toys: Generating " << nToysPerJob
 	    << " toys with mu_DH = " << inputPoIVal << endl;
   for (int i_t = 0; i_t < nToysPerJob; i_t++) {
-    std::cout << "GlobalP0Toys: Starting toy " << i_t << " of " << nToysPerJob
+    std::cout << "LocalP0Toys: Starting toy " << i_t << " of " << nToysPerJob
 	      << std::endl;
     
     // Load model, data, etc. from workspace:
@@ -168,25 +159,53 @@ int main(int argc, char **argv) {
     
     // The statistics class, for calculating qMu etc. 
     TestStat *testStat = new TestStat(configFile, "new", workspace);
+        
+    // Load the background-only snapshot (signal + background snapshot)
+    // for background-only toys (signal + background toys).
+    TString snapshotName = (inputPoIVal == 0) ? 
+      config->getStr("WorkspaceSnapshotMu0") :
+      config->getStr("WorkspaceSnapshotMu1");
+    testStat->setNominalSnapshot(snapshotName);
     
-
-
-
-
-    // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
-    // for every toy job, since the signal hypothesis can change!
-    //testStat->saveSnapshots(true);
-    //TString dataToProf = config->getStr("WorkspaceObsData");
-    //if (inputPoIVal == 0) {
-    //testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu0);
-    //}
-    //else testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
-    //testStat->saveSnapshots(false);
+    // For setting the PoI values in toy creation and fitting:
+    std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
+    std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
+    std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
     
-
-
-
-
+    // Set the parameters of interest using mu = 1 snapshot. The mu=1 fit 
+    // parameters are used even for the mu=0 parameters of interest because the
+    // background-only fits and toys should still have the spurious signal 
+    // randomized and fitted at the proper mass.
+    const RooArgSet *snapshotMu1
+      = workspace->getSnapshot(config->getStr("WorkspaceSnapshotMu1"));
+    TIterator *snapMu1Iter = snapshotMu1->createIterator();
+    RooRealVar *snapParMu1 = NULL;
+    while ((snapParMu1 = (RooRealVar*)snapMu1Iter->Next())) {
+      TString currName = snapParMu1->GetName();
+      for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+	if (currName.EqualTo(listPoI[i_p])) {
+	  mapPoIMu1[listPoI[i_p]] = snapParMu1->getVal();
+	  std::cout << "From snapshot, setting " << listPoI[i_p] 
+		    << " equal to " << mapPoIMu1[listPoI[i_p]]
+		    << " for Mu=1 map " << std::endl;
+	  if (currName.EqualTo(normalizationPoI)) {
+	    mapPoIMu0[listPoI[i_p]] = 0.0;
+	    std::cout << "From snapshot, setting " << listPoI[i_p] 
+		      << " equal to " << mapPoIMu0[listPoI[i_p]]
+		      << " for Mu=0 map " << std::endl;
+	  }
+	  else {
+	    mapPoIMu0[listPoI[i_p]] = snapParMu1->getVal();
+	    std::cout << "From snapshot, setting " << listPoI[i_p] 
+		      << " equal to " << mapPoIMu0[listPoI[i_p]]
+		      << " for Mu=0 map " << std::endl;
+	  }
+	}
+      }
+    }
+    
+    /*
+      I don't think we want to set PoI ranges for the local p0 study
 
     // Set the PoI ranges for this study:
     for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
@@ -197,15 +216,14 @@ int main(int argc, char **argv) {
 	  ->setRange(currRange[0], currRange[1]);
       }
       else {
-	std::cout << "GlobalP0Toys: Workspace has no variable " << listPoI[i_p]
+	std::cout << "LocalP0Toys: Workspace has no variable " << listPoI[i_p]
 		  << std::endl;
 	exit(0);
       }
     }
-    
-    TString snapshotName = config->getStr("WorkspaceSnapshot");
-    
-    // Also turn off MC stat errors if:
+    */
+        
+    // Also turn off MC stat errors if requested for Graviton jobs:
     if (config->isDefined("TurnOffTemplateStat") && 
 	config->getBool("TurnOffTemplateStat")) {
       testStat->theWorkspace()->loadSnapshot(snapshotName);
@@ -222,8 +240,16 @@ int main(int argc, char **argv) {
     }
     
     // Create the pseudo data:
-    RooDataSet *newToyData
-      = testStat->createPseudoData(seed, inputPoIVal, snapshotName, mapPoIMu0);
+    RooDataSet *newToyData = NULL;
+    if (inputPoIVal == 0) {
+      //newToyData = 
+      testStat->createPseudoData(seed, inputPoIVal, snapshotName, mapPoIMu0);
+    }
+    else {
+      //newToyData = 
+      testStat->createPseudoData(seed, inputPoIVal, snapshotName, mapPoIMu1);
+    }
+    
     numEvents = workspace->data("toyData")->sumEntries();
     numEventsPerCate = testStat->getNEventsToys();
     
@@ -239,25 +265,32 @@ int main(int argc, char **argv) {
     }
     
     // Mu = 0 fits:
-    std::cout << "GlobalP0Toys: Mu=0 fit starting" << std::endl;
+    std::cout << "LocalP0Toys: Mu=0 fit starting" << std::endl;
     nllMu0 = testStat->getFitNLL("toyData", 0, true, mapPoIMu0, false);
     convergedMu0 = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu0);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu0);
     
     // Mu = 1 fits:
-    std::cout << "GlobalP0Toys: Mu=1 fit starting" << std::endl;
+    std::cout << "LocalP0Toys: Mu=1 fit starting" << std::endl;
     nllMu1 = testStat->getFitNLL("toyData", 1, true, mapPoIMu1, false);
     convergedMu1 = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMu1);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMu1);
+    double nominalNormalization
+      = (testStat->getPoIs())[(std::string)(normalizationPoI)];
     
     // Mu free fits:
-    std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
+    std::cout << "LocalP0Toys: Mu-free fit starting" << std::endl;
     nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
     convergedMuFree = testStat->fitsAllConverged();
     mapToVectors(testStat->getNuisanceParameters(), namesNP,valuesNPMuFree);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
+    double profiledNormalization
+      = (testStat->getPoIs())[(std::string)(normalizationPoI)];
+    
+    // Get the profiled PoI value:
+    profiledPOIVal = (profiledNormalization / nominalNormalization);
     
     // Calculate profile likelihood ratios:
     llrL1L0 = nllMu1 - nllMu0;
@@ -283,9 +316,9 @@ int main(int argc, char **argv) {
   
   // Clock the toys:
   time = clock() - time;
-
+  
   if (config->getBool("Verbose")) {
-    std::cout << "\nGlobalP0Toys_Faster: Toy procedure concluded." << std::endl;
+    std::cout << "\nLocalP0Toys_Faster: Toy procedure concluded." << std::endl;
     printf("\t%d toys required %d clock cycles (%f seconds).\n\n",
 	   nToysPerJob, (int)time, ((float)time/CLOCKS_PER_SEC));
   }

@@ -631,12 +631,24 @@ bool TestStat::fitsAllConverged() {
 
 /**
    -----------------------------------------------------------------------------
+   Implements the functional form of q0 (same as qMu).
+   @param x - The value of the test statistic.
+   @return - The value of the asymptotic q0 test statistic distribution.
+*/
+double TestStat::functionQ0(double x) {
+  // This corresponds to the "special case" of mu'=0
+  double result = TMath::Exp(-1*x/2.0) / (2.0*sqrt(2.0*TMath::Pi()*x));
+  return result;
+}
+
+/**
+   -----------------------------------------------------------------------------
    Implements the functional form of qMu.
    @param x - The value of the test statistic.
-   @return - The value of the asymptotic test statistic distribution.
+   @return - The value of the qMu asymptotic test statistic distribution.
 */
 double TestStat::functionQMu(double x) {
-  // This corresponds to the "special case" of mu=mu'
+  // This corresponds to the "special case" of mu'=mu
   double result = TMath::Exp(-1*x/2.0) / (2.0*sqrt(2.0*TMath::Pi()*x));
   return result;
 }

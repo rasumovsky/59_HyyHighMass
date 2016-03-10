@@ -162,7 +162,6 @@ int main(int argc, char **argv) {
     mapPoIFromMuFree[listPoI[i_p]] = inValPoIMu0[i_p];// same as mu0 for now
   }
   
-  
   //----------------------------------------//
   // Loop to generate pseudo experiments:
   std::cout << "GlobalP0Toys: Generating " << nToysPerJob
@@ -178,16 +177,6 @@ int main(int argc, char **argv) {
     
     // The statistics class, for calculating qMu etc. 
     TestStat *testStat = new TestStat(configFile, "new", workspace);
-    
-    // Then create snapshot for Mu=1 or Mu=0 hypothesis! This must be re-done
-    // for every toy job, since the signal hypothesis can change!
-    //testStat->saveSnapshots(true);
-    //TString dataToProf = config->getStr("WorkspaceObsData");
-    //if (inputPoIVal == 0) {
-    //testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu0);
-    //}
-    //else testStat->getFitNLL(dataToProf, inputPoIVal, true, mapPoIMu1);
-    //testStat->saveSnapshots(false);
     
     // Set the PoI ranges for this study:
     for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {

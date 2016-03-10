@@ -14,7 +14,8 @@
 //                                                                            //
 //  MasterOption:                                                             //
 //    - TossGlobalP0Toys                                                      //
-//    - PlotGlobalP0Toys                                                      //
+//    - GlobalP0Analysis                                                      //
+//    - LocalP0Analysis                                                       //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -125,12 +126,22 @@ int main (int argc, char **argv) {
   }
   
   //--------------------------------------//
-  // Step 5.1: Plot pseudo-experiment ensemble results:
+  // Step 5.1: Plot pseudo-experiment ensemble results for global significance:
   if (masterOption.Contains("GlobalP0Analysis")) {
-    std::cout << "HMMaster: Step 5.1 - Plot pseudoexperiment results."
+    std::cout << "HMMaster: Step 5.1 - Plot global significance toy results."
 	      << std::endl;
     system(Form("./bin/GlobalP0Analysis %s %s", fullConfigPath.Data(),
 		m_config->getStr("GlobalP0AnalysisOptions").Data()));
+  }
+
+
+  //--------------------------------------//
+  // Step 6.1: Plot pseudo-experiment ensemble results for local significance:
+  if (masterOption.Contains("LocalP0Analysis")) {
+    std::cout << "HMMaster: Step 6.1 - Plot local significance toy results."
+	      << std::endl;
+    system(Form("./bin/LocalP0Analysis %s %s", fullConfigPath.Data(),
+		m_config->getStr("LocalP0AnalysisOptions").Data()));
   }
   
   return 0;

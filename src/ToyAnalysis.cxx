@@ -9,7 +9,7 @@
 //  This program compares test statistic values from pseudo-experiment        //
 //  ensembles and asymptotic formulae.                                        //
 //                                                                            //
-//  Options: ForcePlot                                                        //
+//  Options: StudyRetries                                                     //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -24,6 +24,7 @@
 ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   
   // Load the config file:
+  m_options = options;
   m_config = new Config(newConfigFile);
   TString jobName = m_config->getStr("JobName");
   TString anaType = m_config->getStr("AnalysisType");
@@ -40,6 +41,9 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   m_binMin = 0;
   m_binMax = 20;
   
+  m_hAsymptoticQ0 = NULL;
+  m_hAsymptoticQMu = NULL;
+
   m_valuesQMu_Mu0.clear();
   m_valuesQMu_Mu1.clear();
   m_valuesBestFit_AsymZ0_Mu0.clear();
@@ -233,6 +237,19 @@ double ToyAnalysis::calculatePMuFromToy(double qMu) {
 
 /**
    -----------------------------------------------------------------------------
+   Check whether a particular type of fit is done in these toys.
+   @param fitType - The type of fit to do (or not do).
+   @return - True iff. the fit is done.
+*/
+bool ToyAnalysis::doThisFit(TString fitType) {
+  for (int i_f = 0; i_f < (int)m_fitTypes.size(); i_f++) {
+    if ((m_fitTypes[i_f]).EqualTo(fitType)) return true;
+  }
+  return false;
+}
+
+/**
+   -----------------------------------------------------------------------------
    Calculate pB based on the standard deviation.
    @param N - The standard deviation.
    @return - The value of pB.
@@ -264,35 +281,37 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   m_hCL[muValue] = new TH1F(Form("hCL%d",muValue),Form("hCL%d",muValue),
 			    m_nBins, 0, 1);
   
-  // For investigations:
-  m_hRetries[muValue] = new TH1F(Form("hRetries%d",muValue),
-				 Form("hRetries%d",muValue), 50, 0, 50);
-  m_hImprovement[muValue] = new TH1F(Form("hImprove%d",muValue),
-				     Form("hImprove%d",muValue), 50, 0, 50);
-  m_hMedImprovement[muValue] = new TH1F(Form("hMedImprove%d",muValue),
-					Form("hMedImprove%d",muValue),
-					50, 0, 50);
-  m_hCounter[muValue] = new TH1F(Form("hCounter%d",muValue),
-				 Form("hCounter%d",muValue), 50, 0, 50);
-  
-  m_h2RetriesZ[muValue] = new TH2F(Form("h2RetriesZ%d",muValue),
-				   Form("h2RetriesZ%d",muValue),
-				   50, 0, 50, 50, 0, 5);
-  m_h2ZImprovement[muValue] = new TH2F(Form("h2ZImprove%d",muValue),
-				       Form("h2ZImprove%d",muValue),
-				       50, 0, 5, 50, 0.001, 5);
-  m_hImpAtThisStep[muValue] = new TH1F(Form("hImpAtThisStep%d",muValue),
-				       Form("hImpAtThisStep%d",muValue),
-				       50, 0, 50);
-  
-  // Plot the Gaussian Z0 as a function of # retries:
-  for (int i_r = 0; i_r < 50; i_r++) {
-    m_hZ0Retries[muValue][i_r] = new TH1F(Form("hZ0%d_%d", muValue, i_r), 
-					  Form("hZ0%d_%d", muValue, i_r), 
-					  m_nBins, 0, 5);
+  // For investigations into fit retries:
+  if (m_options.Contains("StudyRetries")) {
+    m_hRetries[muValue] = new TH1F(Form("hRetries%d",muValue),
+				   Form("hRetries%d",muValue), 50, 0, 50);
+    m_hImprovement[muValue] = new TH1F(Form("hImprove%d",muValue),
+				       Form("hImprove%d",muValue), 50, 0, 50);
+    m_hMedImprovement[muValue] = new TH1F(Form("hMedImprove%d",muValue),
+					  Form("hMedImprove%d",muValue),
+					  50, 0, 50);
+    m_hCounter[muValue] = new TH1F(Form("hCounter%d",muValue),
+				   Form("hCounter%d",muValue), 50, 0, 50);
+    
+    m_h2RetriesZ[muValue] = new TH2F(Form("h2RetriesZ%d",muValue),
+				     Form("h2RetriesZ%d",muValue),
+				     50, 0, 50, 50, 0, 5);
+    m_h2ZImprovement[muValue] = new TH2F(Form("h2ZImprove%d",muValue),
+					 Form("h2ZImprove%d",muValue),
+					 50, 0, 5, 50, 0.001, 5);
+    m_hImpAtThisStep[muValue] = new TH1F(Form("hImpAtThisStep%d",muValue),
+					 Form("hImpAtThisStep%d",muValue),
+					 50, 0, 50);
+    
+    // Plot the Gaussian Z0 as a function of # retries:
+    for (int i_r = 0; i_r < 50; i_r++) {
+      m_hZ0Retries[muValue][i_r] = new TH1F(Form("hZ0%d_%d", muValue, i_r), 
+					    Form("hZ0%d_%d", muValue, i_r), 
+					    m_nBins, 0, 5);
+    }
   }
   
-  
+  // An NLL map to keep track of the NLL per ML fit-retry:
   std::map<int,std::vector<double> > nllMap; nllMap.clear();
   for (int i_b = 1; i_b <= 50; i_b++) (nllMap[i_b]).clear();
   
@@ -389,55 +408,50 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     m_hZ0[muValue]->Fill(valueZ0);
     m_hCL[muValue]->Fill(valueCL);
     
-    m_hRetries[muValue]->Fill(toyTree->bestFitUpdate);
-    m_h2RetriesZ[muValue]->Fill(toyTree->bestFitUpdate, valueZ0);
-    
-    // See how big the change is as a function of:
-    double currMinimum=0.0; double prevMinimum=0.0; double improvement=0.0;
-    for (int i_r = 0; i_r < (int)((*toyTree->nllPerRetry).size()); i_r++) { 
+    // Plots to make only in the case that retries are being studied:
+    if (m_options.Contains("StudyRetries")) {
+      m_hRetries[muValue]->Fill(toyTree->bestFitUpdate);
+      m_h2RetriesZ[muValue]->Fill(toyTree->bestFitUpdate, valueZ0);
       
-      if (i_r == 0) {
-	currMinimum = (*toyTree->nllPerRetry)[i_r];
-      }
-      else if ((*toyTree->nllPerRetry)[i_r] < currMinimum) {
-	prevMinimum = currMinimum;
-	currMinimum = (*toyTree->nllPerRetry)[i_r];
-	improvement = fabs(prevMinimum-currMinimum);
-	m_hImpAtThisStep[muValue]->Fill(i_r, improvement);
-
-	if (i_r == toyTree->bestFitUpdate) {
-	  m_hImprovement[muValue]->Fill(i_r, improvement);
-	  (nllMap[i_r]).push_back(improvement);
+      // See how big the change is as a function of:
+      double currMinimum=0.0; double prevMinimum=0.0; double improvement=0.0;
+      for (int i_r = 0; i_r < (int)((*toyTree->nllPerRetry).size()); i_r++) { 
+	
+	if (i_r == 0) {
+	  currMinimum = (*toyTree->nllPerRetry)[i_r];
 	}
-      }
-    }
-
-    m_h2ZImprovement[muValue]->Fill(valueZ0, improvement);
-    
-
-    // For each event, find the best significance below a certain point:
-    for (int i_r = 0; i_r < 50; i_r++) {
-      
-      // Loop over the stored NLLs and find the 
-      double currMinNll = 0.0;
-      for (int i_b = 0; i_b <= i_r; i_b++) {
-	if (currMinNll > (*toyTree->nllPerRetry)[i_b]) {
-	  currMinNll = (*toyTree->nllPerRetry)[i_b];
+	else if ((*toyTree->nllPerRetry)[i_r] < currMinimum) {
+	  prevMinimum = currMinimum;
+	  currMinimum = (*toyTree->nllPerRetry)[i_r];
+	  improvement = fabs(prevMinimum-currMinimum);
+	  m_hImpAtThisStep[muValue]->Fill(i_r, improvement);
+	  
+	  if (i_r == toyTree->bestFitUpdate) {
+	    m_hImprovement[muValue]->Fill(i_r, improvement);
+	    (nllMap[i_r]).push_back(improvement);
+	  }
 	}
       }
       
-      double currValueQ0 = m_ts->getQ0FromNLL(toyTree->nllMu0, currMinNll,
-					      toyTree->profiledPOIVal);
-      double currValueZ0 = m_ts->getZ0FromQ0(currValueQ0);
+      m_h2ZImprovement[muValue]->Fill(valueZ0, improvement);
       
-      m_hZ0Retries[muValue][i_r]->Fill(currValueZ0);
-    }
-    
-    
-
-
-    
-    
+      // For each event, find the best significance below a certain point:
+      for (int i_r = 0; i_r < 50; i_r++) {
+	
+	// Loop over the stored NLLs and find the 
+	double currMinNll = 0.0;
+	for (int i_b = 0; i_b <= i_r; i_b++) {
+	  if (currMinNll > (*toyTree->nllPerRetry)[i_b]) {
+	    currMinNll = (*toyTree->nllPerRetry)[i_b];
+	  }
+	}
+	
+	double currValueQ0 = m_ts->getQ0FromNLL(toyTree->nllMu0, currMinNll,
+						toyTree->profiledPOIVal);
+	double currValueZ0 = m_ts->getZ0FromQ0(currValueQ0);
+	m_hZ0Retries[muValue][i_r]->Fill(currValueZ0);
+      }
+    }// end of plots for retry study
     
     // Also fill the QMu vector for pMu calculation:
     if (muValue > 0) {
@@ -454,34 +468,52 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     // Loop over the nuis:
     for (int i_n = 0; i_n < (int)((*toyTree->namesNP).size()); i_n++) {
       TString currNPName = (*toyTree->namesNP)[i_n];
-      m_histStorage[Form("%s_Mu0Fit_Mu%dData", currNPName.Data(), muValue)]
-	->Fill((*toyTree->valuesNPMu0)[i_n]);
-      //m_histStorage[Form("%s_Mu1Fit_Mu%dData", currNPName.Data(), muValue)]
-      //->Fill((*toyTree->valuesNPMu1)[i_n]);
-      m_histStorage[Form("%s_MuFreeFit_Mu%dData", currNPName.Data(), muValue)]
-	->Fill((*toyTree->valuesNPMuFree)[i_n]);
+      if (doThisFit("0")) {
+	m_histStorage[Form("%s_Mu0Fit_Mu%dData", currNPName.Data(), muValue)]
+	  ->Fill((*toyTree->valuesNPMu0)[i_n]);
+      }
+      if (doThisFit("1")) {
+	m_histStorage[Form("%s_Mu1Fit_Mu%dData", currNPName.Data(), muValue)]
+	  ->Fill((*toyTree->valuesNPMu1)[i_n]);
+      }
+      if (doThisFit("Free")) {
+	m_histStorage[Form("%s_MuFreeFit_Mu%dData", currNPName.Data(), muValue)]
+	  ->Fill((*toyTree->valuesNPMuFree)[i_n]);
+      }
     }
     
     // Loop over the globs:
     for (int i_g = 0; i_g < (int)((*toyTree->namesGlobs).size()); i_g++) {
       TString currGlobName = (*toyTree->namesGlobs)[i_g];
-      m_histStorage[Form("%s_Mu0Fit_Mu%dData", currGlobName.Data(), muValue)]
-	->Fill((*toyTree->valuesGlobsMu0)[i_g]);
-      //m_histStorage[Form("%s_Mu1Fit_Mu%dData", currGlobName.Data(), muValue)]
-      //->Fill((*toyTree->valuesGlobsMu1)[i_g]);
-      m_histStorage[Form("%s_MuFreeFit_Mu%dData", currGlobName.Data(), muValue)]
-	->Fill((*toyTree->valuesGlobsMuFree)[i_g]);
+      if (doThisFit("0")) {
+	m_histStorage[Form("%s_Mu0Fit_Mu%dData", currGlobName.Data(), muValue)]
+	  ->Fill((*toyTree->valuesGlobsMu0)[i_g]);
+      }
+      if (doThisFit("1")) {
+	m_histStorage[Form("%s_Mu1Fit_Mu%dData", currGlobName.Data(), muValue)]
+	  ->Fill((*toyTree->valuesGlobsMu1)[i_g]);
+      }
+      if (doThisFit("Free")) {
+	m_histStorage[Form("%s_MuFreeFit_Mu%dData",currGlobName.Data(),muValue)]
+	  ->Fill((*toyTree->valuesGlobsMuFree)[i_g]);
+      }
     }
     
     // Loop over the non-systematic parameters:
     for (int i_p = 0; i_p < (int)((*toyTree->namesPoIs).size()); i_p++) {
       TString currPoIName = (*toyTree->namesPoIs)[i_p];
-      m_histStorage[Form("%s_Mu0Fit_Mu%dData", currPoIName.Data(), muValue)]
-	->Fill((*toyTree->valuesPoIsMu0)[i_p]);
-      //m_histStorage[Form("%s_Mu1Fit_Mu%dData", currPoIName.Data(), muValue)]
-      //->Fill((*toyTree->valuesPoIsMu1)[i_p]);
-      m_histStorage[Form("%s_MuFreeFit_Mu%dData", currPoIName.Data(), muValue)]
-	->Fill((*toyTree->valuesPoIsMuFree)[i_p]);
+      if (doThisFit("0")) {
+	m_histStorage[Form("%s_Mu0Fit_Mu%dData", currPoIName.Data(), muValue)]
+	  ->Fill((*toyTree->valuesPoIsMu0)[i_p]);
+      }
+      if (doThisFit("1")) {
+	m_histStorage[Form("%s_Mu1Fit_Mu%dData", currPoIName.Data(), muValue)]
+	  ->Fill((*toyTree->valuesPoIsMu1)[i_p]);
+      }
+      if (doThisFit("Free")) {
+	m_histStorage[Form("%s_MuFreeFit_Mu%dData",currPoIName.Data(),muValue)]
+	  ->Fill((*toyTree->valuesPoIsMuFree)[i_p]);
+      }
     }
   }
   
@@ -490,84 +522,108 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   m_hQ0[muValue]->Scale(1.0 / m_hQ0[muValue]->Integral(1, m_nBins));
   m_hZ0[muValue]->Scale(1.0 / m_hZ0[muValue]->Integral(1, m_nBins));
   m_hCL[muValue]->Scale(1.0 / m_hCL[muValue]->Integral(1, m_nBins));
-  
-  for (int i_r = 0; i_r < 50; i_r++) {
-    m_hZ0Retries[muValue][i_r]->Scale(1.0 / m_hZ0Retries[muValue][i_r]->Integral());
-  }
 
-  // Also calculate median improvement:
-  for (int i_b = 1; i_b <= 50; i_b++) {
-    int size = (int)((nllMap[i_b]).size());
-    if (size > 0) {
-      double medianVal = (nllMap[i_b][(int)((double)size/2.0)]);
-      m_hMedImprovement[muValue]->SetBinContent(i_b, medianVal);
-      m_hMedImprovement[muValue]
-	->SetBinError(i_b, (medianVal * sqrt((double)size)/((double)size)));
+  // Finish some calculations for the retry study:
+  if (m_options.Contains("StudyRetries")) {
+
+    for (int i_r = 0; i_r < 50; i_r++) {
+      m_hZ0Retries[muValue][i_r]
+	->Scale(1.0 / m_hZ0Retries[muValue][i_r]->Integral());
     }
-  }
-  
-  // And calculate the averages:
-  for (int i_b = 1; i_b <= 50; i_b++) {
-    m_hImpAtThisStep[muValue]->SetBinContent(i_b, (m_hImpAtThisStep[muValue]->GetBinContent(i_b) / m_hRetries[muValue]->GetBinContent(i_b)));
     
-    m_hImprovement[muValue]->SetBinContent(i_b, (m_hImprovement[muValue]->GetBinContent(i_b) / m_hRetries[muValue]->GetBinContent(i_b)));
+    // Also calculate median improvement:
+    for (int i_b = 1; i_b <= 50; i_b++) {
+      int size = (int)((nllMap[i_b]).size());
+      if (size > 0) {
+	double medianVal = (nllMap[i_b][(int)((double)size/2.0)]);
+	m_hMedImprovement[muValue]->SetBinContent(i_b, medianVal);
+	m_hMedImprovement[muValue]
+	  ->SetBinError(i_b, (medianVal * sqrt((double)size)/((double)size)));
+      }
+    }
+    
+    // And calculate the averages:
+    for (int i_b = 1; i_b <= 50; i_b++) {
+      m_hImpAtThisStep[muValue]
+	->SetBinContent(i_b, (m_hImpAtThisStep[muValue]->GetBinContent(i_b) /
+			      m_hRetries[muValue]->GetBinContent(i_b)));
+      
+      m_hImprovement[muValue]
+	->SetBinContent(i_b, (m_hImprovement[muValue]->GetBinContent(i_b) /
+			      m_hRetries[muValue]->GetBinContent(i_b)));
+    }
   }
   
 }
 
 /**
    -----------------------------------------------------------------------------
-   Get the asymptotic form of the test statistic. Stored in the m_hAsymptotic
-   histogram.
+   Get the asymptotic test statistic distribution. Stored in the 
+   m_hAsymptoticQ0 and m_hAsymptoticQMu histograms.
    @param statistic - the test statistic for asymptotic formula.
-
-void ToyAnalysis::getAsymptoticForm(TString statistic) {
-  std::cout << "ToyAnalysis: Constructing Asymptotic form of "
-	    << statistic << "." << std::endl;
+*/
+TH1F* ToyAnalysis::getAsymptoticHist(TString statistic) {
+  printer(Form("ToyAnalysis: Constructing Asymptotic form of %s", 
+	       statistic.Data()), false);
   
-  // The histogram to contain the asymptotic form:
-  m_hAsymptotic 
-    = new TH1F("hAsymptotic", "hAsymptotic", m_nBins, m_binMin, m_binMax);
+  // If asymptotic histogram has already been made, return it:
+  if (statistic.EqualTo("QMu") && m_hAsymptoticQMu) return m_hAsymptoticQMu;
+  else if (statistic.EqualTo("Q0") && m_hAsymptoticQ0) return m_hAsymptoticQ0;
+  
+  // Otherwise, create a new asymptotic histogram:
+  TH1F *hAsymptotic = new TH1F(Form("hAsymptotic%s",statistic.Data()),
+			       Form("hAsymptotic%s",statistic.Data()),
+			       m_nBins, m_binMin, m_binMax);
   
   // First get the value from fitting Asimov data (asimovDataMu0):
-  double muHat = 0.0;
-  double nllMu1 = m_ts->getFitNLL("asimovDataMu0", 1.0, true, muHat);
-  double nllMu0 = m_ts->getFitNLL("asimovDataMu0", 0.0, true, muHat);
-  double nllMuHat = m_ts->getFitNLL("asimovDataMu0", 0.0, false, muHat);
-  double qMu = m_ts->getQMuFromNLL(nllMu1, nllMuHat, muHat, 1);
-  double qMuTilde 
-    = m_ts->getQMuTildeFromNLL(nllMu1, nllMu0, nllMuHat, muHat,1);
+  //double muHat = 0.0;
+  //double nllMu1 = m_ts->getFitNLL("asimovDataMu0", 1.0, true, muHat);
+  //double nllMu0 = m_ts->getFitNLL("asimovDataMu0", 0.0, true, muHat);
+  //double nllMuHat = m_ts->getFitNLL("asimovDataMu0", 0.0, false, muHat);
+  //double qMu = m_ts->getQMuFromNLL(nllMu1, nllMuHat, muHat, 1);
+  //double qMuTilde 
+  //= m_ts->getQMuTildeFromNLL(nllMu1, nllMu0, nllMuHat, muHat,1);
   
-  double asimovTestStat = 0.0;
-  if (statistic.EqualTo("QMu")) asimovTestStat = qMu;
-  else if (statistic.EqualTo("QMuTilde")) asimovTestStat = qMuTilde;
+  //double asimovTestStat = 0.0;
+  //if (statistic.EqualTo("QMu")) asimovTestStat = qMu;
+  //else if (statistic.EqualTo("QMuTilde")) asimovTestStat = qMuTilde;
   
   // Construct the test statistic function:
-  for (int i_b = 1; i_b <= 1000; i_b++) {
-    double q = m_hAsymptotic->GetBinCenter(i_b);
-    if (statistic.EqualTo("QMu")) {
-      m_hAsymptotic->SetBinContent(i_b, m_ts->functionQMu(q));
+  for (int i_b = 1; i_b <= m_nBins; i_b++) {
+    double q = hAsymptotic->GetBinCenter(i_b);
+    if (statistic.EqualTo("QMu")){
+      hAsymptotic->SetBinContent(i_b, m_ts->functionQMu(q));
     }
-    else if (statistic.EqualTo("QMuTilde")) {
-      m_hAsymptotic
-	->SetBinContent(i_b, m_ts->functionQMuTilde(q,asimovTestStat));
+    else if (statistic.EqualTo("Q0")) {
+      hAsymptotic->SetBinContent(i_b, m_ts->functionQ0(q));
     }
+    //else if (statistic.EqualTo("QMuTilde")) {
+    //hAsymptotic
+    //	->SetBinContent(i_b, m_ts->functionQMuTilde(q,asimovTestStat));
+    //}
   }
-  // Then scale:
-  m_hAsymptotic->SetBinContent(0, 0);
-  m_hAsymptotic->SetBinContent(m_nBins+1, 0);
-  m_hAsymptotic->Scale(1.0 / m_hAsymptotic->Integral(1, m_nBins));
-  m_hAsymptotic->SetBinContent(1,1+m_hAsymptotic->GetBinContent(1));// WHY?
-  m_hAsymptotic->Scale(1.0 / m_hAsymptotic->Integral(1,m_nBins));
-}
-*/
-
-/**
-   -----------------------------------------------------------------------------
-   Retrieve the functional form of the asymptotic test statistic approximation.
-*/
-TH1F* ToyAnalysis::getAsymptoticHist() {
-  return m_hAsymptotic;
+  
+  // Scale so that shape is 1/2 chi^2 and 1/2 delta at 0:
+  hAsymptotic->SetBinContent(0, 0);
+  hAsymptotic->SetBinContent(m_nBins+1, 0);
+  hAsymptotic->Scale(1.0 / hAsymptotic->Integral(1, m_nBins));
+  hAsymptotic->SetBinContent(1, 1 + hAsymptotic->GetBinContent(1));
+  hAsymptotic->Scale(1.0 / hAsymptotic->Integral(1, m_nBins));
+  
+  // Then return a pointer to the desired asymptotic histogram:
+  if (statistic.EqualTo("QMu")) {
+    m_hAsymptoticQMu = hAsymptotic;
+    return m_hAsymptoticQMu;
+  }
+  else if (statistic.EqualTo("Q0")) {
+    m_hAsymptoticQ0 = hAsymptotic;
+    return m_hAsymptoticQ0;
+  }
+  else {
+    printer(Form("ToyAnalysis: Error returning asymptotic form of %s",
+		 statistic.Data()), true);
+  }
+  return NULL;
 }
 
 /**
@@ -718,50 +774,58 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   printer(Form("ToyAnalysis::plotHist(%s, %d)",paramName.Data(),toyMu),false);
   
   // Retrieve the histograms for the parameter after various fits:
-  TH1F *histMu0 = getHist(paramName, "0", toyMu);
-  //TH1F *histMu1 = getHist(paramName, "1", toyMu);
-  TH1F *histMuFree = getHist(paramName, "Free", toyMu);
+  TH1F *histMu0 = doThisFit("0") ? getHist(paramName,"0",toyMu) : NULL;
+  TH1F *histMu1 = doThisFit("1") ? getHist(paramName,"1",toyMu) : NULL;
+  TH1F *histMuFree = doThisFit("Free") ? getHist(paramName,"Free",toyMu) : NULL;
   
   TCanvas *can = new TCanvas("can", "can",800, 800);
   can->cd();
   gPad->SetLogy();
-  
+
   // Format histograms:
   double min = 0.0001;
   double max = 10;
-  histMu0->Scale(1.0 / histMu0->Integral());
-  //histMu1->Scale(1.0 / histMu1->Integral());
-  histMuFree->Scale(1.0 / histMuFree->Integral());
-  histMu0->SetLineColor(kRed);
-  //histMu1->SetLineColor(kGreen+2);
-  histMuFree->SetLineColor(kBlue);
-  histMu0->SetLineWidth(3);
-  //histMu1->SetLineWidth(3);
-  histMuFree->SetLineWidth(3);
-  histMu0->SetLineStyle(1);
-  //histMu1->SetLineStyle(4);
-  histMuFree->SetLineStyle(2);
-  
-  // Format axis titles:
-  histMu0->GetYaxis()->SetTitle("Fraction of toys");
-  histMu0->GetXaxis()->SetTitle(paramName);
-  histMu0->GetYaxis()->SetRangeUser(min,max);
-  
-  // Draw histograms:
-  histMu0->Draw("hist");
-  //histMu1->Draw("histSAME");
-  histMuFree->Draw("histSAME");
-  
+  if (doThisFit("0")) {
+    histMu0->Scale(1.0 / histMu0->Integral());
+    histMu0->SetLineColor(kRed);
+    histMu0->SetLineWidth(3);
+    histMu0->SetLineStyle(1);
+    histMu0->GetYaxis()->SetTitle("Fraction of toys");
+    histMu0->GetXaxis()->SetTitle(paramName);
+    histMu0->GetYaxis()->SetRangeUser(min,max);
+    histMu0->Draw("hist");
+  }
+  if (doThisFit("1")) {  
+    histMu1->Scale(1.0 / histMu1->Integral());
+    histMu1->SetLineColor(kGreen+2);
+    histMu1->SetLineWidth(3);
+    histMu1->SetLineStyle(4);
+    histMu1->Draw("histSAME");
+  }
+  if (doThisFit("Free")) {
+    histMuFree->Scale(1.0 / histMuFree->Integral());
+    histMuFree->SetLineColor(kBlue);
+    histMuFree->SetLineWidth(3);
+    histMuFree->SetLineStyle(2);
+    histMuFree->Draw("histSAME");
+  }
+    
   // Create a legend:
   TLegend leg(0.20, 0.80, 0.60, 0.92);
   leg.SetBorderSize(0);
   leg.SetTextSize(0.03);
   leg.SetFillColor(0);
-  leg.AddEntry(histMu0,Form("#mu=0 fixed, mean=%f",histMu0->GetMean()),"l");
-  //leg.AddEntry(histMu1,Form("#mu=1 fixed, mean=%f",histMu1->GetMean()),"l");
-  leg.AddEntry(histMuFree,Form("#hat{#mu}, mean=%f",histMuFree->GetMean()),"l");
+  leg.AddEntry(histMu0, Form("#mu=0 fixed, mean=%f", histMu0->GetMean()), "l");
+  if (doThisFit("1")) {
+    leg.AddEntry(histMu1, 
+		 Form("#mu=1 fixed, mean=%f", histMu1->GetMean()), "l");
+  }
+  if (doThisFit("Free")) {
+    leg.AddEntry(histMuFree,
+		 Form("#hat{#mu}, mean=%f",histMuFree->GetMean()),"l");
+  }
   leg.Draw("SAME");
-
+  
   // Print the canvas:
   can->Print(Form("%s/plot_%s_toy%i.eps", m_outputDir.Data(), paramName.Data(), 
 		  toyMu));
@@ -979,8 +1043,9 @@ void ToyAnalysis::plotTestStat(TString statistic) {
   hStatMu0->Draw("");
   hStatMu1->Draw("SAME");
   
-  m_hAsymptotic->SetLineColor(kBlack);
-  m_hAsymptotic->Draw("SAME");
+  TH1F *hAsymptotic = getAsymptoticHist(statistic);
+  hAsymptotic->SetLineColor(kBlack);
+  hAsymptotic->Draw("SAME");
   
   TLegend leg(0.49, 0.76, 0.84, 0.9);
   leg.SetBorderSize(0);
@@ -988,7 +1053,7 @@ void ToyAnalysis::plotTestStat(TString statistic) {
   leg.SetTextSize(0.04);
   leg.AddEntry(hStatMu1, "#mu=1 toy MC","l");
   leg.AddEntry(hStatMu0, "#mu=0 toy MC","l");
-  leg.AddEntry(m_hAsymptotic, "Asyptotic distribution","l");
+  leg.AddEntry(hAsymptotic, "Asyptotic distribution","l");
   leg.Draw("SAME");
   
   can->Print(Form("%s/plot_%s.eps", m_outputDir.Data(), statistic.Data()));
@@ -1027,8 +1092,11 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   pad4->Draw();
   
   // Get the toy and asymptotic distributions:
-  TH1F *hStatMu1 = getStatHist(statistic, 1);
-  //m_hAsymptotic;
+  TH1F *hStatNominal = NULL;
+  if (statistic.EqualTo("QMu")) hStatNominal = getStatHist(statistic, 1);
+  else if (statistic.EqualTo("Q0")) hStatNominal = getStatHist(statistic, 0);
+  else printer("ToyAnalysis: ERROR don't know which hist to get", true);
+  TH1F *hAsymptotic = getAsymptoticHist(statistic);
   
   // Calculate the histograms to plot:
   TH1F *hIntegralToy = new TH1F("hIntegralToy", "hIntegralToy", 
@@ -1041,8 +1109,8 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   TH1F *hSignificanceAsym = new TH1F("hSignificanceAsym", "hSignificanceAsym",
 				     m_nBins, m_binMin, m_binMax);
   for (int i_b = 1; i_b <= m_nBins; i_b++) {
-    double valueAsym = m_hAsymptotic->Integral(i_b, m_nBins);
-    double valueToy = hStatMu1->Integral(i_b, m_nBins);
+    double valueAsym = hAsymptotic->Integral(i_b, m_nBins);
+    double valueToy = hStatNominal->Integral(i_b, m_nBins);
     hIntegralToy->SetBinContent(i_b, valueToy);
     hIntegralAsym->SetBinContent(i_b, valueAsym);
     hSignificanceToy->SetBinContent(i_b, -1.0*TMath::NormQuantile(valueToy));
@@ -1056,9 +1124,10 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
    
   // Pad 1: Draw test statistic under mu=1 hypothesis and asymptotic function.
   pad1->cd();
-  m_hAsymptotic->SetLineColor(kBlue);
-  hStatMu1->Draw("");
-  m_hAsymptotic->Draw("SAME");
+  hAsymptotic->SetLineColor(kBlue);
+  hStatNominal->SetLineColor(kRed);
+  hStatNominal->Draw("");
+  hAsymptotic->Draw("SAME");
   gPad->SetLogy();
   gPad->SetLogx();
   
@@ -1067,22 +1136,22 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   leg.SetFillColor(0);
   leg.SetTextSize(0.06);
   TString printName = printStatName(statistic);
-  leg.AddEntry(hStatMu1,Form("Toy MC %s",printName.Data()),"l");
-  leg.AddEntry(m_hAsymptotic,Form("Asymptotic %s",printName.Data()),"l");
+  leg.AddEntry(hStatNominal, Form("Toy MC %s",printName.Data()), "l");
+  leg.AddEntry(hAsymptotic, Form("Asymptotic %s",printName.Data()), "l");
   leg.Draw("SAME");
   TLatex textToy;
   textToy.SetNDC();
   textToy.SetTextColor(kRed); 
   textToy.SetTextFont(42);
   textToy.SetTextSize(0.05);
-  textToy.DrawLatex(0.2, 0.2, Form("Toy Mean = %2.2f", hStatMu1->GetMean()));
+  textToy.DrawLatex(0.2, 0.2, Form("Toy Mean = %2.2f",hStatNominal->GetMean()));
   TLatex textAsym;
   textAsym.SetNDC();
   textAsym.SetTextColor(kBlue); 
   textAsym.SetTextFont(42);
   textAsym.SetTextSize(0.05);
   textAsym.DrawLatex(0.2, 0.15, Form("Asymptotics Mean = %2.2f", 
-				     m_hAsymptotic->GetMean()));
+				     hAsymptotic->GetMean()));
   
   // Pad 2: Draw the CDFs for asymptotics and pseudo-experiments
   pad2->cd();

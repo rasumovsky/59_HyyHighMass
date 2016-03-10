@@ -37,11 +37,11 @@ class ToyAnalysis {
   double calculateBkgQMuForN(double N);
   double calculatePBFromToy(double qMu);
   double calculatePMuFromToy(double qMu);
+  bool doThisFit(TString fitType);
   double getPbFromN(double N);
 
   void fillToyHistograms(int muValue, ToyTree *toyTree);
-  //void getAsymptoticForm(TString statistic);
-  TH1F* getAsymptoticHist();
+  TH1F* getAsymptoticHist(TString statistic);
   std::vector<TString> getFitTypes(); 
   TH1F* getHist(TString paramName, TString fitType, int toyMu);
   TH1F* getMuHist(int toyMu);
@@ -65,6 +65,7 @@ class ToyAnalysis {
   TString printStatName(TString statistic);
   
   // Private member variables:
+  TString m_options;
   TString m_outputDir;
   Config *m_config;
   bool m_filesLoaded;
@@ -95,7 +96,8 @@ class ToyAnalysis {
   std::vector<double> m_valuesBestFit_AsymCL_Mu1;
   
   // Histograms:
-  TH1F *m_hAsymptotic;
+  TH1F *m_hAsymptoticQ0;
+  TH1F *m_hAsymptoticQMu;
   TH1F *m_hMuProfiled[2];
   TH1F *m_hQ0[2];
   TH1F *m_hQMu[2];
