@@ -909,8 +909,9 @@ void ToyAnalysis::plotRetries(int muValue) {
   m_hRetries[muValue]->SetLineColor(kRed+2);
   m_hRetries[muValue]->SetFillColor(kRed-10);
   m_hRetries[muValue]->SetLineWidth(2);
-  m_hRetries[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
-  m_hRetries[muValue]->GetYaxis()->SetTitle("Fraction of toys");
+  m_hRetries[muValue]
+    ->GetXaxis()->SetTitle("Retry with minimum -log(#it{L})");
+  m_hRetries[muValue]->GetYaxis()->SetTitle("Number of toy MC");
   //gPad->SetLogy();
   m_hRetries[muValue]->Draw("hist");
   can->Print(Form("%s/plot_Retries.eps", m_outputDir.Data()));
@@ -920,8 +921,9 @@ void ToyAnalysis::plotRetries(int muValue) {
   m_hImprovement[muValue]->SetLineColor(kRed+2);
   m_hImprovement[muValue]->SetFillColor(kRed-10);
   m_hImprovement[muValue]->SetLineWidth(2);
-  m_hImprovement[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
-  m_hImprovement[muValue]->GetYaxis()->SetTitle("Mean change in NLL");
+  m_hImprovement[muValue]
+    ->GetXaxis()->SetTitle("Retry with minimum -log(#it{L})");
+  m_hImprovement[muValue]->GetYaxis()->SetTitle("Mean -#Delta log(#it{L})");
   gPad->SetLogy();
   m_hImprovement[muValue]->Draw("hist");
   can->Print(Form("%s/plot_Improvement.eps", m_outputDir.Data()));
@@ -931,8 +933,10 @@ void ToyAnalysis::plotRetries(int muValue) {
   m_hMedImprovement[muValue]->SetLineColor(kRed+2);
   m_hMedImprovement[muValue]->SetFillColor(kRed-10);
   m_hMedImprovement[muValue]->SetLineWidth(2);
-  m_hMedImprovement[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
-  m_hMedImprovement[muValue]->GetYaxis()->SetTitle("Median change in NLL");
+  m_hMedImprovement[muValue]
+    ->GetXaxis()->SetTitle("Retry with minimum -log(#it{L})");
+  m_hMedImprovement[muValue]
+    ->GetYaxis()->SetTitle("Median -#Delta log(#it{L})");
   gPad->SetLogy();
   m_hMedImprovement[muValue]->Draw("hist");
   //m_hMedImprovement[muValue]->Draw("E1");
@@ -944,8 +948,9 @@ void ToyAnalysis::plotRetries(int muValue) {
   m_hImpAtThisStep[muValue]->SetLineColor(kRed+2);
   m_hImpAtThisStep[muValue]->SetFillColor(kRed-10);
   m_hImpAtThisStep[muValue]->SetLineWidth(2);
-  m_hImpAtThisStep[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
-  m_hImpAtThisStep[muValue]->GetYaxis()->SetTitle("Avg. Improvement at step");
+  m_hImpAtThisStep[muValue]
+    ->GetXaxis()->SetTitle("Retry giving lower -log(#it{L})");
+  m_hImpAtThisStep[muValue]->GetYaxis()->SetTitle("Mean -#Delta log(#it{L})");
   gPad->SetLogy();
   m_hImpAtThisStep[muValue]->Draw("hist");
   can->Print(Form("%s/plot_AvgImprovementPerRetry.eps", m_outputDir.Data()));
@@ -954,7 +959,8 @@ void ToyAnalysis::plotRetries(int muValue) {
   
 
   m_h2RetriesZ[muValue];
-  m_h2RetriesZ[muValue]->GetXaxis()->SetTitle("Retries to find min NLL");
+  m_h2RetriesZ[muValue]
+    ->GetXaxis()->SetTitle("Retry with minimum -log(#it{L})");
   m_h2RetriesZ[muValue]->GetYaxis()->SetTitle("Z_{0}^{Local} [#sigma]");
   m_h2RetriesZ[muValue]->Draw("colz");
   can->Print(Form("%s/plot_2D_RetriesVsZ0.eps", m_outputDir.Data()));

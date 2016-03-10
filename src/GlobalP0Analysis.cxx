@@ -58,7 +58,9 @@ int main(int argc, char **argv) {
   system(Form("mkdir -vp %s", outputDir.Data()));
   
   // Load the toy analysis class, which does the analysis of toy MC jobs:
-  ToyAnalysis *toyAna = new ToyAnalysis(configFile, "None");
+  TString toyAnaOptions = "";
+  if (options.Contains("StudyRetries")) toyAnaOptions += "StudyRetries";
+  ToyAnalysis *toyAna = new ToyAnalysis(configFile, toyAnaOptions);
   
   toyAna->setOutputDir(Form("%s/%s/ToyAnalysis", 
 			  (config->getStr("MasterOutput")).Data(),
