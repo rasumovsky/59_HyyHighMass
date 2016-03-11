@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
     toyAna->plotHist(namesPars[i_p], 0);
   }
   // Also plot the retries:
-  toyAna->plotRetries(0);
+  if (options.Contains("StudyRetries")) toyAna->plotRetries(0);
 
   //----------------------------------------//
   // Start the plotting!

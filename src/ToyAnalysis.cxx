@@ -1045,7 +1045,7 @@ void ToyAnalysis::plotTestStat(TString statistic) {
   
   // Draw test statistic histograms:
   gPad->SetLogy();
-  hStatMu0->GetYaxis()->SetRangeUser(0.0001,1.0);
+  //hStatMu0->GetYaxis()->SetRangeUser(0.0001,1.0);
   hStatMu0->Draw("");
   hStatMu1->Draw("SAME");
   
@@ -1097,6 +1097,12 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   pad3->Draw();
   pad4->Draw();
   
+  // Plot settings:
+  double yTitleOffset = 0.3;
+  double yTitleSize = 0.15;
+  double yLabelOffset = 0.01;
+  double yLabelSize = 0.15;
+  
   // Get the toy and asymptotic distributions:
   TH1F *hStatNominal = NULL;
   if (statistic.EqualTo("QMu")) hStatNominal = getStatHist(statistic, 1);
@@ -1104,39 +1110,99 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   else printer("ToyAnalysis: ERROR don't know which hist to get", true);
   TH1F *hAsymptotic = getAsymptoticHist(statistic);
   
-  // Create histograms for sub-plots:
+  // Create histograms for sub-plot axes:
   TH1F *hCDF_Toy = new TH1F("hCDF_Toy","hCDF_Toy", m_nBins, m_binMin, m_binMax);
-  TH1F *hCDF_Asym = new TH1F("hCDF_Asym","hCDF_Asym",m_nBins,m_binMin,m_binMax);
   TH1F *hRatio = new TH1F("hRatio", "hRatio", m_nBins, m_binMin, m_binMax);
   TH1F *hZ0_Toy = new TH1F("hZ0_Toy", "hZ0_Toy", m_nBins, m_binMin, m_binMax);
-  TH1F *hZ0_Asym = new TH1F("hZ0_Asym","hZ0_Asym", m_nBins, m_binMin, m_binMax);
+  
+  // Test statistics arrays:
+  double value_Q[m_nBins] = {0.0};
+  double error_Q[m_nBins] = {(0.5*(m_binMax-m_binMin)/((double)m_nBins))};
+  
+  // CDF arrays:
+  double value_CDF_Asym[m_nBins] = {0.0};
+  double value_CDF_Toy[m_nBins] = {0.0};
+  double errorLo_CDF_Toy[m_nBins] = {0.0};
+  double errorHi_CDF_Toy[m_nBins] = {0.0};
+  
+  // Z0 arrays:
+  double value_Z0_Asym[m_nBins] = {0.0};
+  double value_Z0_Toy[m_nBins] = {0.0};
+  double errorLo_Z0_Toy[m_nBins] = {0.0};
+  double errorHi_Z0_Toy[m_nBins] = {0.0};
+  
+  // Ratio arrays:
+  double value_Ratio[m_nBins] = {0.0};
+  double errorLo_Ratio[m_nBins] = {0.0};
+  double errorHi_Ratio[m_nBins] = {0.0};
+  
+  // Asymptotic Graphs:
+  TGraph *gCDF_Asym = new TGraphAsymmErrors();
+  TGraph *gZ0_Asym = new TGraphAsymmErrors();
+  
+  int nToys = hStatNominal->GetEntries();
+  double yMinimum = 0.5 / ((double)nToys);
+  double yMaximum = 1.0;
 
   // Loop over histogram bins to set values:
   for (int i_b = 1; i_b <= m_nBins; i_b++) {
-    double valueAsym = hAsymptotic->Integral(i_b-1, m_nBins);
-    double valueToy = hStatNominal->Integral(i_b-1, m_nBins);
-    hCDF_Toy->SetBinContent(i_b, valueToy);
-    hCDF_Asym->SetBinContent(i_b, valueAsym);
     
-    // Calculate the significance:
-    hZ0_Toy->SetBinContent(i_b, -1.0*TMath::NormQuantile(valueToy));
-    hZ0_Asym->SetBinContent(i_b, -1.0*TMath::NormQuantile(valueAsym));
+    // p-value calculations for CDF graphs:
+    double p_Asym = hAsymptotic->Integral(i_b, m_nBins);
+    double p_Toy = hStatNominal->Integral(i_b, m_nBins);
+    double pError_Toy = calculateErrorPVal(p_Toy, nToys);
     
-    double ratio = (TMath::NormQuantile(valueToy) == 0) ? 1.0 :
-      TMath::NormQuantile(valueAsym) / TMath::NormQuantile(valueToy);
+    // Z0 graphs for significance graphs:
+    double z0_Asym = TMath::NormQuantile(1-p_Asym);
+    double z0_Toy = TMath::NormQuantile(1-p_Toy);
+    double z0Error_Toy = TMath::NormQuantile(1-(p_Toy-pError_Toy));
     
-    hRatio->SetBinContent(i_b, ratio);
+    double z0Ratio = (z0_Toy == 0) ? 1.0 : (z0_Asym / z0_Toy);
+    
+    // Histograms for plot axes:
+    hCDF_Toy->SetBinContent(i_b, p_Toy);
+    hZ0_Toy->SetBinContent(i_b, z0_Toy);
+    hRatio->SetBinContent(i_b, z0Ratio);
+    
+    // Fill arrays for graphs:
+    value_Q[i_b-1] = hStatNominal->GetBinCenter(i_b);
+    
+    // P0 (CDF) values:
+    value_CDF_Asym[i_b-1] = p_Asym;
+    value_CDF_Toy[i_b-1] = p_Toy;
+    errorLo_CDF_Toy[i_b-1] = (pError_Toy < p_Toy) ? pError_Toy : p_Toy;
+    errorHi_CDF_Toy[i_b-1] = pError_Toy;
+    
+    // Z0 graph values:
+    value_Z0_Asym[i_b-1] = z0_Asym;
+    value_Z0_Toy[i_b-1] = z0_Toy;
+    errorLo_Z0_Toy[i_b-1] = z0Error_Toy;
+    errorHi_Z0_Toy[i_b-1] = z0Error_Toy;
+    
+    // Ratio graph values:
+    value_Ratio[i_b-1] = (z0_Asym / z0_Toy);
+    errorLo_Ratio[i_b-1]= fabs(z0Ratio - (z0_Asym/(z0_Toy+z0Error_Toy)));
+    errorHi_Ratio[i_b-1]= fabs(z0Ratio - (z0_Asym/(z0_Toy-z0Error_Toy)));
+    
+    // Then fill graph values:
+    gCDF_Asym->SetPoint(i_b-1, value_Q[i_b-1], p_Asym);
+    gZ0_Asym->SetPoint(i_b-1, value_Q[i_b-1], z0_Asym);
   }
-   
-  // Pad 1: Draw test statistic under mu=1 hypothesis and asymptotic function.
+    
+  //---------- Pad 1: Draw test statistic ----------//
   pad1->cd();
-  hAsymptotic->SetLineColor(kBlue);
-  hStatNominal->SetLineColor(kRed);
+  hStatNominal->SetLineColor(kRed+1);
+  hStatNominal->SetFillColor(kRed-10);
+  hStatNominal->GetYaxis()->SetRangeUser(yMinimum, yMaximum);
   hStatNominal->Draw("");
+  hAsymptotic->SetLineColor(kBlue+1);
+  hAsymptotic->SetFillColor(kBlue+1);
+  hAsymptotic->SetFillStyle(3444);
   hAsymptotic->Draw("SAME");
   gPad->SetLogy();
-  gPad->SetLogx();
+  //gPad->SetLogx();
   
+  // Print the legend:
   TLegend leg(0.65, 0.65, 0.9, 0.9);
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
@@ -1145,79 +1211,88 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   leg.AddEntry(hStatNominal, Form("Toy MC %s",printName.Data()), "l");
   leg.AddEntry(hAsymptotic, Form("Asymptotic %s",printName.Data()), "l");
   leg.Draw("SAME");
-  TLatex textToy;
-  textToy.SetNDC();
-  textToy.SetTextColor(kRed); 
-  textToy.SetTextFont(42);
-  textToy.SetTextSize(0.05);
-  textToy.DrawLatex(0.2, 0.2, Form("Toy Mean = %2.2f",hStatNominal->GetMean()));
-  TLatex textAsym;
-  textAsym.SetNDC();
-  textAsym.SetTextColor(kBlue); 
-  textAsym.SetTextFont(42);
-  textAsym.SetTextSize(0.05);
-  textAsym.DrawLatex(0.2, 0.15, Form("Asymptotics Mean = %2.2f", 
-				     hAsymptotic->GetMean()));
   
-  // Pad 2: Draw the CDFs for asymptotics and pseudo-experiments
+  //---------- Pad 2: Draw the CDFs ----------//
   pad2->cd();
   
-  hCDF_Toy->SetLineColor(kRed);
+  // Axis formatting:
+  hCDF_Toy->SetLineColor(0);    
   hCDF_Toy->GetXaxis()->SetTitle(printName);
   hCDF_Toy->GetYaxis()->SetTitle("CDF");
-  hCDF_Toy->GetYaxis()->SetTitleSize(0.1);
-  hCDF_Toy->GetYaxis()->SetLabelSize(0.1);
-  hCDF_Toy->GetYaxis()->SetTitleOffset(0.65);
+  hCDF_Toy->GetYaxis()->SetTitleSize(yTitleSize);
+  hCDF_Toy->GetYaxis()->SetTitleOffset(yTitleOffset);
+  hCDF_Toy->GetYaxis()->SetLabelSize(yLabelSize);
+  hCDF_Toy->GetYaxis()->SetLabelOffset(yLabelOffset);
+  hCDF_Toy->GetYaxis()->SetRangeUser(yMinimum, yMaximum);
   hCDF_Toy->Draw("");
   
-  hCDF_Asym->SetLineColor(kBlue);
-  hCDF_Asym->GetXaxis()->SetTitle(printName);
-  hCDF_Asym->GetYaxis()->SetTitle("CDF");
-  hCDF_Asym->Draw("SAME");
+  TGraphAsymmErrors *gCDF_Toy
+    = new TGraphAsymmErrors(m_nBins, value_Q, value_CDF_Toy, error_Q, error_Q, 
+			    errorLo_CDF_Toy, errorHi_CDF_Toy);
+  gCDF_Toy->SetLineColor(kRed+1);
+  gCDF_Toy->SetLineWidth(2);
+  gCDF_Toy->SetFillColor(kRed-10);
+  gCDF_Toy->Draw("3SAME");
+  gCDF_Asym->SetLineColor(kBlue+1);
+  gCDF_Asym->SetLineWidth(2);
+  gCDF_Asym->Draw("LSAME");
   
   gPad->SetLogy();
-  gPad->SetLogx();
+  //gPad->SetLogx();
   
-  // Pad 3: Plot the calculated significance corresponding to the CDF on Pad 2.
+  //---------- Pad 3: Draw the Z0 ----------//
   pad3->cd();
   
-  hZ0_Toy->SetLineWidth(2);
-  hZ0_Toy->SetLineColor(kRed);
+  hZ0_Toy->SetLineColor(0);
   hZ0_Toy->GetXaxis()->SetTitle(printName);
   hZ0_Toy->GetYaxis()->SetTitle("Z [#sigma]");
-  hZ0_Toy->SetBinContent(1, 0);
-  hZ0_Toy->GetYaxis()->SetTitleSize(0.1);
-  hZ0_Toy->GetYaxis()->SetLabelSize(0.1);
-  hZ0_Toy->GetYaxis()->SetTitleOffset(0.65);
+  hZ0_Toy->GetYaxis()->SetTitleSize(yTitleSize);
+  hZ0_Toy->GetYaxis()->SetTitleOffset(yTitleOffset);
+  hZ0_Toy->GetYaxis()->SetLabelSize(yLabelSize);
+  hZ0_Toy->GetYaxis()->SetLabelOffset(yLabelOffset);
+  hZ0_Toy->GetYaxis()->SetRangeUser(0.01, 4.99);
   hZ0_Toy->GetYaxis()->SetNdivisions(6);
   hZ0_Toy->Draw("");
   
-  hZ0_Asym->SetLineWidth(2);
-  hZ0_Asym->SetLineColor(kBlue);
-  hZ0_Asym->GetXaxis()->SetTitle(printName);
-  hZ0_Asym->GetYaxis()->SetTitle("Z [#sigma]");
-  hZ0_Asym->SetBinContent(1, 0);
-  hZ0_Asym->Draw("SAME");
+  TGraphAsymmErrors *gZ0_Toy
+    = new TGraphAsymmErrors(m_nBins, value_Q, value_Z0_Toy, error_Q, error_Q, 
+			    errorLo_Z0_Toy, errorHi_Z0_Toy);
+  gZ0_Toy->SetLineWidth(2);
+  gZ0_Toy->SetLineColor(kRed+1);
+  gZ0_Toy->SetFillColor(kRed-10);
+  gZ0_Toy->Draw("3SAME");
+  gZ0_Asym->SetLineWidth(2);
+  gZ0_Asym->SetLineColor(kBlue+1);
+  gZ0_Asym->GetYaxis()->SetTitle("Z [#sigma]");
+  gZ0_Asym->Draw("LSAME");
   
-  gPad->SetLogx();
+  //gPad->SetLogx();
   
-  // Pad 4: Calculate the ratio of Z values from Pad 3.
+  //---------- Pad 4: Plot ratio of Z0 ----------//
   pad4->cd();
   
-  hRatio->SetLineColor(kBlack);
-  hRatio->SetLineWidth(2);
+  hRatio->SetLineColor(0);
   hRatio->GetYaxis()->SetTitle("Z_{Asym.} / Z_{Toy}");
   hRatio->GetXaxis()->SetTitle(printName);
-  hRatio->GetYaxis()->SetTitleSize(0.1);
-  hRatio->GetYaxis()->SetLabelSize(0.1);
-  hRatio->GetYaxis()->SetTitleOffset(0.65);
+  hRatio->GetYaxis()->SetTitleSize(yTitleSize);
+  hRatio->GetYaxis()->SetTitleOffset(yTitleOffset);
+  hRatio->GetYaxis()->SetLabelSize(yLabelSize);
+  hRatio->GetYaxis()->SetLabelOffset(yLabelOffset);
   hRatio->GetYaxis()->SetNdivisions(6);
-  hRatio->GetXaxis()->SetTitleSize(0.1);
-  hRatio->GetXaxis()->SetLabelSize(0.1);
-  hRatio->GetXaxis()->SetTitleOffset(0.9);
-  hRatio->Draw();
-
-  gPad->SetLogx();
+  hRatio->GetXaxis()->SetTitleSize(yTitleSize);
+  hRatio->GetXaxis()->SetLabelSize(yLabelSize);
+  hRatio->GetXaxis()->SetTitleOffset(1.0);
+  hRatio->Draw("");
+  
+  TGraphAsymmErrors *gRatio
+    = new TGraphAsymmErrors(m_nBins, value_Q, value_Ratio, error_Q, error_Q, 
+			    errorLo_Ratio, errorHi_Ratio);
+  gRatio->SetLineWidth(2);
+  gRatio->SetLineColor(kOrange+4);
+  gRatio->SetFillColor(kOrange+1);
+  gRatio->Draw("A2");
+  
+  //gPad->SetLogx();
   
   // Draw a line at zero significance
   TLine *line2 = new TLine();
