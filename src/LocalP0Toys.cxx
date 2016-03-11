@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
   std::vector<double> valuesPoIsMuFree; valuesPoIsMuFree.clear();
   std::vector<double> numEventsPerCate; numEventsPerCate.clear();
   std::vector<double> nllPerRetry; nllPerRetry.clear();
-
+  
   fOutputTree.Branch("seed", &seed, "seed/I");
   fOutputTree.Branch("bestFitUpdate", &bestFitUpdate, "bestFitUpdate/I");
   fOutputTree.Branch("numEvents", &numEvents, "numEvents/D");
@@ -280,11 +280,27 @@ int main(int argc, char **argv) {
     double nominalNormalization
       = (testStat->getPoIs())[(std::string)(normalizationPoI)];
     
+    // Fix the mass and width before the mu-free fit:
+    // Loop over the parameters of interest, and set all of those that are
+    // not the cross-section constant and to the proper values
+    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+      // Set every parameter constant to mu=1 value EXCEPT cross-section:
+      if (!(listPoI[i_p]).EqualTo(config->getStr("PoIForNormalization"))) {
+	// get the value of the PoI to set from the previous fit:
+	for (int i_n = 0; i_n < (int)namesPoIs.size(); i_n++) {
+	  if (TString(namesPoIs[i_n]).EqualTo(listPoI[i_p])) {
+	    testStat->setParam(listPoI[i_p], valuesPoIsMu1[i_n], true);
+	    break;
+	  }
+	}
+      }
+    }
+    
     // Mu free fits:
     std::cout << "LocalP0Toys: Mu-free fit starting" << std::endl;
     nllMuFree = testStat->getFitNLL("toyData", 1, false, mapPoIMu1, false);
     convergedMuFree = testStat->fitsAllConverged();
-    mapToVectors(testStat->getNuisanceParameters(), namesNP,valuesNPMuFree);
+    mapToVectors(testStat->getNuisanceParameters(), namesNP, valuesNPMuFree);
     mapToVectors(testStat->getPoIs(), namesPoIs, valuesPoIsMuFree);
     double profiledNormalization
       = (testStat->getPoIs())[(std::string)(normalizationPoI)];

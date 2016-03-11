@@ -360,7 +360,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     m_namesGlobs.push_back(nameGlobs);
   }
   
-  // Also get names of non-systematic parameters:
+  // Also get names of parameters of interest:
   RooArgSet *setPars = (RooArgSet*)m_mc->GetParametersOfInterest();
   RooRealVar *pars = NULL;
   TIterator *iterPars = setPars->createIterator();
@@ -1104,23 +1104,23 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   else printer("ToyAnalysis: ERROR don't know which hist to get", true);
   TH1F *hAsymptotic = getAsymptoticHist(statistic);
   
-  // Calculate the histograms to plot:
-  TH1F *hIntegralToy = new TH1F("hIntegralToy", "hIntegralToy", 
-				m_nBins, m_binMin, m_binMax);
-  TH1F *hIntegralAsym = new TH1F("hIntegralAsym", "hIntegralAsym",
-				 m_nBins, m_binMin, m_binMax);
+  // Create histograms for sub-plots:
+  TH1F *hCDF_Toy = new TH1F("hCDF_Toy","hCDF_Toy", m_nBins, m_binMin, m_binMax);
+  TH1F *hCDF_Asym = new TH1F("hCDF_Asym","hCDF_Asym",m_nBins,m_binMin,m_binMax);
   TH1F *hRatio = new TH1F("hRatio", "hRatio", m_nBins, m_binMin, m_binMax);
-  TH1F *hSignificanceToy = new TH1F("hSignificanceToy", "hSignificanceToy",
-				    m_nBins, m_binMin, m_binMax);
-  TH1F *hSignificanceAsym = new TH1F("hSignificanceAsym", "hSignificanceAsym",
-				     m_nBins, m_binMin, m_binMax);
+  TH1F *hZ0_Toy = new TH1F("hZ0_Toy", "hZ0_Toy", m_nBins, m_binMin, m_binMax);
+  TH1F *hZ0_Asym = new TH1F("hZ0_Asym","hZ0_Asym", m_nBins, m_binMin, m_binMax);
+
+  // Loop over histogram bins to set values:
   for (int i_b = 1; i_b <= m_nBins; i_b++) {
-    double valueAsym = hAsymptotic->Integral(i_b, m_nBins);
-    double valueToy = hStatNominal->Integral(i_b, m_nBins);
-    hIntegralToy->SetBinContent(i_b, valueToy);
-    hIntegralAsym->SetBinContent(i_b, valueAsym);
-    hSignificanceToy->SetBinContent(i_b, -1.0*TMath::NormQuantile(valueToy));
-    hSignificanceAsym->SetBinContent(i_b, -1.0*TMath::NormQuantile(valueAsym));
+    double valueAsym = hAsymptotic->Integral(i_b-1, m_nBins);
+    double valueToy = hStatNominal->Integral(i_b-1, m_nBins);
+    hCDF_Toy->SetBinContent(i_b, valueToy);
+    hCDF_Asym->SetBinContent(i_b, valueAsym);
+    
+    // Calculate the significance:
+    hZ0_Toy->SetBinContent(i_b, -1.0*TMath::NormQuantile(valueToy));
+    hZ0_Asym->SetBinContent(i_b, -1.0*TMath::NormQuantile(valueAsym));
     
     double ratio = (TMath::NormQuantile(valueToy) == 0) ? 1.0 :
       TMath::NormQuantile(valueAsym) / TMath::NormQuantile(valueToy);
@@ -1161,42 +1161,49 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   
   // Pad 2: Draw the CDFs for asymptotics and pseudo-experiments
   pad2->cd();
-  hIntegralToy->SetLineColor(kRed);
-  hIntegralAsym->SetLineColor(kBlue);
-  hIntegralToy->GetXaxis()->SetTitle(printName);
-  hIntegralAsym->GetXaxis()->SetTitle(printName);
-  hIntegralToy->GetYaxis()->SetTitle("CDF");
-  hIntegralAsym->GetYaxis()->SetTitle("CDF");
-  hIntegralToy->GetYaxis()->SetTitleSize(0.1);
-  hIntegralToy->GetYaxis()->SetLabelSize(0.1);
-  hIntegralToy->GetYaxis()->SetTitleOffset(0.65);
-  hIntegralToy->Draw("");
-  hIntegralAsym->Draw("SAME");
+  
+  hCDF_Toy->SetLineColor(kRed);
+  hCDF_Toy->GetXaxis()->SetTitle(printName);
+  hCDF_Toy->GetYaxis()->SetTitle("CDF");
+  hCDF_Toy->GetYaxis()->SetTitleSize(0.1);
+  hCDF_Toy->GetYaxis()->SetLabelSize(0.1);
+  hCDF_Toy->GetYaxis()->SetTitleOffset(0.65);
+  hCDF_Toy->Draw("");
+  
+  hCDF_Asym->SetLineColor(kBlue);
+  hCDF_Asym->GetXaxis()->SetTitle(printName);
+  hCDF_Asym->GetYaxis()->SetTitle("CDF");
+  hCDF_Asym->Draw("SAME");
+  
   gPad->SetLogy();
   gPad->SetLogx();
   
   // Pad 3: Plot the calculated significance corresponding to the CDF on Pad 2.
   pad3->cd();
-  hSignificanceToy->SetLineWidth(2);
-  hSignificanceAsym->SetLineWidth(2);
-  hSignificanceToy->SetLineColor(kRed);
-  hSignificanceAsym->SetLineColor(kBlue);
-  hSignificanceToy->GetXaxis()->SetTitle(printName);
-  hSignificanceAsym->GetXaxis()->SetTitle(printName);
-  hSignificanceToy->GetYaxis()->SetTitle("Z [#sigma]");
-  hSignificanceAsym->GetYaxis()->SetTitle("Z [#sigma]");
-  hSignificanceToy->SetBinContent(1, 0);
-  hSignificanceAsym->SetBinContent(1, 0);
-  hSignificanceToy->GetYaxis()->SetTitleSize(0.1);
-  hSignificanceToy->GetYaxis()->SetLabelSize(0.1);
-  hSignificanceToy->GetYaxis()->SetTitleOffset(0.65);
-  hSignificanceToy->GetYaxis()->SetNdivisions(6);
-  hSignificanceToy->Draw("");
-  hSignificanceAsym->Draw("SAME");
+  
+  hZ0_Toy->SetLineWidth(2);
+  hZ0_Toy->SetLineColor(kRed);
+  hZ0_Toy->GetXaxis()->SetTitle(printName);
+  hZ0_Toy->GetYaxis()->SetTitle("Z [#sigma]");
+  hZ0_Toy->SetBinContent(1, 0);
+  hZ0_Toy->GetYaxis()->SetTitleSize(0.1);
+  hZ0_Toy->GetYaxis()->SetLabelSize(0.1);
+  hZ0_Toy->GetYaxis()->SetTitleOffset(0.65);
+  hZ0_Toy->GetYaxis()->SetNdivisions(6);
+  hZ0_Toy->Draw("");
+  
+  hZ0_Asym->SetLineWidth(2);
+  hZ0_Asym->SetLineColor(kBlue);
+  hZ0_Asym->GetXaxis()->SetTitle(printName);
+  hZ0_Asym->GetYaxis()->SetTitle("Z [#sigma]");
+  hZ0_Asym->SetBinContent(1, 0);
+  hZ0_Asym->Draw("SAME");
+  
   gPad->SetLogx();
   
   // Pad 4: Calculate the ratio of Z values from Pad 3.
   pad4->cd();
+  
   hRatio->SetLineColor(kBlack);
   hRatio->SetLineWidth(2);
   hRatio->GetYaxis()->SetTitle("Z_{Asym.} / Z_{Toy}");
@@ -1209,7 +1216,10 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   hRatio->GetXaxis()->SetLabelSize(0.1);
   hRatio->GetXaxis()->SetTitleOffset(0.9);
   hRatio->Draw();
+
   gPad->SetLogx();
+  
+  // Draw a line at zero significance
   TLine *line2 = new TLine();
   line2->SetLineStyle(1);
   line2->SetLineWidth(1);

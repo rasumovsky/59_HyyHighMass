@@ -75,16 +75,19 @@ int main(int argc, char **argv) {
   std::vector<TString> namesPars = toyAna->getNamesPoI();
   for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
     if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
-      toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data only
+      toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data
+      toyAna->plotHist(namesGlobs[i_g], 1);// Mu=1 data
     }
   }
   for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
     if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
       toyAna->plotHist(namesNuis[i_n], 0);
+      toyAna->plotHist(namesNuis[i_n], 1);
     }
   }
   for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
     toyAna->plotHist(namesPars[i_p], 0);
+    toyAna->plotHist(namesPars[i_p], 1);
   }
   
   // Then plot statistics:
