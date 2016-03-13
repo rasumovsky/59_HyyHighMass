@@ -1098,11 +1098,18 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   pad4->Draw();
   
   // Plot settings:
-  double yTitleOffset = 0.3;
+  double yTitleOffset = 0.4;
   double yTitleSize = 0.15;
-  double yLabelOffset = 0.01;
-  double yLabelSize = 0.15;
+  double yLabelOffset = 0.005;
+  double yLabelSize = 0.12;
   
+  // Colors:
+  Color_t fillColorAsym = kBlue-10;
+  Color_t lineColorAsym = kBlue+1;
+  Color_t fillColorToy = kRed-10;
+  Color_t lineColorToy = kRed+1;
+  
+
   // Get the toy and asymptotic distributions:
   TH1F *hStatNominal = NULL;
   if (statistic.EqualTo("QMu")) hStatNominal = getStatHist(statistic, 1);
@@ -1141,10 +1148,11 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   TGraph *gZ0_Asym = new TGraphAsymmErrors();
   
   int nToys = hStatNominal->GetEntries();
-  double yMinimum = 0.5 / ((double)nToys);
-  double yMaximum = 1.0;
+  double yMinimum = 0.51 / ((double)nToys);
+  double yMaximum = 0.99;
 
   // Loop over histogram bins to set values:
+  int toyPoints = 0; 
   for (int i_b = 1; i_b <= m_nBins; i_b++) {
     
     // p-value calculations for CDF graphs:
@@ -1155,8 +1163,6 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
     // Z0 graphs for significance graphs:
     double z0_Asym = TMath::NormQuantile(1-p_Asym);
     double z0_Toy = TMath::NormQuantile(1-p_Toy);
-    double z0Error_Toy = TMath::NormQuantile(1-(p_Toy-pError_Toy));
-    
     double z0Ratio = (z0_Toy == 0) ? 1.0 : (z0_Asym / z0_Toy);
     
     // Histograms for plot axes:
@@ -1173,17 +1179,34 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
     errorLo_CDF_Toy[i_b-1] = (pError_Toy < p_Toy) ? pError_Toy : p_Toy;
     errorHi_CDF_Toy[i_b-1] = pError_Toy;
     
-    // Z0 graph values:
-    value_Z0_Asym[i_b-1] = z0_Asym;
-    value_Z0_Toy[i_b-1] = z0_Toy;
-    errorLo_Z0_Toy[i_b-1] = z0Error_Toy;
-    errorHi_Z0_Toy[i_b-1] = z0Error_Toy;
+    if (p_Toy > 0) {
+      
+      double z0ErrorLo_Toy = TMath::NormQuantile(1.0 - (p_Toy+pError_Toy));
+      double z0ErrorHi_Toy = TMath::NormQuantile(1.0 - (p_Toy-pError_Toy));
+      
+      
+      double z0RatioLo = z0_Asym / z0ErrorLo_Toy;
+      double z0RatioHi = z0_Asym / z0ErrorHi_Toy;
+      
+      std::cout << "\tz0=" << z0_Toy << " \tz0ErrorLo_Toy=" << z0ErrorLo_Toy 
+		<< " \tz0ErrorHi_Toy=" << z0ErrorHi_Toy << std::endl;
+      
     
-    // Ratio graph values:
-    value_Ratio[i_b-1] = (z0_Asym / z0_Toy);
-    errorLo_Ratio[i_b-1]= fabs(z0Ratio - (z0_Asym/(z0_Toy+z0Error_Toy)));
-    errorHi_Ratio[i_b-1]= fabs(z0Ratio - (z0_Asym/(z0_Toy-z0Error_Toy)));
-    
+
+      // Z0 graph values:
+      value_Z0_Asym[i_b-1] = z0_Asym;
+      value_Z0_Toy[i_b-1] = z0_Toy;
+      errorLo_Z0_Toy[i_b-1] = fabs(z0_Toy - z0ErrorLo_Toy);
+      errorHi_Z0_Toy[i_b-1] = fabs(z0_Toy - z0ErrorHi_Toy);
+      
+      // Ratio graph values:
+      value_Ratio[i_b-1] = z0Ratio;
+      errorLo_Ratio[i_b-1]= fabs(z0Ratio - z0RatioLo);
+      errorHi_Ratio[i_b-1]= fabs(z0Ratio - z0RatioHi);
+      
+      toyPoints++;
+    }
+
     // Then fill graph values:
     gCDF_Asym->SetPoint(i_b-1, value_Q[i_b-1], p_Asym);
     gZ0_Asym->SetPoint(i_b-1, value_Q[i_b-1], z0_Asym);
@@ -1191,25 +1214,43 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
     
   //---------- Pad 1: Draw test statistic ----------//
   pad1->cd();
-  hStatNominal->SetLineColor(kRed+1);
-  hStatNominal->SetFillColor(kRed-10);
+  hStatNominal->SetLineWidth(2);
+  hStatNominal->SetLineColor(lineColorToy);
+  hStatNominal->SetFillColor(fillColorToy);
   hStatNominal->GetYaxis()->SetRangeUser(yMinimum, yMaximum);
+  hStatNominal->GetYaxis()->SetTitleSize(yTitleSize/2.0);
+  hStatNominal->GetYaxis()->SetTitleOffset(yTitleOffset*2.0);
+  hStatNominal->GetYaxis()->SetLabelSize(yLabelSize/2.0);
+  hStatNominal->GetYaxis()->SetLabelOffset(yLabelOffset*2.0);
   hStatNominal->Draw("");
-  hAsymptotic->SetLineColor(kBlue+1);
-  hAsymptotic->SetFillColor(kBlue+1);
-  hAsymptotic->SetFillStyle(3444);
+  hAsymptotic->SetLineWidth(2);
+  hAsymptotic->SetLineColor(lineColorAsym);
+  hAsymptotic->SetFillColor(fillColorAsym);
+  hAsymptotic->SetFillStyle(3359);
+  
   hAsymptotic->Draw("SAME");
   gPad->SetLogy();
   //gPad->SetLogx();
+ 
+  // Draw the ATLAS text:
+  TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
+  t.SetTextFont(72); t.SetTextSize(0.07);
+  t.DrawLatex(0.63, 0.86, "ATLAS");
+  t.SetTextFont(42); t.SetTextSize(0.07);
+  t.DrawLatex(0.75, 0.86, m_config->getStr("ATLASLabel"));
+  t.DrawLatex(0.63, 0.78, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+			       (m_config->getNum("AnalysisLuminosity")/
+				1000.0)));
   
   // Print the legend:
-  TLegend leg(0.65, 0.65, 0.9, 0.9);
+  TLegend leg(0.63, 0.58, 0.92, 0.75);
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
-  leg.SetTextSize(0.06);
+  leg.SetTextSize(0.07);
+  leg.SetTextFont(42);
   TString printName = printStatName(statistic);
-  leg.AddEntry(hStatNominal, Form("Toy MC %s",printName.Data()), "l");
-  leg.AddEntry(hAsymptotic, Form("Asymptotic %s",printName.Data()), "l");
+  leg.AddEntry(hStatNominal, Form("Toy MC #it{%s}",printName.Data()), "F");
+  leg.AddEntry(hAsymptotic, Form("Asymptotic #it{%s}",printName.Data()), "F");
   leg.Draw("SAME");
   
   //---------- Pad 2: Draw the CDFs ----------//
@@ -1227,13 +1268,13 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   hCDF_Toy->Draw("");
   
   TGraphAsymmErrors *gCDF_Toy
-    = new TGraphAsymmErrors(m_nBins, value_Q, value_CDF_Toy, error_Q, error_Q, 
-			    errorLo_CDF_Toy, errorHi_CDF_Toy);
-  gCDF_Toy->SetLineColor(kRed+1);
+    = new TGraphAsymmErrors(toyPoints, value_Q, value_CDF_Toy, error_Q,
+			    error_Q, errorLo_CDF_Toy, errorHi_CDF_Toy);
   gCDF_Toy->SetLineWidth(2);
-  gCDF_Toy->SetFillColor(kRed-10);
+  gCDF_Toy->SetLineColor(lineColorToy);
+  gCDF_Toy->SetFillColor(fillColorToy);
   gCDF_Toy->Draw("3SAME");
-  gCDF_Asym->SetLineColor(kBlue+1);
+  gCDF_Asym->SetLineColor(lineColorAsym);
   gCDF_Asym->SetLineWidth(2);
   gCDF_Asym->Draw("LSAME");
   
@@ -1243,6 +1284,7 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   //---------- Pad 3: Draw the Z0 ----------//
   pad3->cd();
   
+  double yMin3 = 0.01; double yMax3 = 4.49;
   hZ0_Toy->SetLineColor(0);
   hZ0_Toy->GetXaxis()->SetTitle(printName);
   hZ0_Toy->GetYaxis()->SetTitle("Z [#sigma]");
@@ -1250,19 +1292,18 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   hZ0_Toy->GetYaxis()->SetTitleOffset(yTitleOffset);
   hZ0_Toy->GetYaxis()->SetLabelSize(yLabelSize);
   hZ0_Toy->GetYaxis()->SetLabelOffset(yLabelOffset);
-  hZ0_Toy->GetYaxis()->SetRangeUser(0.01, 4.99);
+  hZ0_Toy->GetYaxis()->SetRangeUser(yMin3, yMax3);
   hZ0_Toy->GetYaxis()->SetNdivisions(6);
   hZ0_Toy->Draw("");
   
   TGraphAsymmErrors *gZ0_Toy
-    = new TGraphAsymmErrors(m_nBins, value_Q, value_Z0_Toy, error_Q, error_Q, 
+    = new TGraphAsymmErrors(toyPoints, value_Q, value_Z0_Toy, error_Q, error_Q, 
 			    errorLo_Z0_Toy, errorHi_Z0_Toy);
-  gZ0_Toy->SetLineWidth(2);
-  gZ0_Toy->SetLineColor(kRed+1);
-  gZ0_Toy->SetFillColor(kRed-10);
+  //gZ0_Toy->SetLineWidth(2);
+  gZ0_Toy->SetFillColor(fillColorToy);
   gZ0_Toy->Draw("3SAME");
   gZ0_Asym->SetLineWidth(2);
-  gZ0_Asym->SetLineColor(kBlue+1);
+  gZ0_Asym->SetLineColor(lineColorAsym);
   gZ0_Asym->GetYaxis()->SetTitle("Z [#sigma]");
   gZ0_Asym->Draw("LSAME");
   
@@ -1271,7 +1312,9 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   //---------- Pad 4: Plot ratio of Z0 ----------//
   pad4->cd();
   
-  hRatio->SetLineColor(0);
+  double yMin4 = 0.1; double yMax4 = 1.9;
+  hRatio->SetLineWidth(2);
+  hRatio->SetLineColor(lineColorAsym);
   hRatio->GetYaxis()->SetTitle("Z_{Asym.} / Z_{Toy}");
   hRatio->GetXaxis()->SetTitle(printName);
   hRatio->GetYaxis()->SetTitleSize(yTitleSize);
@@ -1282,15 +1325,16 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   hRatio->GetXaxis()->SetTitleSize(yTitleSize);
   hRatio->GetXaxis()->SetLabelSize(yLabelSize);
   hRatio->GetXaxis()->SetTitleOffset(1.0);
+  hRatio->GetYaxis()->SetRangeUser(yMin4, yMax4);
   hRatio->Draw("");
   
   TGraphAsymmErrors *gRatio
-    = new TGraphAsymmErrors(m_nBins, value_Q, value_Ratio, error_Q, error_Q, 
+    = new TGraphAsymmErrors(toyPoints, value_Q, value_Ratio, error_Q, error_Q, 
 			    errorLo_Ratio, errorHi_Ratio);
-  gRatio->SetLineWidth(2);
-  gRatio->SetLineColor(kOrange+4);
-  gRatio->SetFillColor(kOrange+1);
-  gRatio->Draw("A2");
+  //gRatio->SetLineWidth(2);
+  gRatio->SetLineColor(lineColorAsym);
+  gRatio->SetFillColor(fillColorAsym);
+  gRatio->Draw("3SAME");
   
   //gPad->SetLogx();
   
@@ -1304,6 +1348,26 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   line2->DrawLine(m_binMin, 1.2, m_binMax, 1.2);
   line2->DrawLine(m_binMin, 0.8, m_binMax, 0.8);
   hRatio->Draw("SAME");
+  
+  // Draw a line at each sigma value:
+  TLatex t2; t2.SetTextColor(kRed); t.SetTextFont(42); t.SetTextSize(0.1);
+  
+  TLine *line3 = new TLine();
+  line3->SetLineWidth(1);
+  line3->SetLineStyle(2);
+  line3->SetLineColor(kRed);
+  double sigmaValues[4] = {1.0, 4.0, 9.0, 16.0};
+  for (int i_s = 0; i_s < 4; i_s++) {
+    pad1->cd();
+    line3->DrawLine(sigmaValues[i_s], yMinimum, sigmaValues[i_s], yMaximum);
+    t2.DrawLatex(sigmaValues[i_s]+0.25, 0.01, Form("%d#sigma",i_s+1));
+    pad2->cd();
+    line3->DrawLine(sigmaValues[i_s], yMinimum, sigmaValues[i_s], yMaximum);
+    pad3->cd();
+    line3->DrawLine(sigmaValues[i_s], yMin3, sigmaValues[i_s], yMax3);
+    pad4->cd();
+    line3->DrawLine(sigmaValues[i_s], yMin4, sigmaValues[i_s], yMax4);
+  }
   
   can->Print(Form("%s/plot_comp_%s.eps", m_outputDir.Data(), statistic.Data()));
   can->Print(Form("%s/plot_comp_%s.png", m_outputDir.Data(), statistic.Data()));
