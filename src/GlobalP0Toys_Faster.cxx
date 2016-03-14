@@ -212,7 +212,7 @@ int main(int argc, char **argv) {
 	}
       }
     }
-    
+        
     // Randomize the mass for the spurious signal: 
     if (config->isDefined("DoRandomizeSpuriousSignal") && 
 	config->getBool("DoRandomizeSpuriousSignal")) {
@@ -243,7 +243,12 @@ int main(int argc, char **argv) {
     if (config->isDefined("FitOptions")) {
       testStat->setFitOptions(config->getStr("FitOptions"));
     }
-        
+    
+    // For 1D Look-elsewhere effect, set width to zero:
+    if (config->isDefined("Do1DLEE") && config->getBool("Do1DLEE")) {
+      testStat->setParam("GoM", 0.0, true);
+    }
+
     //---------- Mu free fits ----------//
     std::cout << "GlobalP0Toys: Mu-free fit starting" << std::endl;
     int retry = 0; nllPerRetry.clear();
@@ -258,6 +263,10 @@ int main(int argc, char **argv) {
 	TRandom3 random = TRandom3(seed+2*retry+4*i_p);
 	double randomValue = random.Uniform(currRange[0], currRange[1]);
 	mapPoIRandom[listPoI[i_p]] = randomValue;
+	if (config->isDefined("Do1DLEE") && config->getBool("Do1DLEE") &&
+	    listPoI[i_p].EqualTo("GoM")) {
+	  mapPoIRandom[listPoI[i_p]] = 0.0;
+	}
       }
       
       // Perform the fit:

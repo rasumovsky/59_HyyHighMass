@@ -1241,10 +1241,6 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
 	errorHi_Ratio[toyPoints] = 0.0;
       }
       
-      std::cout << "ratio = " << value_Ratio[toyPoints] 
-		<< " \tratioHi = " << errorHi_Ratio[toyPoints]
-		<< " \tratioLo = " << errorLo_Ratio[toyPoints]
-		<< std::endl;
       toyPoints++;
     }
   }
@@ -1253,15 +1249,20 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   pad1->cd();
   hStatNominal->SetLineWidth(2);
   hStatNominal->SetLineColor(lineColorToy);
-  hStatNominal->SetFillColor(fillColorToy);
+  hStatNominal->SetFillColor(lineColorToy);
+  hStatNominal->SetFillStyle(3354);
   hStatNominal->GetYaxis()->SetRangeUser(yMinimum, yMaximum);
   hStatNominal->GetYaxis()->SetTitleSize(yTitleSize/2.0);
   hStatNominal->GetYaxis()->SetTitleOffset(yTitleOffset*2.0);
   hStatNominal->GetYaxis()->SetLabelSize(yLabelSize/2.0);
   hStatNominal->GetYaxis()->SetLabelOffset(yLabelOffset*2.0);
+  double xWidth = ((m_binMax- m_binMin) / ((double)m_nBins));
+  hStatNominal->GetYaxis()->SetTitle(Form("Fraction / %2.2f",xWidth));
   hStatNominal->Draw("");
   hAsymptotic->SetLineWidth(2);
   hAsymptotic->SetLineColor(lineColorAsym);
+  hAsymptotic->SetFillColor(lineColorAsym);
+  hAsymptotic->SetFillStyle(3345);
   
   hAsymptotic->Draw("SAME");
   gPad->SetLogy();
@@ -1284,8 +1285,14 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   leg.SetTextSize(0.07);
   leg.SetTextFont(42);
   TString printName = printStatName(statistic);
-  leg.AddEntry(hStatNominal, Form("Toy MC #it{%s}",printName.Data()), "F");
-  leg.AddEntry(hAsymptotic, Form("Asymptotic #it{%s}",printName.Data()), "L");
+  if (statistic.EqualTo("QMu")) {
+    leg.AddEntry(hStatNominal, Form("#mu=1 Toy MC %s",printName.Data()), "F");
+  }
+  else if (statistic.EqualTo("Q0")) {
+    leg.AddEntry(hStatNominal, Form("#mu=0 Toy MC %s",printName.Data()), "F");
+  }
+  
+  leg.AddEntry(hAsymptotic, Form("Asymptotic %s",printName.Data()), "L");
   leg.Draw("SAME");
   
   //---------- Pad 2: Draw the CDFs ----------//
