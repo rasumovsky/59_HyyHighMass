@@ -46,6 +46,8 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
 
   m_valuesQMu_Mu0.clear();
   m_valuesQMu_Mu1.clear();
+  m_valuesMuHat_Mu0.clear();
+  m_valuesMuHat_Mu1.clear();
   m_valuesBestFit_AsymZ0_Mu0.clear();
   m_valuesBestFit_AsymCL_Mu0.clear();
   m_valuesBestFit_AsymZ0_Mu1.clear();
@@ -271,7 +273,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   // Instantiate the histograms:
   m_hMuProfiled[muValue] = new TH1F(Form("hMuProfiled%d",muValue),
 				    Form("hMuProfiled%d",muValue), 
-				    m_nBins, -2.0, 4.0);
+				    m_nBins, 0.0, 4.0);
   m_hQMu[muValue] = new TH1F(Form("hQMu%d",muValue),Form("hQMu%d",muValue),
 			     m_nBins, m_binMin, m_binMax);
   m_hQ0[muValue] = new TH1F(Form("hQ0%d",muValue),Form("hQ0%d",muValue),
@@ -322,11 +324,13 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   
   // Clear the qMu storage for pMu calculation if looking at Mu1 toy:
   if (muValue > 0) {
+    m_valuesMuHat_Mu1.clear();
     m_valuesQMu_Mu1.clear();
     m_valuesBestFit_AsymZ0_Mu1.clear();
     m_valuesBestFit_AsymCL_Mu1.clear();
   }
   else  {
+    m_valuesMuHat_Mu0.clear();
     m_valuesQMu_Mu0.clear();
     m_valuesBestFit_AsymZ0_Mu0.clear();
     m_valuesBestFit_AsymCL_Mu0.clear();
@@ -455,11 +459,13 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     
     // Also fill the QMu vector for pMu calculation:
     if (muValue > 0) {
+      m_valuesMuHat_Mu1.push_back(toyTree->profiledPOIVal);
       m_valuesQMu_Mu1.push_back(valueQMu);
       m_valuesBestFit_AsymZ0_Mu1.push_back(valueZ0);
       m_valuesBestFit_AsymCL_Mu1.push_back(valueCL);
     }
     else {
+      m_valuesMuHat_Mu0.push_back(toyTree->profiledPOIVal);
       m_valuesQMu_Mu0.push_back(valueQMu);
       m_valuesBestFit_AsymZ0_Mu0.push_back(valueZ0);
       m_valuesBestFit_AsymCL_Mu0.push_back(valueCL);
@@ -518,11 +524,13 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   }
   
   // Then scale the statistics histograms:
+  m_hMuProfiled[muValue]
+    ->Scale(1.0 / m_hMuProfiled[muValue]->Integral(1, m_nBins));
   m_hQMu[muValue]->Scale(1.0 / m_hQMu[muValue]->Integral(1, m_nBins));
   m_hQ0[muValue]->Scale(1.0 / m_hQ0[muValue]->Integral(1, m_nBins));
   m_hZ0[muValue]->Scale(1.0 / m_hZ0[muValue]->Integral(1, m_nBins));
   m_hCL[muValue]->Scale(1.0 / m_hCL[muValue]->Integral(1, m_nBins));
-
+  
   // Finish some calculations for the retry study:
   if (m_options.Contains("StudyRetries")) {
 
@@ -839,58 +847,71 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
 */
 void ToyAnalysis::plotProfiledMu() {
  
-  TCanvas *can = new TCanvas("can", "can", 800, 800);
+  TCanvas *can = new TCanvas("can", "can", 800, 600);
   can->cd();
   
   TH1F *histMu0 = getMuHist(0);
   TH1F *histMu1 = getMuHist(1);
-  histMu0->SetLineColor(kBlue);
-  histMu1->SetLineColor(kRed);
+  histMu0->SetLineColor(kBlue+1);
+  histMu0->SetFillStyle(3354);
+  histMu0->SetFillColor(kBlue);
   histMu0->SetLineWidth(2);
+  
+  histMu1->SetFillColor(kRed);
+  histMu1->SetFillStyle(3345);
+  histMu1->SetLineColor(kRed+1);
   histMu1->SetLineWidth(2);
-
+  
+  double yMinimum = 0.51 / ((double)histMu0->GetEntries());
+  double yMaximum = 0.99;
+  
+  double xWidth = ((histMu1->GetXaxis()->GetXmax() - 
+		    histMu1->GetXaxis()->GetXmin()) /
+		   ((double)histMu1->GetNbinsX()));
   gPad->SetLogy();
   histMu0->GetXaxis()->SetTitle("#mu_{profiled}");
-  histMu0->GetYaxis()->SetTitle("Fraction of toys");
+  histMu0->GetYaxis()->SetTitle(Form("Fraction per %2.3f", xWidth));
+  
+  histMu0->GetYaxis()->SetRangeUser(yMinimum, yMaximum);
   histMu0->Draw("");
   histMu1->Draw("SAME");
-  
-  TLegend leg(0.56,0.74,0.88,0.86);
-  leg.SetBorderSize(0);
-  leg.SetTextSize(0.04);
-  leg.SetFillColor(0);
-  leg.AddEntry(histMu0,"#mu=0 toy MC","l");
-  leg.AddEntry(histMu1,"#mu=1 toy MC","l");
-  leg.Draw("SAME");
-  
+    
   // Also get the mean signal strengths from the toy profiling:
-  double meanMu0 = histMu0->GetMean();
+  double medMu0 =m_valuesMuHat_Mu0[(int)(0.5*(double)m_valuesMuHat_Mu0.size())];
   TLine *lineMu0 = new TLine();
   lineMu0->SetLineStyle(2);
   lineMu0->SetLineWidth(3);
-  lineMu0->SetLineColor(kBlue); 
-  lineMu0->DrawLine(meanMu0, histMu0->GetYaxis()->GetXmin(),
-		    meanMu0, histMu0->GetYaxis()->GetXmax());
-  double meanMu1 = histMu1->GetMean();
+  lineMu0->SetLineColor(kBlue+1); 
+  lineMu0->DrawLine(medMu0, yMinimum, medMu0, yMaximum);
+  double medMu1 =m_valuesMuHat_Mu1[(int)(0.5*(double)m_valuesMuHat_Mu1.size())];
   TLine *lineMu1 = new TLine();
   lineMu1->SetLineStyle(2);
   lineMu1->SetLineWidth(3);
-  lineMu1->SetLineColor(kRed);
-  lineMu1->DrawLine(meanMu1, histMu0->GetYaxis()->GetXmin(),
-		    meanMu1, histMu0->GetYaxis()->GetXmax());
-  TLatex textMu0;
-  textMu0.SetNDC();
-  textMu0.SetTextColor(kBlue);
-  textMu0.SetTextFont(42);
-  textMu0.SetTextSize(0.04); 
-  textMu0.DrawLatex(0.56, 0.65,Form("#mu=0 toy mean = %2.2f",meanMu0));
-  TLatex textMu1;
-  textMu1.SetNDC();
-  textMu1.SetTextColor(kRed); 
-  textMu1.SetTextFont(42);
-  textMu1.SetTextSize(0.04);
-  textMu1.DrawLatex(0.56, 0.7,Form("#mu=1 toy mean = %2.2f",meanMu1));
+  lineMu1->SetLineColor(kRed+1);
+  lineMu1->DrawLine(medMu1, yMinimum, medMu1, yMaximum);
   
+  // Create a legend of histograms and median lines:
+  TLegend leg(0.56, 0.50, 0.88, 0.80);
+  leg.SetBorderSize(0);
+  leg.SetTextSize(0.05);
+  leg.SetFillColor(0);
+  leg.SetTextFont(42);
+  leg.AddEntry(histMu0, "#mu=0 toy MC", "F");
+  leg.AddEntry(lineMu0, Form("#mu=0 median = %2.2f",medMu0), "l");
+  leg.AddEntry(histMu1, "#mu=1 toy MC", "F");
+  leg.AddEntry(lineMu1, Form("#mu=1 median = %2.2f",medMu1), "l");
+  leg.Draw("SAME");
+  
+  // Draw the ATLAS text:
+  TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
+  t.SetTextFont(72); t.SetTextSize(0.05);
+  t.DrawLatex(0.58, 0.88, "ATLAS");
+  t.SetTextFont(42); t.SetTextSize(0.05);
+  t.DrawLatex(0.71, 0.88, m_config->getStr("ATLASLabel"));
+  t.DrawLatex(0.58, 0.82, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+			       (m_config->getNum("AnalysisLuminosity")/
+				1000.0)));
+
   can->Print(Form("%s/plot_profiledMu.eps", m_outputDir.Data()));
   can->Clear();
   gPad->SetLogy(0);  
@@ -1104,12 +1125,11 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   double yLabelSize = 0.12;
   
   // Colors:
-  Color_t fillColorAsym = kBlue-10;
+  Color_t fillColorAsym = kBlue-9;
   Color_t lineColorAsym = kBlue+1;
-  Color_t fillColorToy = kRed-10;
+  Color_t fillColorToy = kRed-9;
   Color_t lineColorToy = kRed+1;
   
-
   // Get the toy and asymptotic distributions:
   TH1F *hStatNominal = NULL;
   if (statistic.EqualTo("QMu")) hStatNominal = getStatHist(statistic, 1);
@@ -1169,47 +1189,64 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
     hCDF_Toy->SetBinContent(i_b, p_Toy);
     hZ0_Toy->SetBinContent(i_b, z0_Toy);
     hRatio->SetBinContent(i_b, z0Ratio);
+        
+    // Then fill graph values:
+    gCDF_Asym->SetPoint(i_b-1, hStatNominal->GetBinCenter(i_b), p_Asym);
+    gZ0_Asym->SetPoint(i_b-1, hStatNominal->GetBinCenter(i_b), z0_Asym);
     
     // Fill arrays for graphs:
-    value_Q[i_b-1] = hStatNominal->GetBinCenter(i_b);
-    
-    // P0 (CDF) values:
-    value_CDF_Asym[i_b-1] = p_Asym;
-    value_CDF_Toy[i_b-1] = p_Toy;
-    errorLo_CDF_Toy[i_b-1] = (pError_Toy < p_Toy) ? pError_Toy : p_Toy;
-    errorHi_CDF_Toy[i_b-1] = pError_Toy;
-    
-    if (p_Toy > 0) {
+    if (p_Toy > 0 && i_b > 0) {
       
-      double z0ErrorLo_Toy = TMath::NormQuantile(1.0 - (p_Toy+pError_Toy));
-      double z0ErrorHi_Toy = TMath::NormQuantile(1.0 - (p_Toy-pError_Toy));
+      value_Q[toyPoints] = hStatNominal->GetBinCenter(i_b);
       
+      // P0 (CDF) values:
+      value_CDF_Asym[toyPoints] = p_Asym;
+      value_CDF_Toy[toyPoints] = p_Toy;
+      errorLo_CDF_Toy[toyPoints] = (pError_Toy < p_Toy) ? pError_Toy : p_Toy;
+      errorHi_CDF_Toy[toyPoints] = pError_Toy;
       
+      // Z and p errors are flipped:
+      double z0ErrorLo_Toy
+	= TMath::NormQuantile(1.0 - (p_Toy+errorHi_CDF_Toy[toyPoints]));
+      double z0ErrorHi_Toy
+	= TMath::NormQuantile(1.0 - (p_Toy-errorLo_CDF_Toy[toyPoints]));
+      
+      if (!std::isfinite(z0ErrorLo_Toy) || std::isnan(z0ErrorLo_Toy)) {
+	z0ErrorLo_Toy = 0.0;
+      }
+      if (!std::isfinite(z0ErrorHi_Toy) || std::isnan(z0ErrorHi_Toy)) {
+	z0ErrorHi_Toy = 0.0;
+      }
+
       double z0RatioLo = z0_Asym / z0ErrorLo_Toy;
       double z0RatioHi = z0_Asym / z0ErrorHi_Toy;
       
-      std::cout << "\tz0=" << z0_Toy << " \tz0ErrorLo_Toy=" << z0ErrorLo_Toy 
-		<< " \tz0ErrorHi_Toy=" << z0ErrorHi_Toy << std::endl;
-      
-    
-
       // Z0 graph values:
-      value_Z0_Asym[i_b-1] = z0_Asym;
-      value_Z0_Toy[i_b-1] = z0_Toy;
-      errorLo_Z0_Toy[i_b-1] = fabs(z0_Toy - z0ErrorLo_Toy);
-      errorHi_Z0_Toy[i_b-1] = fabs(z0_Toy - z0ErrorHi_Toy);
+      value_Z0_Asym[toyPoints] = z0_Asym;
+      value_Z0_Toy[toyPoints] = z0_Toy;
+      errorLo_Z0_Toy[toyPoints] = fabs(z0_Toy - z0ErrorLo_Toy);
+      errorHi_Z0_Toy[toyPoints] = fabs(z0_Toy - z0ErrorHi_Toy);
       
       // Ratio graph values:
-      value_Ratio[i_b-1] = z0Ratio;
-      errorLo_Ratio[i_b-1]= fabs(z0Ratio - z0RatioLo);
-      errorHi_Ratio[i_b-1]= fabs(z0Ratio - z0RatioHi);
+      value_Ratio[toyPoints] = z0Ratio;
+      errorLo_Ratio[toyPoints] = fabs(z0Ratio - z0RatioHi);
+      errorHi_Ratio[toyPoints] = fabs(z0Ratio - z0RatioLo);
       
+      if (!std::isfinite(errorLo_Ratio[toyPoints]) || 
+	  std::isnan(errorLo_Ratio[toyPoints])) {
+	errorLo_Ratio[toyPoints] = 0.0;
+      }
+      if (!std::isfinite(errorHi_Ratio[toyPoints]) || 
+	  std::isnan(errorHi_Ratio[toyPoints])) {
+	errorHi_Ratio[toyPoints] = 0.0;
+      }
+      
+      std::cout << "ratio = " << value_Ratio[toyPoints] 
+		<< " \tratioHi = " << errorHi_Ratio[toyPoints]
+		<< " \tratioLo = " << errorLo_Ratio[toyPoints]
+		<< std::endl;
       toyPoints++;
     }
-
-    // Then fill graph values:
-    gCDF_Asym->SetPoint(i_b-1, value_Q[i_b-1], p_Asym);
-    gZ0_Asym->SetPoint(i_b-1, value_Q[i_b-1], z0_Asym);
   }
     
   //---------- Pad 1: Draw test statistic ----------//
@@ -1225,8 +1262,6 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   hStatNominal->Draw("");
   hAsymptotic->SetLineWidth(2);
   hAsymptotic->SetLineColor(lineColorAsym);
-  hAsymptotic->SetFillColor(fillColorAsym);
-  hAsymptotic->SetFillStyle(3359);
   
   hAsymptotic->Draw("SAME");
   gPad->SetLogy();
@@ -1250,7 +1285,7 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   leg.SetTextFont(42);
   TString printName = printStatName(statistic);
   leg.AddEntry(hStatNominal, Form("Toy MC #it{%s}",printName.Data()), "F");
-  leg.AddEntry(hAsymptotic, Form("Asymptotic #it{%s}",printName.Data()), "F");
+  leg.AddEntry(hAsymptotic, Form("Asymptotic #it{%s}",printName.Data()), "L");
   leg.Draw("SAME");
   
   //---------- Pad 2: Draw the CDFs ----------//
@@ -1299,7 +1334,8 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   TGraphAsymmErrors *gZ0_Toy
     = new TGraphAsymmErrors(toyPoints, value_Q, value_Z0_Toy, error_Q, error_Q, 
 			    errorLo_Z0_Toy, errorHi_Z0_Toy);
-  //gZ0_Toy->SetLineWidth(2);
+  gZ0_Toy->SetLineWidth(2);
+  gZ0_Toy->SetLineColor(lineColorToy);
   gZ0_Toy->SetFillColor(fillColorToy);
   gZ0_Toy->Draw("3SAME");
   gZ0_Asym->SetLineWidth(2);
@@ -1312,7 +1348,7 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   //---------- Pad 4: Plot ratio of Z0 ----------//
   pad4->cd();
   
-  double yMin4 = 0.1; double yMax4 = 1.9;
+  double yMin4 = 0.61; double yMax4 = 1.39;
   hRatio->SetLineWidth(2);
   hRatio->SetLineColor(lineColorAsym);
   hRatio->GetYaxis()->SetTitle("Z_{Asym.} / Z_{Toy}");
@@ -1331,7 +1367,7 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   TGraphAsymmErrors *gRatio
     = new TGraphAsymmErrors(toyPoints, value_Q, value_Ratio, error_Q, error_Q, 
 			    errorLo_Ratio, errorHi_Ratio);
-  //gRatio->SetLineWidth(2);
+  gRatio->SetLineWidth(2);
   gRatio->SetLineColor(lineColorAsym);
   gRatio->SetFillColor(fillColorAsym);
   gRatio->Draw("3SAME");
@@ -1344,20 +1380,25 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   line2->SetLineWidth(1);
   line2->SetLineColor(kBlack);
   line2->DrawLine(m_binMin, 1.0, m_binMax, 1.0);
-  line2->SetLineStyle(2);
+  line2->SetLineColor(kGray+2);
+  line2->SetLineStyle(3);
+  line2->DrawLine(m_binMin, 1.3, m_binMax, 1.3);
   line2->DrawLine(m_binMin, 1.2, m_binMax, 1.2);
+  line2->DrawLine(m_binMin, 1.1, m_binMax, 1.1);
+  line2->DrawLine(m_binMin, 0.9, m_binMax, 0.9);
   line2->DrawLine(m_binMin, 0.8, m_binMax, 0.8);
-  hRatio->Draw("SAME");
+  line2->DrawLine(m_binMin, 0.7, m_binMax, 0.7);
+  //hRatio->Draw("SAME");
   
   // Draw a line at each sigma value:
-  TLatex t2; t2.SetTextColor(kRed); t.SetTextFont(42); t.SetTextSize(0.1);
+  TLatex t2; t2.SetTextColor(kRed+1); t.SetTextFont(42); t.SetTextSize(0.1);
   
   TLine *line3 = new TLine();
   line3->SetLineWidth(1);
   line3->SetLineStyle(2);
-  line3->SetLineColor(kRed);
-  double sigmaValues[4] = {1.0, 4.0, 9.0, 16.0};
-  for (int i_s = 0; i_s < 4; i_s++) {
+  line3->SetLineColor(kRed+1);
+  double sigmaValues[3] = {1.0, 4.0, 9.0};
+  for (int i_s = 0; i_s < 3; i_s++) {
     pad1->cd();
     line3->DrawLine(sigmaValues[i_s], yMinimum, sigmaValues[i_s], yMaximum);
     t2.DrawLatex(sigmaValues[i_s]+0.25, 0.01, Form("%d#sigma",i_s+1));
@@ -1419,4 +1460,17 @@ void ToyAnalysis::setOutputDir(TString outputDirectory) {
   m_outputDir = outputDirectory;
   // Create output directory:
   system(Form("mkdir -vp %s", m_outputDir.Data()));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Change the binning and x-axis range for the statistical histogram.
+   @param nBins - The number of histogram bins.
+   @param binMin - The minimum of the x-axis.
+   @param binMax - The maximum of the x-axis.
+*/
+void ToyAnalysis::setStatHistRanges(int nBins, int binMin, int binMax) {
+  m_nBins = nBins;
+  m_binMin = binMin;
+  m_binMax = binMax;
 }
