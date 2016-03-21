@@ -246,7 +246,7 @@ int main(int argc, char **argv) {
     
     // For 1D Look-elsewhere effect, set width to zero:
     if (config->isDefined("Do1DLEE") && config->getBool("Do1DLEE")) {
-      testStat->setParam("GoM", 0.0, true);
+      testStat->setParam("GoM", config->getNum("LEEWidthValue"), true);
     }
 
     //---------- Mu free fits ----------//
@@ -265,7 +265,7 @@ int main(int argc, char **argv) {
 	mapPoIRandom[listPoI[i_p]] = randomValue;
 	if (config->isDefined("Do1DLEE") && config->getBool("Do1DLEE") &&
 	    listPoI[i_p].EqualTo("GoM")) {
-	  mapPoIRandom[listPoI[i_p]] = 0.0;
+	  mapPoIRandom[listPoI[i_p]] = config->getNum("LEEWidthValue");
 	}
       }
       

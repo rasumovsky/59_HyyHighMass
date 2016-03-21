@@ -13,7 +13,7 @@
 //  system commands to submit jobs to various clusters.                       //
 //                                                                            //
 //  MasterOption:                                                             //
-//    - TossGlobalP0Toys                                                      //
+//    - GlobalP0Toys                                                          //
 //    - GlobalP0Analysis                                                      //
 //    - LocalP0Analysis                                                       //
 //                                                                            //
@@ -107,7 +107,7 @@ int main (int argc, char **argv) {
   
   //--------------------------------------//
   // Step 5.0: Create pseudoexperiment ensemble:
-  if (masterOption.Contains("TossGlobalP0Toys")) {
+  if (masterOption.Contains("GlobalP0Toys")) {
     std::cout << "HMMaster: Step 5.1 - Create pseudoexperiments." << std::endl;
     
     int toySeed = m_config->getInt("toySeed");
