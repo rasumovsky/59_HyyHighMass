@@ -39,20 +39,21 @@ void mapToVectors(std::map<std::string,double> map,
 
 /**
    -----------------------------------------------------------------------------
-*/
-void runToysImportSampling() {
-}
-
-/**
-   -----------------------------------------------------------------------------
    Create a single pseudo-experiment and fit it. If option "ToyMLPoint" is used,
    the program will attempt to load the ML snapshot to get the values of the
    parameters of interest. On the other hand, if "ToyForScan" is used in the
    option, the parameters of interest are taken directly from the arguments
    passed to the main() method.
+   @param doImportanceSampling - True iff you want to use importance sampling
+   to inflate the statistics in the tail of the LLR distributions.
 */
-void runToysSinglePoint() {
-    
+void runToysSinglePoint(bool doImportanceSampling) {
+  
+  // Default snapshot to be used in the toy generation and prior to fitting:
+  TString snapshotName = (m_inputPoIVal == 0) ? 
+    m_config->getStr("WorkspaceSnapshotMu0") :
+    m_config->getStr("WorkspaceSnapshotMu1");
+  
   // Load model, data, etc. from workspace:
   TFile inputFile(m_copiedFile, "read");
   RooWorkspace *workspace 
@@ -61,8 +62,24 @@ void runToysSinglePoint() {
   // The statistics class, for calculating qMu etc. 
   TestStat *testStat = new TestStat(m_configFile, "new", workspace);
   
-  // Snapshot to be used in the toy generation and prior to fitting.
-  TString snapshotName = "";
+  //----------------------------------------//
+  // Prepare model parameters for tossing and fitting toy MC:
+  
+  // Turn off MC stat errors if requested for Graviton jobs:
+  if (m_config->isDefined("TurnOffTemplateStat") && 
+      m_config->getBool("TurnOffTemplateStat")) {
+    testStat->theWorkspace()->loadSnapshot(snapshotName);
+    const RooArgSet *nuisanceParameters
+      = testStat->theModelConfig()->GetNuisanceParameters();
+    TIterator *nuisIter = nuisanceParameters->createIterator();
+    RooRealVar *nuisCurr = NULL;
+    while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
+      TString currName = nuisCurr->GetName();
+      if (currName.Contains("gamma_stat_channel_bin")) {
+	testStat->setParam(currName, nuisCurr->getVal(), true);
+      }
+    }
+  }
   
   // Get the name of the normalization parameter:
   TString poiForNorm = m_config->getStr("PoIForNormalization");
@@ -139,26 +156,74 @@ void runToysSinglePoint() {
     testStat->setNominalSnapshot(snapshotName);
   }
 
-  
-  // Turn off MC stat errors if requested for Graviton jobs:
-  if (m_config->isDefined("TurnOffTemplateStat") && 
-      m_config->getBool("TurnOffTemplateStat")) {
-    testStat->theWorkspace()->loadSnapshot(snapshotName);
-    const RooArgSet *nuisanceParameters
-      = testStat->theModelConfig()->GetNuisanceParameters();
-    TIterator *nuisIter = nuisanceParameters->createIterator();
-    RooRealVar *nuisCurr = NULL;
-    while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
-      TString currName = nuisCurr->GetName();
-      if (currName.Contains("gamma_stat_channel_bin")) {
-	testStat->setParam(currName, nuisCurr->getVal(), true);
+
+
+
+  //----------------------------------------//
+  // Preparations for importance sampling:
+  int nImportanceDensities = 1;
+  int importanceDensityToUse = 0;
+  std::map<TString,double> mapPoIIS; mapPoIIS.clear();
+  std::map<TString,double> mapPoIIS_Lo; mapPoIIS_Lo.clear();
+  std::map<TString,double> mapPoIIS_Hi; mapPoIIS_Hi.clear();
+  if (doImportanceSampling) {
+    
+    // Use ML snapshot (most extreme p0 case) to derive # importance densities:
+    const RooArgSet *snapshotMu1
+      = workspace->getSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+    TIterator *snapMu1Iter = snapshotMu1->createIterator();
+    RooRealVar *snapParMu1 = NULL;
+    while ((snapParMu1 = (RooRealVar*)snapMu1Iter->Next())) {
+      TString currName = snapParMu1->GetName();
+      if (currName.EqualTo(poiForNorm)) {
+	// Use muhat to get number of importance densities (muhat / error):
+	nImportanceDensities
+	  = (int)std::round(snapParMu1->getVal() / snapParMu1->getError());
+	break;
       }
+    }
+    
+    // Generate a random importance density to use in this toy:
+    TRandom3 randomIDGen = TRandom3(19*m_seed+7);
+    importanceDensityToUse = randomIDGen.Integer(nImportanceDensities+1);
+    
+    // Then set the mapPoI normalization parameters for pseudo-data:
+    if (m_inputPoIVal == 0) {
+      mapPoIIS = mapPoIMu0;
+      mapPoIIS_Lo = mapPoIMu0;
+      mapPoIIS_Hi = mapPoIMu0;
+      mapPoIIS[m_config->getStr("PoIForNormalization")] = m_toyXSection * 
+	((double)importanceDensityToUse / (double)nImportanceDensities);
+      mapPoIIS_Lo[m_config->getStr("PoIForNormalization")] = m_toyXSection * 
+	((double)(importanceDensityToUse-1) / (double)nImportanceDensities);
+      mapPoIIS_Hi[m_config->getStr("PoIForNormalization")] = m_toyXSection * 
+	((double)(importanceDensityToUse+1) / (double)nImportanceDensities);
+    }
+    else {
+      mapPoIIS = mapPoIMu1;
+      mapPoIIS_Lo = mapPoIMu1;
+      mapPoIIS_Hi = mapPoIMu1;
+      mapPoIIS[m_config->getStr("PoIForNormalization")] = m_toyXSection * 
+	((double)(nImportanceDensities-importanceDensityToUse) / 
+	 (double)nImportanceDensities); 
+      mapPoIIS_Lo[m_config->getStr("PoIForNormalization")] = m_toyXSection * 
+	((double)(nImportanceDensities-(importanceDensityToUse-1)) / 
+	 (double)nImportanceDensities); 
+      mapPoIIS_Hi[m_config->getStr("PoIForNormalization")] = m_toyXSection * 
+	((double)(nImportanceDensities-(importanceDensityToUse+1)) / 
+	 (double)nImportanceDensities); 
     }
   }
   
+  // Importance sampling is unnecessary in absence of extreme excess:
+  if (nImportanceDensities < 1) doImportanceSampling = false;
+  
   //----------------------------------------//
   // Create the pseudo data:
-  if (m_inputPoIVal == 0) {
+  if (doImportanceSampling) {
+    testStat->createPseudoData(m_seed, m_inputPoIVal, snapshotName, mapPoIIS);
+  }
+  else if (m_inputPoIVal == 0) {
     testStat->createPseudoData(m_seed, m_inputPoIVal, snapshotName, mapPoIMu0);
   }
   else {
@@ -224,6 +289,51 @@ void runToysSinglePoint() {
   mapToVectors(testStat->getPoIs(), m_namesPoIs, m_valuesPoIsMuFree);
   double profiledNormalization
     = (testStat->getPoIs())[(std::string)(poiForNorm)];
+
+  //----------------------------------------//
+  // Calculate weight for importance sampling:
+  if (doImportanceSampling) {
+    double nllIS = 1.0; double nllIS_Lo = 1.0; double nllIS_Hi = 1.0;
+    double nllNom = (m_inputPoIVal == 0) ? m_nllMu0 : m_nllMu1;
+    
+    // Do fit with IS
+    std::cout << "GenericToys: IS fit starting" << std::endl;
+    nllIS = testStat->getFitNLL("toyData", 1, true, mapPoIIS, false);
+    // Do fit with IS_Lo if necessary:
+    if (importanceDensityToUse > 0) {
+      std::cout << "GenericToys: IS-low fit starting" << std::endl;
+      nllIS_Lo = testStat->getFitNLL("toyData", 1, true, mapPoIIS_Lo, false);
+    }
+    // Do fit with IS_Hi if necessary:
+    if (importanceDensityToUse < nImportanceDensities) {
+      std::cout << "GenericToys: IS_hi fit starting" << std::endl;
+      nllIS_Hi = testStat->getFitNLL("toyData", 1, true, mapPoIIS_Hi, false);
+    }
+    
+    // Upper constraint only:
+    if (importanceDensityToUse == 0) {
+      if (nllIS <= nllIS_Hi) m_weight = 1.0;
+      else m_weight = 0.0;
+    }
+    // Lower constraint only:
+    else if (importanceDensityToUse == nImportanceDensities) {
+      if (nllIS < nllIS_Lo) m_weight = TMath::Exp(nllIS - nllNom);
+      else m_weight = 0.0;
+    }
+    // One of the sandwiched importance densities (upper and lower constraint):
+    else {
+      if (nllIS < nllIS_Lo && nllIS <= nllIS_Hi) {
+	m_weight = TMath::Exp(nllIS - nllNom);
+      }
+      else m_weight = 0.0;
+    }  
+    
+    std::cout << "GenericToys: Importance sample " << importanceDensityToUse
+	      << " with weight of " << m_weight << std::endl;
+    std::cout << " \tnllNom = " << nllNom << std::endl;
+    std::cout << " \tnllIS = " << nllIS << std::endl;
+    
+  }
   
   //----------------------------------------//
   // Post-fit calculations:
@@ -361,11 +471,10 @@ int main(int argc, char **argv) {
   
   // Set the output TTree branch addresses:
   m_outputTree->Branch("seed", &m_seed, "seed/I");
-
+  m_outputTree->Branch("weight", &m_weight, "weight/D");
   m_outputTree->Branch("toyMass", &m_toyMass, "toyMass/D");
   m_outputTree->Branch("toyWidth", &m_toyWidth, "toyWidth/D");
   m_outputTree->Branch("toyXSection", &m_toyXSection, "toyXSection/D");
-
   m_outputTree->Branch("bestFitUpdate", &m_bestFitUpdate, "bestFitUpdate/I");
   m_outputTree->Branch("numEvents", &m_numEvents, "numEvents/D");
   m_outputTree->Branch("numEventsPerCate", &m_numEventsPerCate);
@@ -401,11 +510,13 @@ int main(int argc, char **argv) {
     std::cout << "GenericToys: Starting toy " << i_t << " of " << m_nToysPerJob
 	      << std::endl;
     
-    if (m_options.Contains("ToyImportSamp")) runToysImportSampling();
-    else if (m_options.Contains("ToyForScan")) runToysSinglePoint();
-    else if (m_options.Contains("ToyMLPoint")) runToysSinglePoint();
-    
-    
+    if (m_options.Contains("ToyForScan") || m_options.Contains("ToyMLPoint")) {
+      runToysSinglePoint(m_options.Contains("ToyImportSamp"));
+    }
+    else {
+      std::cout << "GenericToys: Option " << m_options << " not recognized."
+		<< std::endl;
+    }
   }
   
   // Write the output file, delete local file copies:

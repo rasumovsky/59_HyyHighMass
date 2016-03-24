@@ -29,7 +29,7 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   TString jobName = m_config->getStr("JobName");
   TString anaType = m_config->getStr("AnalysisType");
   
-  printer(Form("ToyAnalysis::ToyAnalysis(%s)",newConfigFile.Data()),false);
+  printer(Form("ToyAnalysis::ToyAnalysis(%s)",newConfigFile.Data()), false);
 
   // Set output directory:
   setOutputDir(Form("%s/%s/ToyAnalysis", 
@@ -44,6 +44,8 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   m_hAsymptoticQ0 = NULL;
   m_hAsymptoticQMu = NULL;
 
+  m_weightsIS_Mu0.clear();
+  m_weightsIS_Mu1.clear();
   m_valuesQMu_Mu0.clear();
   m_valuesQMu_Mu1.clear();
   m_valuesMuHat_Mu0.clear();
@@ -97,14 +99,22 @@ double ToyAnalysis::calculateBkgQMuForN(double N) {
   // First get the probability corresponding to the Gaussian N:
   double probability = getPbFromN(N);
   
-  // Then find first q_mu value above this probability:
-  std::sort(m_valuesQMu_Mu0.begin(), m_valuesQMu_Mu0.end());
-  int totalEvents = (int)m_valuesQMu_Mu0.size();
-  for (int i_e = 0; i_e < totalEvents; i_e++) {
-    double fraction = (((double)i_e) / ((double)totalEvents));
+  // Then sort the qMu vector (and associated weight vector):
+  //std::sort(m_valuesQMu_Mu0.begin(), m_valuesQMu_Mu0.end());
+  sortPairedVectors(m_valuesQMu_Mu0, m_weightsIS_Mu0);
+  
+  // Then find the first q_mu value above this probability:
+  double denominator = 0.0;
+  for (int i_e = 0; i_e < (int)m_valuesQMu_Mu0.size(); i_e++) {
+    denominator += m_weightsIS_Mu0[i_e];
+  }
+  double numerator = 0.0;
+  for (int i_e = 0; i_e < (int)m_valuesQMu_Mu0.size(); i_e++) {
+    numerator += m_weightsIS_Mu0[i_e];
+    double fraction = numerator / denominator;
     if (fraction >= probability) {
-      printer(Form("calculateBkgQMuForN(%f) = %f using i_e=%d / totalEvents=%d",
-		   N, m_valuesQMu_Mu0[i_e], i_e, totalEvents), false);
+      printer(Form("calculateBkgQMuForN(%f) = %f using (%f pass / %f total)",
+		   N, m_valuesQMu_Mu0[i_e], numerator, denominator), false);
       return m_valuesQMu_Mu0[i_e];
     }
   }
@@ -201,17 +211,16 @@ double ToyAnalysis::calculateErrorFromCounting(double pValue, int nToys) {
    @return - The value of pB.
 */
 double ToyAnalysis::calculatePBFromToy(double qMu) {
-  int totalEvents = (int)m_valuesQMu_Mu0.size();
-  int passingEvents = 0;
-  for (int i_e = 0; i_e < totalEvents; i_e++) {
-    if (m_valuesQMu_Mu0[i_e] <= qMu) passingEvents++;
+  double totalEvents = 0.0;
+  double passingEvents = 0.0;
+  for (int i_e = 0; i_e < (int)m_valuesQMu_Mu0.size(); i_e++) {
+    if (m_valuesQMu_Mu0[i_e] <= qMu) passingEvents += m_weightsIS_Mu0[i_e];
+    totalEvents += m_weightsIS_Mu0[i_e];
   }
-  double probability = (totalEvents > 0) ?
-    (((double)passingEvents) / ((double)totalEvents)) : 0.0;
+  double probability = (totalEvents > 0.0) ? (passingEvents/totalEvents) : 0.0;
   
-  printer(Form("calculatePBFromToy(%f) using passingEvents=%d / totalEvents=%d",
+  printer(Form("calculatePBFromToy(%f) using (%f passing / %f total)",
 	       qMu, passingEvents, totalEvents), false);
-  
   return probability;
 }
 
@@ -223,17 +232,16 @@ double ToyAnalysis::calculatePBFromToy(double qMu) {
    @return - The value of pMu.
 */
 double ToyAnalysis::calculatePMuFromToy(double qMu) {
-  int totalEvents = (int)m_valuesQMu_Mu1.size();
-  int passingEvents = 0;
-  for (int i_e = 0; i_e < totalEvents; i_e++) {
-    if (m_valuesQMu_Mu1[i_e] >= qMu) passingEvents++;
+  double totalEvents = 0.0;
+  double passingEvents = 0.0;
+  for (int i_e = 0; i_e < (int)m_valuesQMu_Mu1.size(); i_e++) {
+    if (m_valuesQMu_Mu1[i_e] >= qMu) passingEvents += m_weightsIS_Mu1[i_e];
+    totalEvents += m_weightsIS_Mu1[i_e];
   }
-  double probability = (totalEvents > 0) ?
-    (((double)passingEvents) / ((double)totalEvents)) : 0.0;
+  double probability = (totalEvents > 0.0) ? (passingEvents/totalEvents) : 0.0;
   
-  printer(Form("calculatePBFromToy(%f) using passingEvents=%d / totalEvents=%d",
+  printer(Form("calculatePBFromToy(%f) using (%f passing / %f total)",
 	       qMu, passingEvents, totalEvents), false);
-  
   return probability;
 }
 
@@ -324,12 +332,14 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   
   // Clear the qMu storage for pMu calculation if looking at Mu1 toy:
   if (muValue > 0) {
+    m_weightsIS_Mu1.clear();
     m_valuesMuHat_Mu1.clear();
     m_valuesQMu_Mu1.clear();
     m_valuesBestFit_AsymZ0_Mu1.clear();
     m_valuesBestFit_AsymCL_Mu1.clear();
   }
   else  {
+    m_weightsIS_Mu0.clear();
     m_valuesMuHat_Mu0.clear();
     m_valuesQMu_Mu0.clear();
     m_valuesBestFit_AsymZ0_Mu0.clear();
@@ -404,13 +414,16 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
 					  toyTree->profiledPOIVal);
     double valueZ0 = m_ts->getZ0FromQ0(valueQ0);
     double valueCL = m_ts->getCLFromQMu(valueQMu, 0);
-        
+    
+    double toyWeight = 1.0;
+    //toyWeight = toyTree->weight;
+    
     // Fill histograms for the test statistics and POI:
-    m_hQMu[muValue]->Fill(valueQMu);
-    m_hQ0[muValue]->Fill(valueQ0);
-    m_hMuProfiled[muValue]->Fill(toyTree->profiledPOIVal);
-    m_hZ0[muValue]->Fill(valueZ0);
-    m_hCL[muValue]->Fill(valueCL);
+    m_hQMu[muValue]->Fill(valueQMu, toyWeight);
+    m_hQ0[muValue]->Fill(valueQ0, toyWeight);
+    m_hMuProfiled[muValue]->Fill(toyTree->profiledPOIVal, toyWeight);
+    m_hZ0[muValue]->Fill(valueZ0, toyWeight);
+    m_hCL[muValue]->Fill(valueCL, toyWeight);
     
     // Plots to make only in the case that retries are being studied:
     if (m_options.Contains("StudyRetries")) {
@@ -459,12 +472,14 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     
     // Also fill the QMu vector for pMu calculation:
     if (muValue > 0) {
+      m_weightsIS_Mu1.push_back(toyWeight);
       m_valuesMuHat_Mu1.push_back(toyTree->profiledPOIVal);
       m_valuesQMu_Mu1.push_back(valueQMu);
       m_valuesBestFit_AsymZ0_Mu1.push_back(valueZ0);
       m_valuesBestFit_AsymCL_Mu1.push_back(valueCL);
     }
     else {
+      m_weightsIS_Mu0.push_back(toyWeight);
       m_valuesMuHat_Mu0.push_back(toyTree->profiledPOIVal);
       m_valuesQMu_Mu0.push_back(valueQMu);
       m_valuesBestFit_AsymZ0_Mu0.push_back(valueZ0);
@@ -476,15 +491,15 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
       TString currNPName = (*toyTree->namesNP)[i_n];
       if (doThisFit("0")) {
 	m_histStorage[Form("%s_Mu0Fit_Mu%dData", currNPName.Data(), muValue)]
-	  ->Fill((*toyTree->valuesNPMu0)[i_n]);
+	  ->Fill((*toyTree->valuesNPMu0)[i_n], toyWeight);
       }
       if (doThisFit("1")) {
 	m_histStorage[Form("%s_Mu1Fit_Mu%dData", currNPName.Data(), muValue)]
-	  ->Fill((*toyTree->valuesNPMu1)[i_n]);
+	  ->Fill((*toyTree->valuesNPMu1)[i_n], toyWeight);
       }
       if (doThisFit("Free")) {
 	m_histStorage[Form("%s_MuFreeFit_Mu%dData", currNPName.Data(), muValue)]
-	  ->Fill((*toyTree->valuesNPMuFree)[i_n]);
+	  ->Fill((*toyTree->valuesNPMuFree)[i_n], toyWeight);
       }
     }
     
@@ -493,15 +508,15 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
       TString currGlobName = (*toyTree->namesGlobs)[i_g];
       if (doThisFit("0")) {
 	m_histStorage[Form("%s_Mu0Fit_Mu%dData", currGlobName.Data(), muValue)]
-	  ->Fill((*toyTree->valuesGlobsMu0)[i_g]);
+	  ->Fill((*toyTree->valuesGlobsMu0)[i_g], toyWeight);
       }
       if (doThisFit("1")) {
 	m_histStorage[Form("%s_Mu1Fit_Mu%dData", currGlobName.Data(), muValue)]
-	  ->Fill((*toyTree->valuesGlobsMu1)[i_g]);
+	  ->Fill((*toyTree->valuesGlobsMu1)[i_g], toyWeight);
       }
       if (doThisFit("Free")) {
 	m_histStorage[Form("%s_MuFreeFit_Mu%dData",currGlobName.Data(),muValue)]
-	  ->Fill((*toyTree->valuesGlobsMuFree)[i_g]);
+	  ->Fill((*toyTree->valuesGlobsMuFree)[i_g], toyWeight);
       }
     }
     
@@ -510,15 +525,15 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
       TString currPoIName = (*toyTree->namesPoIs)[i_p];
       if (doThisFit("0")) {
 	m_histStorage[Form("%s_Mu0Fit_Mu%dData", currPoIName.Data(), muValue)]
-	  ->Fill((*toyTree->valuesPoIsMu0)[i_p]);
+	  ->Fill((*toyTree->valuesPoIsMu0)[i_p], toyWeight);
       }
       if (doThisFit("1")) {
 	m_histStorage[Form("%s_Mu1Fit_Mu%dData", currPoIName.Data(), muValue)]
-	  ->Fill((*toyTree->valuesPoIsMu1)[i_p]);
+	  ->Fill((*toyTree->valuesPoIsMu1)[i_p], toyWeight);
       }
       if (doThisFit("Free")) {
 	m_histStorage[Form("%s_MuFreeFit_Mu%dData",currPoIName.Data(),muValue)]
-	  ->Fill((*toyTree->valuesPoIsMuFree)[i_p]);
+	  ->Fill((*toyTree->valuesPoIsMuFree)[i_p], toyWeight);
       }
     }
   }
@@ -732,6 +747,11 @@ std::vector<double> ToyAnalysis::getStatValues(TString statistic, int toyMu) {
     if (toyMu == 0) return m_valuesBestFit_AsymCL_Mu0;
     else if (toyMu == 1) return m_valuesBestFit_AsymCL_Mu1;
   }
+  else if (statistic.EqualTo("ImportanceWeight")) {
+    if (toyMu == 0) return m_weightsIS_Mu0;
+    else if (toyMu == 1) return m_weightsIS_Mu1;
+  }
+
   std::cout << "ToyAnalysis: could not return stat value for statistic=" 
 	    << statistic << " and toyMu=" << toyMu << std::endl;
   exit(0);
@@ -1480,4 +1500,57 @@ void ToyAnalysis::setStatHistRanges(int nBins, int binMin, int binMax) {
   m_nBins = nBins;
   m_binMin = binMin;
   m_binMax = binMax;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Simultaneously sort vector 1 and vector 2. Vector1's values will be used for
+   sorting comparison. Resulting vector will be sorted in ascending order. The
+   input vectors are passed by reference and their ordering is modified. 
+   @param vec1 - The first vector to be sorted. It contains values for ordering.
+   @param vec2 - The second vector to be sorted. Values don't affect ordering.
+*/
+void ToyAnalysis::sortPairedVectors(std::vector<double> &vec1, 
+				    std::vector<double> &vec2) {
+  
+  std::vector<double> vecSorted1; vecSorted1.clear();
+  std::vector<double> vecSorted2; vecSorted2.clear();
+  
+  // Loop over the original vector:
+  for (int i_n = 0; i_n < (int)vec1.size(); i_n++) {
+    // If sorted vector is empty, add the current unsorted elements:
+    if (i_n == 0) {
+      vecSorted1.push_back(vec1[i_n]);
+      vecSorted2.push_back(vec2[i_n]);
+    }
+    // If sorted vector not empty, loop over sorted vector:
+    else {
+      std::vector<double>::iterator iterVec1 = vecSorted1.begin();
+      std::vector<double>::iterator iterVec2 = vecSorted2.begin();
+      
+      bool inserted = false;
+      while (iterVec2 != vecSorted2.end()) {
+	// Insert current unsorted value if it is less than current sorted value
+	if (vec1[i_n] < *iterVec1) {
+	  vecSorted1.insert(iterVec1, vec1[i_n]);
+	  vecSorted2.insert(iterVec2, vec2[i_n]);
+	  inserted = true;
+	  break;
+	}
+	else {
+	  iterVec1++;
+	  iterVec2++;
+	}
+      }
+      // If current unsorted values weren't inserted yet, insert them now. 
+      if (!inserted) {
+	vecSorted1.push_back(vec1[i_n]);
+	vecSorted2.push_back(vec2[i_n]);
+      }
+    }
+  }
+  
+  // Then equate the original vector with the sorted vector:
+  vec1 = vecSorted1;
+  vec2 = vecSorted2;
 }

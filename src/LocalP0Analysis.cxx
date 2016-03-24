@@ -57,12 +57,27 @@ int main(int argc, char **argv) {
   fitTypes.push_back("1");
   fitTypes.push_back("Free");
   toyAna->setFitTypes(fitTypes);
-  toyAna->loadToy(0, Form("%s/%s/LocalP0Toys/single_files/toy_mu0*", 
-			  (config->getStr("MasterOutput")).Data(),
-			  (config->getStr("JobName")).Data()));
-  toyAna->loadToy(1, Form("%s/%s/LocalP0Toys/single_files/toy_mu1*", 
-			  (config->getStr("MasterOutput")).Data(),
-			  (config->getStr("JobName")).Data()));
+  
+  // ToyImportSamp
+  // ToyForScan
+  // ToyMLPoint
+  
+  if (option.Contains("ToyForScan")) {
+    toyAna->loadToy(0, Form("%s/%s/GenericToys/single_files/toy_mu0*ForScan*", 
+			    (config->getStr("MasterOutput")).Data(),
+			    (config->getStr("JobName")).Data()));
+    toyAna->loadToy(1, Form("%s/%s/GenericToys/single_files/toy_mu1*ForScan*", 
+			    (config->getStr("MasterOutput")).Data(),
+			    (config->getStr("JobName")).Data()));
+  }
+  else {
+    toyAna->loadToy(0, Form("%s/%s/GenericToys/single_files/toy_mu0*", 
+			    (config->getStr("MasterOutput")).Data(),
+			    (config->getStr("JobName")).Data()));
+    toyAna->loadToy(1, Form("%s/%s/GenericToys/single_files/toy_mu1*", 
+			    (config->getStr("MasterOutput")).Data(),
+			    (config->getStr("JobName")).Data()));
+  }
   
   if (!(toyAna->areInputFilesOK())) {
     std::cout << "LocalP0Analysis: ERROR loading toys." << std::endl;

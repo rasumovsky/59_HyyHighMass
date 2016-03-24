@@ -59,6 +59,7 @@ class ToyAnalysis {
   void setFitTypes(std::vector<TString> fitTypes);
   void setOutputDir(TString outputDirectory);
   void setStatHistRanges(int nBins, int binMin, int binMax);
+  void sortPairedVectors(std::vector<double> &vec1, std::vector<double> &vec2);
   
  private:
 
@@ -87,16 +88,18 @@ class ToyAnalysis {
   std::vector<TString> m_fitTypes;
   
   // Storage of QMu for pMu calculation:
+  std::vector<double> m_weightsIS_Mu0;
+  std::vector<double> m_weightsIS_Mu1;
   std::vector<double> m_valuesQMu_Mu0;
   std::vector<double> m_valuesQMu_Mu1;
   std::vector<double> m_valuesMuHat_Mu0;
   std::vector<double> m_valuesMuHat_Mu1;
 
   // Storage of best-fit CL and p0 for calculation:
-  std::vector<double> m_valuesBestFit_AsymZ0_Mu0;
   std::vector<double> m_valuesBestFit_AsymCL_Mu0;
-  std::vector<double> m_valuesBestFit_AsymZ0_Mu1;
   std::vector<double> m_valuesBestFit_AsymCL_Mu1;
+  std::vector<double> m_valuesBestFit_AsymZ0_Mu0;
+  std::vector<double> m_valuesBestFit_AsymZ0_Mu1;
   
   // Histograms:
   TH1F *m_hAsymptoticQ0;
