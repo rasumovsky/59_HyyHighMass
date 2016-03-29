@@ -29,8 +29,9 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   TString jobName = m_config->getStr("JobName");
   TString anaType = m_config->getStr("AnalysisType");
   
-  printer(Form("ToyAnalysis::ToyAnalysis(%s)",newConfigFile.Data()), false);
-
+  printer(Form("ToyAnalysis::ToyAnalysis(%s, %s)", 
+	       newConfigFile.Data(), options.Data()), false);
+  
   // Set output directory:
   setOutputDir(Form("%s/%s/ToyAnalysis", 
 		    (m_config->getStr("MasterOutput")).Data(),
@@ -415,8 +416,8 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     double valueZ0 = m_ts->getZ0FromQ0(valueQ0);
     double valueCL = m_ts->getCLFromQMu(valueQMu, 0);
     
-    double toyWeight = 1.0;
-    //toyWeight = toyTree->weight;
+    //double toyWeight = 1.0;
+    double toyWeight = toyTree->weight;
     
     // Fill histograms for the test statistics and POI:
     m_hQMu[muValue]->Fill(valueQMu, toyWeight);

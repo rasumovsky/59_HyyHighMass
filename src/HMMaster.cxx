@@ -106,9 +106,9 @@ int main (int argc, char **argv) {
 				configFileName.Data());
   
   //--------------------------------------//
-  // Step 5.0: Create pseudoexperiment ensemble:
+  // Step 1.0: Create pseudoexperiment ensemble for global p0 study:
   if (masterOption.Contains("GlobalP0Toys")) {
-    std::cout << "HMMaster: Step 5.1 - Create pseudoexperiments." << std::endl;
+    std::cout << "HMMaster: Step 1.0 - Create pseudoexperiments." << std::endl;
     
     int toySeed = m_config->getInt("toySeed");
     int nToysTotal = m_config->getInt("nToysTotal");
@@ -126,9 +126,9 @@ int main (int argc, char **argv) {
   }
   
   //--------------------------------------//
-  // Step 5.1: Plot pseudo-experiment ensemble results for global significance:
+  // Step 1.1: Plot pseudo-experiment ensemble results for global significance:
   if (masterOption.Contains("GlobalP0Analysis")) {
-    std::cout << "HMMaster: Step 5.1 - Plot global significance toy results."
+    std::cout << "HMMaster: Step 1.1 - Plot global significance toy results."
 	      << std::endl;
     system(Form("./bin/GlobalP0Analysis %s %s", fullConfigPath.Data(),
 		m_config->getStr("GlobalP0AnalysisOptions").Data()));
@@ -136,13 +136,14 @@ int main (int argc, char **argv) {
 
 
   //--------------------------------------//
-  // Step 6.1: Plot pseudo-experiment ensemble results for local significance:
+  // Step 2.1: Plot pseudo-experiment ensemble results for local significance:
   if (masterOption.Contains("LocalP0Analysis")) {
-    std::cout << "HMMaster: Step 6.1 - Plot local significance toy results."
+    std::cout << "HMMaster: Step 2.1 - Plot local significance toy results."
 	      << std::endl;
     system(Form("./bin/LocalP0Analysis %s %s", fullConfigPath.Data(),
 		m_config->getStr("LocalP0AnalysisOptions").Data()));
   }
   
+
   return 0;
 }

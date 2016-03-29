@@ -1,8 +1,8 @@
 //////////////////////////////////////////////////////////
 // This class has been automatically generated on
-// Tue Mar  8 11:22:22 2016 by ROOT version 6.04/14
+// Thu Mar 24 10:48:31 2016 by ROOT version 6.04/14
 // from TTree toy/toy
-// found on file: toy_mu0.root
+// found on file: toy_mu0_4672_ForScan_mass750_width20_xs20000.root
 //////////////////////////////////////////////////////////
 
 #ifndef ToyTree_h
@@ -27,6 +27,9 @@ public :
 
    // Declaration of leaf types
    Int_t           seed;
+   Double_t        toyMass;
+   Double_t        toyWidth;
+   Double_t        toyXSection;
    Int_t           bestFitUpdate;
    Double_t        numEvents;
    vector<double>  *numEventsPerCate;
@@ -56,6 +59,9 @@ public :
 
    // List of branches
    TBranch        *b_seed;   //!
+   TBranch        *b_toyMass;   //!
+   TBranch        *b_toyWidth;   //!
+   TBranch        *b_toyXSection;   //!
    TBranch        *b_bestFitUpdate;   //!
    TBranch        *b_numEvents;   //!
    TBranch        *b_numEventsPerCate;   //!
@@ -102,9 +108,9 @@ ToyTree::ToyTree(TTree *tree) : fChain(0)
 // if parameter tree is not specified (or zero), connect the file
 // used to generate this class and read the Tree.
    if (tree == 0) {
-      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("toy_mu0.root");
+      TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject("toy_mu0_4672_ForScan_mass750_width20_xs20000.root");
       if (!f || !f->IsOpen()) {
-         f = new TFile("toy_mu0.root");
+         f = new TFile("toy_mu0_4672_ForScan_mass750_width20_xs20000.root");
       }
       f->GetObject("toy",tree);
 
@@ -169,6 +175,9 @@ void ToyTree::Init(TTree *tree)
    fChain->SetMakeClass(1);
 
    fChain->SetBranchAddress("seed", &seed, &b_seed);
+   fChain->SetBranchAddress("toyMass", &toyMass, &b_toyMass);
+   fChain->SetBranchAddress("toyWidth", &toyWidth, &b_toyWidth);
+   fChain->SetBranchAddress("toyXSection", &toyXSection, &b_toyXSection);
    fChain->SetBranchAddress("bestFitUpdate", &bestFitUpdate, &b_bestFitUpdate);
    fChain->SetBranchAddress("numEvents", &numEvents, &b_numEvents);
    fChain->SetBranchAddress("numEventsPerCate", &numEventsPerCate, &b_numEventsPerCate);
