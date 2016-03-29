@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////
 // This class has been automatically generated on
-// Thu Mar 24 10:48:31 2016 by ROOT version 6.04/14
+// Tue Mar 29 17:06:50 2016 by ROOT version 6.04/14
 // from TTree toy/toy
 // found on file: toy_mu0_4672_ForScan_mass750_width20_xs20000.root
 //////////////////////////////////////////////////////////
@@ -27,6 +27,7 @@ public :
 
    // Declaration of leaf types
    Int_t           seed;
+   Double_t        weight;
    Double_t        toyMass;
    Double_t        toyWidth;
    Double_t        toyXSection;
@@ -59,6 +60,7 @@ public :
 
    // List of branches
    TBranch        *b_seed;   //!
+   TBranch        *b_weight;   //!
    TBranch        *b_toyMass;   //!
    TBranch        *b_toyWidth;   //!
    TBranch        *b_toyXSection;   //!
@@ -175,6 +177,7 @@ void ToyTree::Init(TTree *tree)
    fChain->SetMakeClass(1);
 
    fChain->SetBranchAddress("seed", &seed, &b_seed);
+   fChain->SetBranchAddress("weight", &weight, &b_weight);
    fChain->SetBranchAddress("toyMass", &toyMass, &b_toyMass);
    fChain->SetBranchAddress("toyWidth", &toyWidth, &b_toyWidth);
    fChain->SetBranchAddress("toyXSection", &toyXSection, &b_toyXSection);

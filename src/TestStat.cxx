@@ -956,7 +956,7 @@ double TestStat::getQ0FromNLL(double nllMu0, double nllMuHat, double muHat) {
    @return - The value of qMu.
 */
 double TestStat::getQMuFromNLL(double nllMu, double nllMuHat, double muHat,
-				 double muTest) {
+			       double muTest) {
   double qMu = 0.0;
   if (muHat < muTest) qMu = 2 * (nllMu - nllMuHat);
   return qMu;

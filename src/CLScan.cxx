@@ -80,7 +80,7 @@ void CLScan::detectMassWidthXSFiles(TString toyDirectory) {
     if (currToyName.Contains("ForScan")) {
       
       // Split up the file name into components:
-      TObjArray *array = systematicForm.Tokenize("_");
+      TObjArray *array = currToyName.Tokenize("_");
       for (int i_t = 0; i_t < array->GetEntries(); i_t++) {
 	TString currElement = ((TObjString*)array->At(i_t))->GetString();
 	// Token for mass value:
@@ -179,10 +179,147 @@ double CLScan::getIntercept(TGraph *graph, double valueToIntercept) {
    @return - The 95% CL value of the cross-section.
 */
 double CLScan::getLimit(int mass, int width, bool expected, int N) {
-  TString key = expected ? Form("exp_mass%d_%width%d_N%d", mass, width, N) : 
-    Form("obs_mass%d_%width%d_N%d", mass, width, N);
+  TString key = expected ? Form("exp_mass%d_width%d_N%d", mass, width, N) : 
+    Form("obs_mass%d_width%d_N%d", mass, width, N);
   if (m_values95CL.count(key) > 0) return m_values95CL[key];
   else printer(Form("CLScan: ERROR no value for key %s", key.Data()), true);
+  return 0.0;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Prints a statement (if verbose) and exits (if fatal).
+   @param statement - The statement to print.
+   @param isFatal - True iff. this should trigger an exit command.
+*/
+void CLScan::printer(TString statement, bool isFatal) {
+  if (m_config->getBool("Verbose") || isFatal) {
+    std::cout << statement << std::endl;
+  }
+  if (isFatal) exit(0);
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Plot the limits as a function of mass, for a given width slice.
+   @param width - The width integer for the scan.
+*/
+void CLScan::scanMass(int width, bool makeNew) {
+  
+  // Arrays to store band information:
+  double varValues[100] = {0};  
+  double CLObs[100]     = {0};
+  double CLExp_p2[100]  = {0};  
+  double CLExp_p1[100]  = {0};
+  double CLExp[100]     = {0};
+  double CLExp_n1[100]  = {0};
+  double CLExp_n2[100]  = {0};
+  
+  int nToyPoints = 0;
+
+  // Loop over the mass points to load CL results
+  for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
+    if (singleCLScan(m_massValues[i_m], width, makeNew)) {
+      CLObs[nToyPoints]    = getLimit(m_massValues[i_m], width, false, 0);
+      CLExp_p2[nToyPoints] = getLimit(m_massValues[i_m], width, true, -2);
+      CLExp_p1[nToyPoints] = getLimit(m_massValues[i_m], width, true, -1);
+      CLExp[nToyPoints]    = getLimit(m_massValues[i_m], width, true, 0);
+      CLExp_n1[nToyPoints] = getLimit(m_massValues[i_m], width, true, 1);
+      CLExp_n2[nToyPoints]  = getLimit(m_massValues[i_m], width, true, 2);
+      nToyPoints++;
+    }
+  }
+  
+  // Scan information:
+  //std::vector<double> scanMXValues = config->getNumV("MXScanValues");
+  
+  //----------------------------------------//
+  // Plot the results:
+  double errExp_p2[100] = {0};  
+  double errExp_p1[100] = {0};
+  double errExp_n1[100] = {0};
+  double errExp_n2[100] = {0};
+  for (int i_t = 0; i_t < nToyPoints; i_t++) {
+    errExp_p2[i_t] = fabs(CLExp_p2[i_t] - CLExp[i_t]);
+    errExp_p1[i_t] = fabs(CLExp_p1[i_t] - CLExp[i_t]);
+    errExp_n1[i_t] = fabs(CLExp_n1[i_t] - CLExp[i_t]);
+    errExp_n2[i_t] = fabs(CLExp_n2[i_t] - CLExp[i_t]);
+  }
+  
+  // Median expected and observed results:
+  TGraph *gCLExp = new TGraph(nToyPoints, varValues, CLExp);
+  TGraph *gCLObs = new TGraph(nToyPoints, varValues, CLObs);
+  
+  // Also plot the bands:
+  TGraphAsymmErrors *gCLExp_2s
+    = new TGraphAsymmErrors(nToyPoints, varValues, CLExp, 0, 0, 
+ 			    errExp_n2, errExp_p2);
+  TGraphAsymmErrors *gCLExp_1s
+    = new TGraphAsymmErrors(nToyPoints, varValues, CLExp, 0, 0, 
+			    errExp_n1, errExp_p1);
+  
+  // Start plotting:
+  TCanvas *can = new TCanvas("can","can");
+  can->cd();
+  
+  // Toy graph formatting:
+  gCLExp->GetXaxis()->SetTitle("m_{X} [GeV]");
+  gCLObs->GetXaxis()->SetTitle("m_{X} [GeV]");
+  gCLExp_2s->GetXaxis()->SetTitle("m_{X} [GeV]");
+  gCLExp->GetYaxis()
+    ->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrowhh} [pb]");
+  gCLObs->GetYaxis()
+    ->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrowhh} [pb]");
+  gCLExp_2s->GetYaxis()
+    ->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrowhh} [pb]");
+  
+  gCLExp->SetLineColor(kBlack);
+  gCLObs->SetLineColor(kBlack);
+  gCLExp->SetLineStyle(2);
+  gCLObs->SetLineStyle(1);
+  gCLExp->SetLineWidth(2);
+  gCLObs->SetLineWidth(2);
+  gCLExp_2s->SetFillColor(kYellow);
+  gCLExp_1s->SetFillColor(kGreen);
+  
+  // Legend:
+  TLegend leg(0.61,0.68,0.89,0.91);
+  leg.SetBorderSize(0);
+  leg.SetFillColor(0);
+  leg.SetTextSize(0.04);
+  if (!m_config->getBool("DoBlind")) leg.AddEntry(gCLObs,"Obs. limit","l");
+  leg.AddEntry(gCLExp,"Exp. limit","l");
+  leg.AddEntry(gCLExp_1s,"Exp. limit #pm1#sigma_{exp}","F");
+  leg.AddEntry(gCLExp_2s,"Exp. limit #pm2#sigma_{exp}","F");
+  
+  // Plotting options:
+  gCLExp_2s->Draw("A3");
+  gCLExp->Draw("Lsame");
+  gCLExp_1s->Draw("3same");
+  gCLExp->Draw("LSAME");
+  if (!m_config->getBool("DoBlind")) gCLObs->Draw("LSAME");
+  gPad->RedrawAxis();
+  leg.Draw("SAME");
+  
+  // Print ATLAS text on the plot:    
+  TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
+  t.SetTextFont(72); t.SetTextSize(0.05);
+  t.DrawLatex(0.2, 0.87, "ATLAS");
+  t.SetTextFont(42); t.SetTextSize(0.05);
+  t.DrawLatex(0.32, 0.87, m_config->getStr("ATLASLabel"));
+  t.DrawLatex(0.2, 0.81, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
+  
+  // Print the canvas:
+  can->Print(Form("%s/limits_toy.eps", m_outputDir.Data()));
+  
+  // Delete pointers:
+  printer(Form("CLScan: Finished mass scan for %d!", width), false);
+  delete can;
+  delete gCLObs;
+  delete gCLExp;
+  delete gCLExp_2s;
+  delete gCLExp_1s;
 }
 
 /**
@@ -208,10 +345,10 @@ void CLScan::setInputDirectory(TString directory) {
 void CLScan::setLimit(int mass, int width, bool expected, int N, 
 		      double limitValue) {
   if (expected) {
-    m_values95CL[Form("exp_mass%d_%width%d_N%d", mass, width, N)] = limitValue;
+    m_values95CL[Form("exp_mass%d_width%d_N%d", mass, width, N)] = limitValue;
   }
   else {
-    m_values95CL[Form("obs_mass%d_%width%d_N%d", mass, width, N)] = limitValue;
+    m_values95CL[Form("obs_mass%d_width%d_N%d", mass, width, N)] = limitValue;
   }
 }
 
@@ -233,10 +370,14 @@ void CLScan::setOutputDirectory(TString directory) {
    @param options - Job options: "New","FromFile","toy","asymptotic","NEvents"
    @param resMass - The resonance mass.
    @param makeNew - True if from toy MC, false if from text file storage.
+   @return - True iff loaded successfully.
 */
-void CLScan::singleCLScan(int mass, int width, bool makeNew) {
-    
+bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
+  printer(Form("Form(singleCLScan(mass=%d, width=%d, makeNew=%d",
+	       mass, width, (int)makeNew), false);
+  
   // Arrays to store band information:
+  int xsVals[100] = {0};
   double varValues[100] = {0};  
   double CLObs[100] = {0};
   double CLExp_p2[100] = {0};  
@@ -298,25 +439,34 @@ void CLScan::singleCLScan(int mass, int width, bool makeNew) {
       double crossSection = ((double)m_xsValues[i_x])/1000.0;
       std::cout << "CLScan: cross-section = " << crossSection << std::endl;
       
-      // Set the value of the variable to scan:
-      testStat->setParam(m_config->getStr("PoIForNormalization"),
-		     crossSection, true);
-      testStat->setParam(m_config->getStr("PoIForMass"),
-		     (double)mass, true);
+      // Also force the mass and width to be constant always:
+      testStat->setParam(m_config->getStr("PoIForMass"), 
+			 (double)mass, true);
       testStat->setParam(m_config->getStr("PoIForWidth"), 
-		     (((double)width)/100.0), true);
+			 (((double)width)/100.0), true);
       
-      // Calculate the observed qMu values:
-      double obsPoI = 0.0;
+      // map of names and values of pois to set for fit.
+      std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
+      mapPoIMu1[m_config->getStr("PoIForNormalization")] = crossSection;
+      mapPoIMu1[m_config->getStr("PoIForMass")] = (double)mass;
+      mapPoIMu1[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
+      
+      // Perform the mu=1 fit and mu-free fit (necessary for qmu calculation):
       double nllObsMu1
 	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-			  1, true, obsPoI, false);
+			      1, true, mapPoIMu1, false);
       double nllObsMuFree
 	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-			  1, false, obsPoI, false);
-      qMuObs[nToyPoints]
-	= testStat->getQMuFromNLL(nllObsMu1, nllObsMuFree, obsPoI, 1);
+			      1, false, mapPoIMu1, false);
       
+      // Get profiled signal strength from the mu-free fit:
+      std::map<std::string,double> poiFromFit = testStat->getPoIs();
+      double obsXSValue = poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
+      double muHatValue = obsXSValue / crossSection;
+      
+      qMuObs[nToyPoints]
+	= testStat->getQMuFromNLL(nllObsMu1, nllObsMuFree, muHatValue, 1);
+      xsVals[nToyPoints] = m_xsValues[i_x];
       varValues[nToyPoints] = crossSection;
       nToyPoints++;
     }
@@ -332,14 +482,19 @@ void CLScan::singleCLScan(int mass, int width, bool makeNew) {
       // NOTE: this was moved outside the loop above because of interference
       // between the DHToyAnalysis class and DHTestStat, which is called
       // in DHToyAnalysis...
-      TString toyScanOption = Form("CLScan%d",i_t);
-      if (i_t == 1) toyScanOption.Append("_ForcePlot");
-      ToyAnalysis *toyAna
-	= new ToyAnalysis(m_configFileName, toyScanOption, resonanceMass);
+      ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, "None");
+      toyAna->setOutputDir(m_outputDir);
+      std::vector<TString> fitTypes; fitTypes.clear();
+      fitTypes.push_back("0");
+      fitTypes.push_back("1");
+      fitTypes.push_back("Free");
+      toyAna->setFitTypes(fitTypes);
+      toyAna->loadToy(0, Form("%s/toy_mu0*ForScan_mass%d_width%d_xs%d.root",
+			      m_outputDir.Data(), mass, width, xsVals[i_t]));
+      toyAna->loadToy(1, Form("%s/toy_mu1*ForScan_mass%d_width%d_xs%d.root",
+			      m_outputDir.Data(), mass, width, xsVals[i_t]));
       if (!(toyAna->areInputFilesOK())) {
-	std::cout << "CLScan: ERROR with toy scan option " << toyScanOption
-		  << std::endl;
-	continue;
+	printer("CLScan: ERROR with toy scan option.", true);
       }
       
       // Calculate the expected qmu:
@@ -453,7 +608,7 @@ void CLScan::singleCLScan(int mass, int width, bool makeNew) {
   
   // Print the canvas:
   can->Print(Form("%s/scan_95CL_mass%d_width%d.eps",
-		  outputDir.Data(), mass, width));
+		  m_outputDir.Data(), mass, width));
   
   // Get the actual limit values:
   double observedCL = getIntercept(gCLObs, 0.95);
@@ -489,6 +644,10 @@ void CLScan::singleCLScan(int mass, int width, bool makeNew) {
   delete gCLExp;
   delete gCLExp_2s;
   delete gCLExp_1s;
+  
+  // Return true iff. calculation was successful:
+  if (nToyPoints < 2 || observedCL < 0 || expectedCL < 0) return false;
+  else return true;
 }
 
 /**
