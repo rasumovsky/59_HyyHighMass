@@ -11,12 +11,12 @@ in the configuration files residing in the `data/` directory.
 If you have any questions about the code, please contact the author, who will be
 happy to assist you in getting the code running.
 
-##### Input files
+### Input files
 
 The analysis requires RooWorkspace objects stored in `.root` files as inputs to 
 the analysis software. 
 
-##### Config files
+### Config files
 
 The configuration files for the analysis are included in the `data/` directory.
 The baseline config files are currently:
@@ -26,7 +26,7 @@ The baseline config files are currently:
 The config files allow the user to specify everything that might change, such as
 analysis luminosity. Only developers should need to modify the code.
 
-##### Compiling and running the package locally
+### Executing the package locally
 
 Several executables should be compiled prior to running. The package currently
 uses GCC and ROOT versions hosted on cvmfs, in order to facilitate grid and 
@@ -64,14 +64,14 @@ The analysis steps are listed and explained below.
  - GlobalP0Analysis: analyze the global toy ensemble to get the global z value.
  - LocalP0Analysis: analyze pseudo-experiments to cross-check asymptotic qmu,q0.
 
-##### Instructions for preparing package for remote processing
+### Preparation for remote processing
 
 Since large pseudo-experiment ensembles are CPU-intensive but highly 
 parallelizable, the code can be easily configured to run on the GRID or other
 remote resources. The step by step instructions below will guide you through
 setting up a package for remote processing. 
 
-###### Copy inputs and executables
+#### Copy inputs and executables
 
 Start in the package directory, and copy the necessary executables into a new 
 directory:
@@ -89,7 +89,7 @@ You should substitute `data/settings_Graviton.cfg` for the config file of
 interest to you. Similarly, if the executable changes, you should substitute 
 that for `bin/GenericToys`. 
 
-###### Modify the config file
+#### Modify the config file
 
 The next few steps cannot be automated as easily. Open the settings file that
 you just copied to the `forTar/` directory. Find the `WorkspaceFile` setting,
@@ -113,14 +113,14 @@ PackageLocation:	.
 Also take a gander at the `JobName` in the config file before closing it, as it 
 will be important for the next step. 
 
-###### Modify the job script
+#### Modify the job script
 
 Open the file `forTar/run.sh`. Make sure that the executable name 
 `GlobalP0Toys_Faster` and config file name `settings_Graviton.cfg` are set as 
 desired. Then check that the output location `Graviton_Mar9` corresponds to the
 `JobName` setting from the config file.
 
-###### Create and test the tar file
+#### Create and test the tar file
 
 Create a `.tar` file with everything for the remote job. Then, test it using 
 the `run.sh` script with a seed of 95487 and 1 toy. WARNING! Be absolutely sure
