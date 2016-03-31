@@ -299,50 +299,34 @@ void TestStat::clearFitParamSettings() {
 
 /**
    -----------------------------------------------------------------------------
-   Create a pseudo-dataset with a given value of DM and SM signal strength.
-   @param seed - The random seed for dataset generation.
+   Create an Asimov dataset. WARNING! Method currently assumes inclusive
+   categorization scheme in order to get category normalization.
    @param valPoI - The value of the parameter of interest.
    @param snapshotName - The name of the parameter snapshot to load.
    @param namesAndValsPoI - The names and values of the parameters of interest.
-   @param toyIndex - In case multiple toys are to be saved in this workspace.
-   @return - A pseudo-dataset.
-
-RooDataSet* TestStat::createOneCatPseudoData(int seed, int valPoI, 
-  TString snapshotName, std::map<TString,double> namesAndValsPoI,
-  TString namePDF, int toyIndex) {
+   @param luminosity - The luminosity for asimov data.
+   @return - An Asimov dataset.
+*/
+RooDataSet* TestStat::createAsimovData(int valPoI, TString snapshotName,
+				       std::map<TString,double> namesAndValsPoI,
+				       double luminosity) {
+  printer(Form("TestStat::createAsimovData(PoI=%d, snapshot=%s)", 
+	       valPoI, snapshotName.Data()), false);
   
-  printer(Form("TestStat::createOneCatPseudoData(seed=%d, PoI=%d, snapshot=%s)",
-	       seed, valPoI, snapshotName.Data()), false);
-  
-  // Load the parameters from profiling data to create UNCONDITIONAL ENSEMBLE:
-  //TString snapshotName = Form("paramsProfilePoI%d", valPoI);
+  // Load the parameters from profiling data:
   if (m_workspace->getSnapshot(snapshotName)) {
     m_workspace->loadSnapshot(snapshotName);
-    printer(Form("TestStat: Loaded snapshot %s",snapshotName.Data()), false);
+    printer(Form("TestStat: Loaded snapshot %s", snapshotName.Data()), false);
   }
   else {
-    // Load the original parameters from profiling:
-    //m_workspace->loadSnapshot(m_nominalSnapshot);
-    printer(Form("TestStat: ERROR! No snapshot %s", snapshotName.Data()),
-	    true);
+    printer(Form("TestStat: ERROR! No snapshot %s", snapshotName.Data()), true);
   }
   
-  //RooAbsPdf* combPdf = (RooAbsPdf*)m_mc->GetPdf();
-  //RooSimultaneous* combPdf = (RooSimultaneous*)m_mc->GetPdf();
-  RooAbsPdf* combPdf = (RooAbsPdf*)m_workspace->pdf(namePDF);
-  RooArgSet* nuisanceParameters = (RooArgSet*)m_mc->GetNuisanceParameters();
-  RooArgSet* globalObservables = (RooArgSet*)m_mc->GetGlobalObservables();
-  RooArgSet* observables = (RooArgSet*)m_mc->GetObservables();
-  RooArgSet* poi = (RooArgSet*)m_mc->GetParametersOfInterest();
-  
-  RooRandom::randomGenerator()->SetSeed(seed);
-  statistics::constSet(nuisanceParameters, true);
-  statistics::constSet(globalObservables, false);
-  
-  // Randomize the global observables and set them constant for now:
-  statistics::randomizeSet(combPdf, globalObservables, seed); 
-  statistics::constSet(globalObservables, true);
-  
+  // First check that PDF is of simultaneous type:
+  if (!((TString)(m_mc->GetPdf()->ClassName())).Contains("Simultaneous")) {
+    printer("TestStat::createPseudoData() ERROR. PDF not RooSimultaneous",true);
+  }
+    
   // Set the values of parameters of interest as specified in the input.
   for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
        iterPoI != namesAndValsPoI.end(); iterPoI++) {
@@ -360,7 +344,6 @@ RooDataSet* TestStat::createOneCatPseudoData(int seed, int valPoI,
   // WARNING! This overrides the randomization settings above!
   for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
        iterParam != m_paramValToSet.end(); iterParam++) {
-    // Check that workspace contains parameter:
     if (m_workspace->var(iterParam->first)) {
       m_workspace->var(iterParam->first)->setVal(iterParam->second);
       m_workspace->var(iterParam->first)
@@ -371,71 +354,98 @@ RooDataSet* TestStat::createOneCatPseudoData(int seed, int valPoI,
       printer(Form("TestStat: Error! Parameter %s not found in workspace! See printout above for clues...", (iterParam->first).Data()), true);
     }
   }
-    
+  
   // Iterate over the categories:
-  printer("TestStat: Single category to generate toy data.", false);
-  RooRealVar *wt = new RooRealVar("wt","wt",1.0);
-  RooArgSet *currObs = combPdf->getObservables(observables);
-  
-  RooDataSet* pseudoData = NULL;
-  TString newDataName = (toyIndex < 0) ? "toyData" : Form("toyData%d",toyIndex);
-  
-  // Create binned pseudo-data by request:
-  if (m_config->getBool("DoBinnedFit")) {
-    currPdf->setAttribute("PleaseGenerateBinned");
-    pseudoData
-      = (RooDataSet*)currPdf->generate(*currObs, AutoBinned(true),
-				       Extended(currPdf->canBeExtended()),
-				       GenBinned("PleaseGenerateBinned"));
-  }
-  // Construct unbinned pseudo-data by default:
-  else pseudoData = (RooDataSet*)currPdf->generate(*currObs, Extended(true));
-  
-  // Count the events:
-  double currEvt = pseudoData->sumEntries();
-  m_numEventsPerCate.push_back(currEvt);
-  
-  // Add ghost events if requested:
-  if (m_config->isDefined("AddGhostEvents") &&
-      m_config->getBool("AddGhostEvents")) {
-    addGhostEvents(pseudoData, (RooRealVar*)(currObs->first()), wt);
-    currObs->add(*wt);
-  }
-  
-  pseudoData->SetNameTitle(newDataName, newDataName);
-  
-  
+  printer("TestStat: Iterate over categories to generate asimov data.", false);
+  map<string,RooDataSet*> asimovDataMap; asimovDataMap.clear();
+  RooRealVar *wt = new RooRealVar("wt", "wt", 1.0);
+  RooSimultaneous* combPdf = (RooSimultaneous*)m_mc->GetPdf();
+  RooArgSet* observables = (RooArgSet*)m_mc->GetObservables();
+  TIterator *cateIter = combPdf->indexCat().typeIterator();
+  RooCatType *cateType = NULL;
+  while ((cateType = (RooCatType*)cateIter->Next())) {
+    RooAbsPdf *currPdf = combPdf->getPdf(cateType->GetName());
+    RooArgSet *currObs = currPdf->getObservables(m_mc->GetObservables());
+    RooRealVar *firstObs = (RooRealVar*)currObs->first();
+    TString cateName = cateType->GetName();
+    
+    // Determine the number of events for the dataset:
+    // WARNING!!! THIS ASSUMES INCLUSIVE CATEGORIZATION.
+    double nAsimovEvents = (luminosity / m_config->getNum("AnalysisLuminosity"))
+      * m_workspace->data(m_config->getStr("WorkspaceObsData"))->sumEntries();
+    
+    // Create Asimov dataset:
+    asimovDataMap[(std::string)cateType->GetName()]
+      = new RooDataSet(Form("asimovData_%s",cateName.Data()),
+		       Form("asimovData_%s",cateName.Data()),
+		       RooArgSet(*firstObs, *wt), RooFit::WeightVar(*wt));
+    
+    double xMin = firstObs->getMin();
+    double xMax = firstObs->getMax();
+    firstObs->setRange("fullRange", xMin, xMax);
+    RooAbsReal* integralTotal
+      = (RooAbsReal*)currPdf->createIntegral(RooArgSet(*firstObs), 
+					     RooFit::NormSet(*firstObs), 
+					     RooFit::Range("fullRange"));
+    double valueTotal = integralTotal->getVal();
+    
+    // Loop over mass to get value in mass bins:
+    double increment = (xMax - xMin) / 1000.0;
+    for (double i_m = xMin; i_m < xMax; i_m += increment) {
+      firstObs->setRange(Form("range%2.2f",i_m), i_m, (i_m+increment));
+      RooAbsReal* integralWindow = (RooAbsReal*)currPdf
+	->createIntegral(RooArgSet(*firstObs), RooFit::NormSet(*firstObs),
+			 RooFit::Range(Form("range%2.2f",i_m)));
+      double valueWindow = integralWindow->getVal();
+      double currMass = i_m + (0.5*increment);
+      double currPdfWeight = nAsimovEvents * (valueWindow / valueTotal);
+      
+      firstObs->setVal(currMass);
+      wt->setVal(currPdfWeight);
+      asimovDataMap[(std::string)cateType->GetName()]
+	->add(RooArgSet(*firstObs, *wt), currPdfWeight);
+      delete integralWindow;
+    }
+    
+    delete integralTotal;
+    firstObs->setRange("fullRange", xMin, xMax);
+    
     TCanvas *can = new TCanvas("can", "can", 800, 800);
     can->cd();
-    RooPlot* frame = ((RooRealVar*)(currObs->first()))->frame(115);
-    toyDataMap[(std::string)cateType->GetName()]->plotOn(frame);
-    frame->SetXTitle(currObs->GetName());
-    frame->SetYTitle(Form("Events / %2.1f GeV", m_geVPerBin));
+    RooPlot* frame = ((RooRealVar*)(firstObs))->frame(1000);
+    asimovDataMap[(std::string)cateType->GetName()]->plotOn(frame);
+    frame->SetXTitle(firstObs->GetName());
+    frame->SetYTitle("Events / GeV");
     frame->Draw();
     gPad->SetLogy(); 
     frame->GetYaxis()->SetRangeUser(0.1, 10000);
-    can->Print("data.eps");
-    
-    
-  // Save the parameters used to generate toys:
-  storeParams(nuisanceParameters, m_mapNP);
-  storeParams(globalObservables, m_mapGlobs);
-  storeParams(poi, m_mapPoI);
-
-  // release nuisance parameters (but don't change the values!):
-  //m_workspace->loadSnapshot(m_nominalSnapshot);
-  statistics::constSet(nuisanceParameters, false);
-  statistics::constSet(globalObservables, true);
+    can->Print(Form("data_%s.eps",cateName.Data()));
+  }
   
-  // Import into the workspace then return:
-  m_workspace->import(*pseudoData);
-  return pseudoData;
+  // Create the combined toy RooDataSet:
+  RooCategory *categories = NULL;
+  TString nameRooCategory = m_config->getStr("WorkspaceRooCategory");
+  if (m_workspace->obj(nameRooCategory)) {
+    categories = (RooCategory*)m_workspace->obj(nameRooCategory);
+  }
+  else {
+    printer(Form("TestStat: RooCategory object %s not found",
+		 nameRooCategory.Data()), true);
+  }
+  
+  // Create and return the Asimov dataset:
+  RooDataSet* asimovData = new RooDataSet(Form("asimovDataMu%d",valPoI), 
+					  Form("asimovDataMu%d",valPoI),
+					  *observables,
+					  RooFit::Index(*categories),
+					  RooFit::Import(asimovDataMap));
+  m_workspace->import(*asimovData);
+  return asimovData;
 }
-*/
 
 /**
    -----------------------------------------------------------------------------
-   Create a pseudo-dataset with a given value of DM and SM signal strength.
+   Create a pseudo-dataset.
    @param seed - The random seed for dataset generation.
    @param valPoI - The value of the parameter of interest.
    @param snapshotName - The name of the parameter snapshot to load.

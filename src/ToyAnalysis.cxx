@@ -416,8 +416,8 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     double valueZ0 = m_ts->getZ0FromQ0(valueQ0);
     double valueCL = m_ts->getCLFromQMu(valueQMu, 0);
     
-    //double toyWeight = 1.0;
-    double toyWeight = toyTree->weight;
+    double toyWeight = 1.0;
+    if (m_options.Contains("ImportSamp")) toyWeight = toyTree->weight;
     
     // Fill histograms for the test statistics and POI:
     m_hQMu[muValue]->Fill(valueQMu, toyWeight);

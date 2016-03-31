@@ -62,7 +62,7 @@ int main(int argc, char **argv) {
   // ToyForScan
   // ToyMLPoint
   
-  if (option.Contains("ToyForScan")) {
+  if (options.Contains("ToyForScan")) {
     toyAna->loadToy(0, Form("%s/%s/GenericToys/single_files/toy_mu0*ForScan*", 
 			    (config->getStr("MasterOutput")).Data(),
 			    (config->getStr("JobName")).Data()));

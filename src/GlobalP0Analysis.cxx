@@ -61,10 +61,7 @@ int main(int argc, char **argv) {
   TString toyAnaOptions = "";
   if (options.Contains("StudyRetries")) toyAnaOptions += "StudyRetries";
   ToyAnalysis *toyAna = new ToyAnalysis(configFile, toyAnaOptions);
-  
-  toyAna->setOutputDir(Form("%s/%s/ToyAnalysis", 
-			  (config->getStr("MasterOutput")).Data(),
-			  jobName.Data()));
+  toyAna->setOutputDir(outputDir);
   
   std::vector<TString> fitTypes;
   fitTypes.clear(); fitTypes.push_back("0"); fitTypes.push_back("Free");
