@@ -27,6 +27,9 @@ class CLScan {
   virtual ~CLScan() {};
   void clearData();
   double getLimit(int mass, int width, bool expected, int N);
+  std::vector<int> listMasses();
+  std::vector<int> listWidths();
+  std::vector<int> listXS();
   void scanMass(int width, bool makeNew);
   void setInputDirectory(TString directory);
   void setLimit(int mass, int width, bool expected, int N, double limitValue);

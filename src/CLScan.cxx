@@ -9,10 +9,6 @@
 //  Performs a scan of the 95% CL using toy MC at various mass-width-cross-   //
 //  section points.                                                           //
 //                                                                            //
-//  Macro options:                                                            //
-//  - "New"        Calculate everything from scratch.                         //
-//  - "FromFile"   Load CL values from file.                                  //
-//                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "CLScan.h"
@@ -24,14 +20,15 @@
    @param options - Options for the CL scan.
 */
 CLScan::CLScan(TString configFileName, TString options) {
-  printer(Form("CLScan::CLScan(%s, %s)", configFileName.Data(), options.Data()),
-	  false);
-  
+    
   // Load the config file:
   m_configFileName = configFileName;
   m_config = new Config(m_configFileName);
   m_options = options;
-  
+
+  printer(Form("CLScan::CLScan(%s, %s)", configFileName.Data(), options.Data()),
+	  false);
+
   // Set output directory:
   setInputDirectory(Form("%s/%s/GenericToys/single_files",
 			 (m_config->getStr("MasterOutput")).Data(),
@@ -184,6 +181,30 @@ double CLScan::getLimit(int mass, int width, bool expected, int N) {
   if (m_values95CL.count(key) > 0) return m_values95CL[key];
   else printer(Form("CLScan: ERROR no value for key %s", key.Data()), true);
   return 0.0;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get a list of the mass values stored in the scan tool.
+*/
+std::vector<int> CLScan::listMasses() {
+  return m_massValues;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get a list of the width values stored in the scan tool.
+*/
+std::vector<int> CLScan::listWidths() {
+  return m_widthValues;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get a list of the cross-section values stored in the scan tool.
+*/
+std::vector<int> CLScan::listXS() {
+  return m_xsValues;
 }
 
 /**
@@ -430,6 +451,23 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
     
     // Instantiate the test statistic class for calculations and plots:
     TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
+    
+    // Turn off MC stat errors if requested for Graviton jobs:
+    if (m_config->isDefined("TurnOffTemplateStat") && 
+	m_config->getBool("TurnOffTemplateStat")) {
+      testStat->theWorkspace()
+	->loadSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+      const RooArgSet *nuisanceParameters
+	= testStat->theModelConfig()->GetNuisanceParameters();
+      TIterator *nuisIter = nuisanceParameters->createIterator();
+      RooRealVar *nuisCurr = NULL;
+      while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
+	TString currName = nuisCurr->GetName();
+	if (currName.Contains("gamma_stat_channel_bin")) {
+	  testStat->setParam(currName, nuisCurr->getVal(), true);
+	}
+      }
+    }
     
     // Save values for plotting again!
     std::ofstream outFile(Form("%s/scan_CL_values.txt", m_outputDir.Data()));
