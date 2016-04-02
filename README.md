@@ -20,7 +20,7 @@ the analysis software.
 
 The configuration files for the analysis are included in the `data/` directory.
 The baseline config files are currently:
- - settings_Graviton_TightIso.cfg (graviton analysis with tight isolation)
+ - settings_Graviton.cfg (graviton analysis with tight isolation)
  - settings_Scalar.cfg (scalar analysis)
 
 The config files allow the user to specify everything that might change, such as
@@ -46,7 +46,7 @@ To compile the executables:
 make bin/HMMaster  
 make bin/GlobalP0Toys_Faster  
 make bin/GlobalP0Analysis  
-make bin/LocalP0Toys  
+make bin/GenericToys  
 make bin/LocalP0Analysis  
 make bin/TossToys_NoFit
 ```
