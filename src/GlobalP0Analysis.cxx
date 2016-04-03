@@ -10,6 +10,7 @@
 //                                                                            //
 //  Macro options:                                                            //
 //  - PlotGauss                                                               //
+//  - PlotLine                                                                //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -94,7 +95,9 @@ int main(int argc, char **argv) {
   }
   // Also plot the retries:
   if (options.Contains("StudyRetries")) toyAna->plotRetries(0);
-
+  
+  double observedZ0 = config->getNum("GlobalP0AnalysisSigma");
+  
   //----------------------------------------//
   // Start the plotting!
   
@@ -164,10 +167,18 @@ int main(int argc, char **argv) {
   // Draw a line at the median:
   TLine *line1 = new TLine();
   line1->SetLineStyle(2);
-  line1->SetLineWidth(3);
-  line1->SetLineColor(kRed);
+  line1->SetLineWidth(2);
+  line1->SetLineColor(kBlue-1);
   line1->DrawLine(medianZ0, hMaxZ0->GetYaxis()->GetXmin(),
 		  medianZ0, hMaxZ0->GetMaximum());
+  
+  // Draw a line at the observed Z0Local:
+  TLine *line2 = new TLine();
+  line2->SetLineStyle(2);
+  line2->SetLineWidth(2);
+  line2->SetLineColor(kRed+1);
+  line2->DrawLine(observedZ0, hMaxZ0->GetYaxis()->GetXmin(),
+		  observedZ0, hMaxZ0->GetMaximum());
   
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
@@ -179,12 +190,13 @@ int main(int argc, char **argv) {
 			       (config->getNum("AnalysisLuminosity")/1000.0)));
   
   // Legend:
-  TLegend leg1(0.2, 0.55, 0.45, 0.70);
+  TLegend leg1(0.2, 0.49, 0.45, 0.71);
   leg1.SetTextFont(42); 
   leg1.SetTextSize(0.07);
   leg1.SetBorderSize(0);
   leg1.SetFillColor(0);
-  leg1.AddEntry(line1, Form("Med. Z_{0}^{Local}=%2.2f",medianZ0), "l");
+  leg1.AddEntry(line1, Form("Med. Z_{0}^{Local}=%2.1f#sigma",medianZ0), "l");
+  leg1.AddEntry(line2, Form("Obs. Z_{0}^{Local}=%2.1f#sigma",observedZ0), "l");
   if (options.Contains("PlotGauss")) leg1.AddEntry(fGauss, "Gaussian", "l");
   leg1.Draw("SAME");
 
@@ -235,22 +247,22 @@ int main(int argc, char **argv) {
   hForAxis->SetLineColor(0);
   hForAxis->Draw();
   
-  TLine *line2 = new TLine();
-  line2->SetLineStyle(1);
-  line2->SetLineWidth(2);
-  line2->DrawLine(hForAxis->GetYaxis()->GetXmin(), 0,
+  TLine *line3 = new TLine();
+  line3->SetLineStyle(1);
+  line3->SetLineWidth(2);
+  line3->DrawLine(hForAxis->GetYaxis()->GetXmin(), 0,
 		  hForAxis->GetXaxis()->GetXmax(), 0);
-  line2->SetLineWidth(1);
-  line2->SetLineStyle(3);
-  line2->DrawLine(hForAxis->GetYaxis()->GetXmin(), 1,
+  line3->SetLineWidth(1);
+  line3->SetLineStyle(3);
+  line3->DrawLine(hForAxis->GetYaxis()->GetXmin(), 1,
 		  hForAxis->GetXaxis()->GetXmax(), 1);
-  line2->DrawLine(hForAxis->GetYaxis()->GetXmin(), -1,
+  line3->DrawLine(hForAxis->GetYaxis()->GetXmin(), -1,
 		  hForAxis->GetXaxis()->GetXmax(), -1);
-  line2->DrawLine(hForAxis->GetYaxis()->GetXmin(), 2,
+  line3->DrawLine(hForAxis->GetYaxis()->GetXmin(), 2,
 		  hForAxis->GetXaxis()->GetXmax(), 2);
-  line2->DrawLine(hForAxis->GetYaxis()->GetXmin(), 3,
+  line3->DrawLine(hForAxis->GetYaxis()->GetXmin(), 3,
 		  hForAxis->GetXaxis()->GetXmax(), 3);
-  line2->DrawLine(hForAxis->GetYaxis()->GetXmin(), 4,
+  line3->DrawLine(hForAxis->GetYaxis()->GetXmin(), 4,
 		  hForAxis->GetXaxis()->GetXmax(), 4);
     
   // Also fit the graph:
@@ -263,17 +275,13 @@ int main(int argc, char **argv) {
   fZGlobal->SetLineColor(1);
   
   gZGlobal->Draw("2SAME");
-  //gZGlobal->Draw("E1SAME");
+  if (options.Contains("PlotLine")) fZGlobal->Draw("LSAME");
   
-  fZGlobal->Draw("LSAME");
-    
   // Now get a global significance just from the Gaussian fit:
   TGraph *gFromGauss = new TGraph();
   TGraph *gFromGaussP1 = new TGraph();
   TGraph *gFromGaussN1 = new TGraph();
   
-  //double totalIntegral = fGauss->Integral(hMaxZ0->GetXaxis()->GetXmin(),
-  //					  hMaxZ0->GetXaxis()->GetXmax());
   double totalIntegral = fGauss->Integral(-5, hMaxZ0->GetXaxis()->GetXmax());
   double totalIntegralP1 = fGaussP1->Integral(-5,hMaxZ0->GetXaxis()->GetXmax());
   double totalIntegralN1 = fGaussN1->Integral(-5,hMaxZ0->GetXaxis()->GetXmax());
@@ -301,46 +309,76 @@ int main(int argc, char **argv) {
     gFromGaussN1->Draw("LSAME");
   }
   
-  // Draw excluded region:
-  Double_t xExcl[3] = {hMaxZ0->GetXaxis()->GetXmin(), 
-		       hMaxZ0->GetXaxis()->GetXmin(),
-		       hMaxZ0->GetXaxis()->GetXmax()};
-  Double_t yExcl[3] = {hMaxZ0->GetXaxis()->GetXmax(), 
-		       hMaxZ0->GetXaxis()->GetXmin(), 
-		       hMaxZ0->GetXaxis()->GetXmax()};
-  TPolyLine *lineExcl = new TPolyLine(3, xExcl, yExcl);
-  lineExcl->SetFillColor(kRed-7);
-  lineExcl->SetFillStyle(3345);
-  lineExcl->SetLineColor(kRed);
-  lineExcl->SetLineWidth(2);
-  lineExcl->Draw("f");
+  if (options.Contains("PlotLine")) {
+    // Print functional form:
+    TString fText = Form("Z_{0}^{Global} = %2.2f Z_{0}^{Local} + %2.2f",
+			 fZGlobal->GetParameter(1), fZGlobal->GetParameter(0));
+    fText.ReplaceAll("+ -","- ");
+    t.DrawLatex(0.58, 0.34, fText);
+    
+    // Print the chi^2 probability:
+    double chi2 = fZGlobal->GetChisquare();
+    double probChi2 = TMath::Prob(fZGlobal->GetChisquare(), gZGlobal->GetN());
+    t.DrawLatex(0.58, 0.24, Form("p(#chi^{2}) = %2.2f", probChi2));
+  }
+    
+  // Calculate the Z0 global value with errors:
+  double xValue = 0.0; double yValue = 0.0;
+  double xError = 0.0; double yError = 0.0;
+  for (int i_p = 0; i_p < gZGlobal->GetN(); i_p++) {
+    gZGlobal->GetPoint(i_p, xValue, yValue);
+    xError = gZGlobal->GetErrorX(i_p);
+    yError = gZGlobal->GetErrorY(i_p);
+    if (((xValue + xError) >= observedZ0) &&
+	((xValue - xError) <= observedZ0)) {
+      break;
+    }
+  }
+    
+  // Create lines showin the Z0 local -> global conversion:
+  Double_t xZ0Global[4] = {hMaxZ0->GetXaxis()->GetXmin(), 
+			   hMaxZ0->GetXaxis()->GetXmin(),
+			   xValue,
+			   xValue};
+  Double_t yZ0Global[4] = {yValue+yError,
+			   yValue-yError,
+			   yValue-yError,
+			   yValue+yError};
+  
+  TPolyLine *lineZ0Global = new TPolyLine(4, xZ0Global, yZ0Global);
+  lineZ0Global->SetFillColor(kRed+1);
+  //lineZ0Global->SetFillStyle(3345);
+  lineZ0Global->SetFillStyle(3245);
+  lineZ0Global->SetLineColor(kRed+1);
+  lineZ0Global->SetLineWidth(3);
+  lineZ0Global->Draw("f");
   hForAxis->Draw("axisSAME");
   
-  // Print functional form:
-  TString fText = Form("Z_{0}^{Global} = %2.2f Z_{0}^{Local} + %2.2f",
-		       fZGlobal->GetParameter(1), fZGlobal->GetParameter(0));
-  fText.ReplaceAll("+ -","- ");
-  t.DrawLatex(0.58, 0.34, fText);
+  // Draw a line at the observed Z0Local:
+  TLine *line4 = new TLine();
+  line4->SetLineStyle(2);
+  line4->SetLineWidth(2);
+  line4->SetLineColor(kRed+1);
+  line4->DrawLine(observedZ0, hMaxZ0->GetYaxis()->GetXmin(),
+		  observedZ0, yValue);
   
-  // Print the chi^2 probability:
-  double chi2 = fZGlobal->GetChisquare();
-  double probChi2 = TMath::Prob(fZGlobal->GetChisquare(), gZGlobal->GetN());
-  t.DrawLatex(0.58, 0.24, Form("p(#chi^{2}) = %2.2f", probChi2));
-
   // Legend for Pad 2:
-  TLegend leg2(0.18, 0.75, 0.61, 0.97);
+  TLegend leg2(0.18, 0.75, 0.59, 0.97);
   leg2.SetTextFont(42); 
   leg2.SetTextSize(0.07);
   leg2.SetBorderSize(0);
   leg2.SetFillColor(0);
-  leg2.AddEntry(gZGlobal, "Toy MC #pm error", "F");
-  leg2.AddEntry(fZGlobal, "Fit to Toy MC", "l");
+  leg2.AddEntry(gZGlobal, "Toy MC #pm stat. error", "F");
+  if (options.Contains("PlotLine")) {
+    leg2.AddEntry(fZGlobal, "Fit to Toy MC", "l");
+  }
   if (options.Contains("PlotGauss")) {
     leg2.AddEntry(gFromGauss, "Gaussian Fit", "l");
   }
-  leg2.AddEntry(lineExcl, "Upper bound on Z_{0}^{Global}", "F");
+  //leg2.AddEntry(lineExcl, "Upper bound on Z_{0}^{Global}", "F");
+  leg2.AddEntry(lineZ0Global, Form("Z_{0}^{Global}=%2.2f#sigma #pm %2.2f#sigma",
+				   yValue, yError), "F");
   leg2.Draw("SAME");
-  
   
   // Print the canvas:
   can->Print(Form("%s/plot_maxZ0_%s.eps", outputDir.Data(), anaType.Data()));
@@ -350,23 +388,10 @@ int main(int argc, char **argv) {
   std::cout << "\nGlobalP0Analysis: Finished!" << std::endl;
   
   // Print the results:
-  double testSigma = config->getNum("GlobalP0AnalysisSigma");
-  std::cout << "\tFrom linear fit: Z0Global( " << testSigma << " ) = " 
-	    << fZGlobal->Eval(testSigma) << std::endl;
-  
-  
-  double xValue = 0.0; double yValue = 0.0;
-  double xError = 0.0; double yError = 0.0;
-  for (int i_p = 0; i_p < gZGlobal->GetN(); i_p++) {
-    gZGlobal->GetPoint(i_p, xValue, yValue);
-    xError = gZGlobal->GetErrorX(i_p);
-    yError = gZGlobal->GetErrorY(i_p);
-    if (((xValue + xError) >= testSigma) && ((xValue - xError) <= testSigma)) {
-      break;
-    }
-  }
-  
-  std::cout << "\tFrom toy: Z0Global( " << testSigma << " ) = " 
+  std::cout << "\tFrom linear fit: Z0Global( " << observedZ0 << " ) = " 
+	    << fZGlobal->Eval(observedZ0) << std::endl;
+    
+  std::cout << "\tFrom toy: Z0Global( " << observedZ0 << " ) = " 
 	    << yValue << " +/- " << yError << std::endl;
 
   delete config;

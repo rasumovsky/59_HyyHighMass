@@ -284,15 +284,12 @@ void CLScan::scanMass(int width, bool makeNew) {
   can->cd();
   
   // Toy graph formatting:
-  gCLExp->GetXaxis()->SetTitle("m_{X} [GeV]");
-  gCLObs->GetXaxis()->SetTitle("m_{X} [GeV]");
-  gCLExp_2s->GetXaxis()->SetTitle("m_{X} [GeV]");
-  gCLExp->GetYaxis()
-    ->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrowhh} [pb]");
-  gCLObs->GetYaxis()
-    ->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrowhh} [pb]");
-  gCLExp_2s->GetYaxis()
-    ->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrowhh} [pb]");
+  gCLExp->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  gCLObs->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  gCLExp_2s->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  gCLExp->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
+  gCLObs->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
+  gCLExp_2s->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
   
   gCLExp->SetLineColor(kBlack);
   gCLObs->SetLineColor(kBlack);
@@ -314,6 +311,9 @@ void CLScan::scanMass(int width, bool makeNew) {
   leg.AddEntry(gCLExp_2s,"Exp. limit #pm2#sigma_{exp}","F");
   
   // Plotting options:
+  gCLExp_2s->GetXaxis()->SetRangeUser(m_massValues[0], 
+				      m_massValues[m_massValues.size()-1]);
+  gPad->SetLogy();
   gCLExp_2s->Draw("A3");
   gCLExp->Draw("Lsame");
   gCLExp_1s->Draw("3same");
@@ -332,7 +332,8 @@ void CLScan::scanMass(int width, bool makeNew) {
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
   
   // Print the canvas:
-  can->Print(Form("%s/limits_toy.eps", m_outputDir.Data()));
+  can->Print(Form("%s/limits_width%d.eps", m_outputDir.Data(), width));
+  gPad->SetLogy(false);
   
   // Delete pointers:
   printer(Form("CLScan: Finished mass scan for %d!", width), false);
@@ -394,7 +395,7 @@ void CLScan::setOutputDirectory(TString directory) {
    @return - True iff loaded successfully.
 */
 bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
-  printer(Form("Form(singleCLScan(mass=%d, width=%d, makeNew=%d",
+  printer(Form("singleCLScan(mass=%d, width=%d, makeNew=%d",
 	       mass, width, (int)makeNew), false);
   
   // Arrays to store band information:
@@ -424,7 +425,8 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   if (!makeNew) {
     
     // Open the saved CL values from toys:
-    TString inputName = Form("%s/scan_CL_values.txt", m_outputDir.Data());
+    TString inputName = Form("%s/scan_CL_values_mass%d_width%d.txt",
+			     m_outputDir.Data(), mass, width);
     std::ifstream inputFile(inputName);
     if (inputFile.is_open()) {
       while (inputFile >> varValues[nToyPoints] >> CLObs[nToyPoints] 
@@ -451,6 +453,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
     
     // Instantiate the test statistic class for calculations and plots:
     TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
+    testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
     
     // Turn off MC stat errors if requested for Graviton jobs:
     if (m_config->isDefined("TurnOffTemplateStat") && 
@@ -470,9 +473,11 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
     }
     
     // Save values for plotting again!
-    std::ofstream outFile(Form("%s/scan_CL_values.txt", m_outputDir.Data()));
+    std::ofstream outFile(Form("%s/scan_CL_values_mass%d_width%d.txt",
+			       m_outputDir.Data(), mass, width));
     
     // Loop over cross-section:
+    printer("CLScan: Loop over cross-sections to get qMuObs", false);
     for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
       double crossSection = ((double)m_xsValues[i_x])/1000.0;
       std::cout << "CLScan: cross-section = " << crossSection << std::endl;
@@ -514,6 +519,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
     
     //----------------------------------------//
     // Process the toy MC files to obtain the CL values:
+    printer("CLScan: Processing toy MC in loop over cross-sections", false);
     for (int i_t = 0; i_t < nToyPoints; i_t++) {
       
       // Load the tool to analyze toys.
@@ -528,9 +534,9 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
       fitTypes.push_back("Free");
       toyAna->setFitTypes(fitTypes);
       toyAna->loadToy(0, Form("%s/toy_mu0*ForScan_mass%d_width%d_xs%d.root",
-			      m_outputDir.Data(), mass, width, xsVals[i_t]));
+			      m_inputDir.Data(), mass, width, xsVals[i_t]));
       toyAna->loadToy(1, Form("%s/toy_mu1*ForScan_mass%d_width%d_xs%d.root",
-			      m_outputDir.Data(), mass, width, xsVals[i_t]));
+			      m_inputDir.Data(), mass, width, xsVals[i_t]));
       if (!(toyAna->areInputFilesOK())) {
 	printer("CLScan: ERROR with toy scan option.", true);
       }
@@ -594,8 +600,10 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   can->cd();
   
   // Toy graph formatting:
-  gCLExp->GetXaxis()->SetTitle("#sigma#timesBR(G*#rightarrow#gamma#gamma [fb]");
-  gCLObs->GetXaxis()->SetTitle("#sigma#timesBR(G*#rightarrow#gamma#gamma [fb]");
+  gCLExp->GetXaxis()
+    ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
+  gCLObs->GetXaxis()
+    ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
   gCLExp->GetYaxis()->SetTitle("CL_{s} value");
   gCLObs->GetYaxis()->SetTitle("CL_{s} value");
   gCLExp->SetLineColor(kBlack);
@@ -605,6 +613,10 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   gCLExp->SetLineWidth(2);
   gCLObs->SetLineWidth(2);
   gCLExp->GetYaxis()->SetRangeUser(0.0, 1.0);
+  gCLExp->GetXaxis()
+    ->SetRangeUser(((double)m_xsValues[0])/1000.0,
+		   ((double)m_xsValues[(int)m_xsValues.size()-1])/1000.0);
+  gPad->SetLogx();
   gCLExp_2s->SetFillColor(kYellow);
   gCLExp_1s->SetFillColor(kGreen);
   
@@ -647,6 +659,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   // Print the canvas:
   can->Print(Form("%s/scan_95CL_mass%d_width%d.eps",
 		  m_outputDir.Data(), mass, width));
+  gPad->SetLogx(false);
   
   // Get the actual limit values:
   double observedCL = getIntercept(gCLObs, 0.95);
@@ -674,7 +687,8 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   std::cout << "\texp. CL -2 " << expectedCL_n2 << std::endl;
   
   // Delete pointers, close files, return:
-  printer(Form("CLScan: Finished mass %d width %d!\n", mass, width), false);
+  printer(Form("CLScan::singleCLScan finished mass %d width %d\n", mass, width),
+	  false);
   
   delete line;
   delete can;
