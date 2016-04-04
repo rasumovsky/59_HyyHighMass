@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: PlotCLScan.cxx                                                    //
+//  Name: PlotCLScan.cxx                                                      //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
   CommonFunc::SetAtlasStyle();
   
   // Use the CLScan class to load toys and calculate 95% CL limits:
-  CLScan *scan = new CLScan(configFile, "none");
+  CLScan *scan = new CLScan(configFile, config->getStr("PlotCLScanOptions"));
   scan->setInputDirectory(inputDir);
   scan->setOutputDirectory(outputDir);
   std::vector<int> widths = scan->listWidths();

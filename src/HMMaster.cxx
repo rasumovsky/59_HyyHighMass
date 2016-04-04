@@ -144,6 +144,13 @@ int main (int argc, char **argv) {
 		m_config->getStr("LocalP0AnalysisOptions").Data()));
   }
   
-
+  //--------------------------------------//
+  // Step 3.0: Plot limits from pseudo-experiments:
+  if (masterOption.Contains("PlotCLScan")) {
+    std::cout << "HMMaster: Step 3.0 - Plot toy limits." << std::endl;
+    system(Form("./bin/PlotCLScan %s %s", fullConfigPath.Data(),
+		m_config->getStr("PlotCLScanOptions").Data()));
+  }
+  
   return 0;
 }

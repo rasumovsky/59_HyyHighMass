@@ -227,6 +227,9 @@ void CLScan::printer(TString statement, bool isFatal) {
 */
 void CLScan::scanMass(int width, bool makeNew) {
   
+  TString limitFileName = Form("%s/limit_values_width%d.txt",
+			       m_outputDir.Data(), width);
+  
   // Arrays to store band information:
   double varValues[100] = {0};  
   double CLObs[100]     = {0};
@@ -235,24 +238,61 @@ void CLScan::scanMass(int width, bool makeNew) {
   double CLExp[100]     = {0};
   double CLExp_n1[100]  = {0};
   double CLExp_n2[100]  = {0};
-  
   int nToyPoints = 0;
-
-  // Loop over the mass points to load CL results
-  for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
-    if (singleCLScan(m_massValues[i_m], width, makeNew)) {
-      CLObs[nToyPoints]    = getLimit(m_massValues[i_m], width, false, 0);
-      CLExp_p2[nToyPoints] = getLimit(m_massValues[i_m], width, true, -2);
-      CLExp_p1[nToyPoints] = getLimit(m_massValues[i_m], width, true, -1);
-      CLExp[nToyPoints]    = getLimit(m_massValues[i_m], width, true, 0);
-      CLExp_n1[nToyPoints] = getLimit(m_massValues[i_m], width, true, 1);
-      CLExp_n2[nToyPoints]  = getLimit(m_massValues[i_m], width, true, 2);
-      nToyPoints++;
-    }
-  }
   
-  // Scan information:
-  //std::vector<double> scanMXValues = config->getNumV("MXScanValues");
+  //----------------------------------------//
+  // Access results either by loading toy MC or stored limit computations:
+  // Loop over the mass points to load CL results
+  if (makeNew || m_options.Contains("ForceScan")) {
+    printer("CLScan: Calculating limits vs. mass from scratch", false);
+    
+    std::ofstream limitFileIn(limitFileName);
+    for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
+      if (singleCLScan(m_massValues[i_m], width, makeNew)) {
+	varValues[nToyPoints] = m_massValues[i_m];
+	CLObs[nToyPoints]    = getLimit(m_massValues[i_m], width, false, 0);
+	CLExp_p2[nToyPoints] = getLimit(m_massValues[i_m], width, true, -2);
+	CLExp_p1[nToyPoints] = getLimit(m_massValues[i_m], width, true, -1);
+	CLExp[nToyPoints]    = getLimit(m_massValues[i_m], width, true, 0);
+	CLExp_n1[nToyPoints] = getLimit(m_massValues[i_m], width, true, 1);
+	CLExp_n2[nToyPoints] = getLimit(m_massValues[i_m], width, true, 2);
+	limitFileIn << m_massValues[i_m] << " " << CLObs[nToyPoints] << " " 
+		  << CLExp_p2[nToyPoints] << " " << CLExp_p1[nToyPoints] << " " 
+		  << CLExp[nToyPoints] << " " << CLExp_n1[nToyPoints] << " " 
+		  << CLExp_n2[nToyPoints] << " " << std::endl;
+	nToyPoints++;
+      }
+    }
+    limitFileIn.close();
+  }
+  // Or load from text file:
+  else {
+    printer("CLScan: Loading limits vs. mass from file.", false);
+    
+    double currMass = 0.0;
+    std::ifstream limitFileOut(limitFileName);
+    if (limitFileOut.is_open()) {
+      while (limitFileOut >> currMass >> CLObs[nToyPoints]
+	     >> CLExp_p2[nToyPoints] >> CLExp_p1[nToyPoints] 
+	     >> CLExp[nToyPoints] >> CLExp_n1[nToyPoints] 
+	     >> CLExp_n2[nToyPoints]) {
+	varValues[nToyPoints] = currMass;
+        setLimit(currMass, width, false, 0, CLObs[nToyPoints]);
+	setLimit(currMass, width, true, -2, CLExp_p2[nToyPoints]);
+	setLimit(currMass, width, true, -1, CLExp_p1[nToyPoints]);
+	setLimit(currMass, width, true, 0, CLExp[nToyPoints]);
+	setLimit(currMass, width, true, 1, CLExp_n1[nToyPoints]);
+	setLimit(currMass, width, true, 2, CLExp_n2[nToyPoints]);
+	
+	std::cout << currMass << " " << CLObs[nToyPoints] << " " 
+		  << CLExp_p2[nToyPoints] << " " << CLExp_p1[nToyPoints] << " " 
+		  << CLExp[nToyPoints] << " " << CLExp_n1[nToyPoints] << " " 
+		  << CLExp_n2[nToyPoints] << " " << std::endl;
+	nToyPoints++;
+      }
+    }
+    limitFileOut.close();
+  }
   
   //----------------------------------------//
   // Plot the results:
@@ -305,14 +345,18 @@ void CLScan::scanMass(int width, bool makeNew) {
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
-  if (!m_config->getBool("DoBlind")) leg.AddEntry(gCLObs,"Obs. limit","l");
-  leg.AddEntry(gCLExp,"Exp. limit","l");
-  leg.AddEntry(gCLExp_1s,"Exp. limit #pm1#sigma_{exp}","F");
-  leg.AddEntry(gCLExp_2s,"Exp. limit #pm2#sigma_{exp}","F");
+  if (!m_config->getBool("DoBlind")) {
+    leg.AddEntry(gCLObs,"Observed #it{CL_{s}} limit","l");
+  }
+  leg.AddEntry(gCLExp,"Expected #it{CL_{s}} limit","l");
+  leg.AddEntry(gCLExp_1s,"Expected #pm 1#sigma_{exp}","F");
+  leg.AddEntry(gCLExp_2s,"Expected #pm 2#sigma_{exp}","F");
   
   // Plotting options:
   gCLExp_2s->GetXaxis()->SetRangeUser(m_massValues[0], 
 				      m_massValues[m_massValues.size()-1]);
+  gCLExp_2s->GetYaxis()->SetRangeUser(0.1, 1000);
+  
   gPad->SetLogy();
   gCLExp_2s->Draw("A3");
   gCLExp->Draw("Lsame");
@@ -330,6 +374,10 @@ void CLScan::scanMass(int width, bool makeNew) {
   t.DrawLatex(0.32, 0.87, m_config->getStr("ATLASLabel"));
   t.DrawLatex(0.2, 0.81, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
+  t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
+  t.DrawLatex(0.2, 0.69,
+	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		   ((double)width)/100.0));
   
   // Print the canvas:
   can->Print(Form("%s/limits_width%d.eps", m_outputDir.Data(), width));
@@ -604,8 +652,8 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
     ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
   gCLObs->GetXaxis()
     ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
-  gCLExp->GetYaxis()->SetTitle("CL_{s} value");
-  gCLObs->GetYaxis()->SetTitle("CL_{s} value");
+  gCLExp->GetYaxis()->SetTitle("#it{CL_{s}} value");
+  gCLObs->GetYaxis()->SetTitle("#it{CL_{s}} value");
   gCLExp->SetLineColor(kBlack);
   gCLObs->SetLineColor(kBlack);
   gCLExp->SetLineStyle(2);
@@ -625,10 +673,12 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
-  if (!m_config->getBool("DoBlind")) leg.AddEntry(gCLObs, "Obs. CL_{s}", "l");
-  leg.AddEntry(gCLExp, "Exp. CL_{s}", "l");
-  leg.AddEntry(gCLExp_1s, "Exp. CL_{s} #pm1#sigma_{exp}", "F");
-  leg.AddEntry(gCLExp_2s, "Exp. CL_{s} #pm2#sigma_{exp}", "F");
+  if (!m_config->getBool("DoBlind")) {
+    leg.AddEntry(gCLObs, "Observed #it{CL_{s}}", "l");
+  }
+  leg.AddEntry(gCLExp, "Expected #it{CL_{s}}", "l");
+  leg.AddEntry(gCLExp_1s, "Expected #pm 1#sigma_{exp}", "F");
+  leg.AddEntry(gCLExp_2s, "Expected #pm 2#sigma_{exp}", "F");
   
   // Plotting options:
   gCLExp->Draw("AL");
@@ -672,8 +722,8 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   // Store the limits for this mass and width:
   setLimit(mass, width, false, 0, observedCL);
   setLimit(mass, width, true, 0, expectedCL);
-  setLimit(mass, width, true, 2, expectedCL_p1);
-  setLimit(mass, width, true, 1, expectedCL_p2);
+  setLimit(mass, width, true, 1, expectedCL_p1);
+  setLimit(mass, width, true, 2, expectedCL_p2);
   setLimit(mass, width, true, -1, expectedCL_n1);
   setLimit(mass, width, true, -2, expectedCL_n2);
   
