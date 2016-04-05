@@ -151,6 +151,14 @@ int main (int argc, char **argv) {
     system(Form("./bin/PlotCLScan %s %s", fullConfigPath.Data(),
 		m_config->getStr("PlotCLScanOptions").Data()));
   }
-  
+  //--------------------------------------//
+  // Step 4.0: Extrapolate the 2015 excess using S+B or B-only hypothesis:
+  if (masterOption.Contains("ExtrapolateSig")) {
+    std::cout << "HMMaster: Step 4.0 - Plot toy limits." << std::endl;
+    system(Form("./bin/ExtrapolateSig %s %s 0", fullConfigPath.Data(),
+		m_config->getStr("ExtrapSigOptions").Data()));
+    system(Form("./bin/ExtrapolateSig %s %s 1", fullConfigPath.Data(),
+		m_config->getStr("ExtrapSigOptions").Data()));
+  }
   return 0;
 }

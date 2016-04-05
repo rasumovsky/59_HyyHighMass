@@ -568,13 +568,15 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
   // Randomize the global observables and set them constant for now:
   statistics::randomizeSet(combPdf, globalObservables, seed); 
   statistics::constSet(globalObservables, true);
-  
+    
   // Set the values of parameters of interest as specified in the input.
   for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
        iterPoI != namesAndValsPoI.end(); iterPoI++) {
-    if (m_workspace->var(iterPoI->first)) {
-      m_workspace->var(iterPoI->first)->setVal(iterPoI->second);
-      m_workspace->var(iterPoI->first)->setConstant(true);
+    TString currParName = iterPoI->first;
+    double currParVal = iterPoI->second;
+    if (m_workspace->var(currParName)) {
+      m_workspace->var(currParName)->setVal(currParVal);
+      m_workspace->var(currParName)->setConstant(true);
     }
     else {
       printer(Form("TestStat: ERROR! %s parameter missing",
@@ -1150,7 +1152,7 @@ double TestStat::graphIntercept(TGraph *graph, double valueToIntercept) {
   
   // Print error message and return bad value if convergence not achieved:
   if (nIterations == maxIterations) {
-    std::cout << "DHCLScan: ERROR! Intercept not found." << std::cout;
+    std::cout << "TestStat: ERROR! Intercept not found." << std::cout;
     return -999;
   }
   

@@ -71,6 +71,9 @@ int main(int argc, char **argv) {
     std::cout << "ExtrapolateSig: Lumi point" << i_l << " of " 
 	      << lumiValues.size() << std::endl;
     
+    double lumiSF = (lumiValues[i_l] / config->getNum("AnalysisLuminosity"));
+    double lumiRelSF = ((lumiValues[i_l]-config->getNum("AnalysisLuminosity")) /
+			config->getNum("AnalysisLuminosity"));
     // Loop over errors:
     for (int i_e = -1; i_e < 2; i_e++) {
 
@@ -125,16 +128,35 @@ int main(int argc, char **argv) {
 	  if (currName.EqualTo(listPoI[i_p])) {
 	    if (currName.EqualTo(poiForNorm)) {
 	      mapPoIMu0[listPoI[i_p]] = 0.0;
-	      if (i_e == 0) {
-		mapPoIMu1[listPoI[i_p]] = snapParMu1->getVal();
+	      
+	      // There is no data in the new dataset:
+	      if (muHypothesis == 0) {
+		if (i_e == 0) {
+		  mapPoIMu1[listPoI[i_p]] = snapParMu1->getVal();
+		}
+		else if (i_e == -1) {
+		  mapPoIMu1[listPoI[i_p]] = (snapParMu1->getVal() -
+					     snapParMu1->getError());
+		}
+		else if (i_e == 1) {
+		  mapPoIMu1[listPoI[i_p]] = (snapParMu1->getVal() +
+					     snapParMu1->getError());
+		}
 	      }
-	      else if (i_e == -1) {
-		mapPoIMu1[listPoI[i_p]] = (snapParMu1->getVal() -
-					   snapParMu1->getError());
-	      }
-	      else if (i_e == 1) {
-		mapPoIMu1[listPoI[i_p]] = (snapParMu1->getVal() +
-					   snapParMu1->getError());
+	      
+	      // The signal also appears in the new data:
+	      else {
+		if (i_e == 0) {
+		  mapPoIMu1[listPoI[i_p]] = lumiSF * snapParMu1->getVal();
+		}
+		else if (i_e == -1) {
+		  mapPoIMu1[listPoI[i_p]] = snapParMu1->getVal() + 
+		    (lumiRelSF*((snapParMu1->getVal()-snapParMu1->getError())));
+		}
+		else if (i_e == 1) {
+		  mapPoIMu1[listPoI[i_p]] = snapParMu1->getVal() + 
+		    (lumiRelSF*(snapParMu1->getVal() + snapParMu1->getError()));
+		}
 	      }
 	    }
 	    else {
@@ -145,15 +167,12 @@ int main(int argc, char **argv) {
 	}
       }
       
-      double lumiScaleFactor = (lumiValues[i_l] / 
-				config->getNum("AnalysisLuminosity"));
       // If we are assuming no signal in 2016 data, then the amount of signal
       // should be constant (only what we saw in 2015):
-      if (muHypothesis == 0) {
-	mapPoIMu1[poiForNorm] = (mapPoIMu1[poiForNorm] / lumiScaleFactor);
-      }
-      testStat->scaleAsimovData(lumiScaleFactor, 
-				config->getStrV("ParamsToScale"));
+      //if (muHypothesis == 0) mapPoIMu1[poiForNorm] = mapPoIMu1[poiForNorm];
+      //else mapPoIMu1[poiForNorm] = (mapPoIMu1[poiForNorm] * lumiSF);
+      
+      testStat->scaleAsimovData(lumiSF, config->getStrV("ParamsToScale"));
       testStat->createAsimovData(1.0, snapshotName, mapPoIMu1);
       
       //----------------------------------------//
@@ -210,6 +229,12 @@ int main(int argc, char **argv) {
   for (int i_l = 0; i_l < (int)lumiValues.size(); i_l++) {
     yErrorHi[i_l] = fabs(yErrorHi[i_l] - yValues[i_l]);
     yErrorLo[i_l] = fabs(yValues[i_l] - yErrorLo[i_l]);
+    if (std::isnan(yErrorLo[i_l]) && std::isnan(yErrorHi[i_l])) {
+      yErrorLo[i_l] = 0.0;
+      yErrorHi[i_l] = 0.0;
+    }
+    else if (std::isnan(yErrorLo[i_l])) yErrorLo[i_l] = yErrorHi[i_l];
+    else if (std::isnan(yErrorHi[i_l])) yErrorHi[i_l] = yErrorLo[i_l];
   }
   
   // Create a graph: double xValues[100] = {0.0};
@@ -278,6 +303,7 @@ int main(int argc, char **argv) {
 				"RECREATE");
   gZ0vsLumi_err->Write();
   gZ0vsLumi_nom->Write();
+  can->Write();
   outputFile->Close();
   
   // Clock the toys for final print summary:

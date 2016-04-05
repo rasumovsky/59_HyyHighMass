@@ -575,7 +575,8 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
       // between the DHToyAnalysis class and DHTestStat, which is called
       // in DHToyAnalysis...
       ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, "None");
-      toyAna->setOutputDir(m_outputDir);
+      toyAna->setOutputDir(Form("%s/ToyPlots_mass%d_width%d_xs%d",
+				m_outputDir.Data(), mass, width, xsVals[i_t]));
       std::vector<TString> fitTypes; fitTypes.clear();
       fitTypes.push_back("0");
       fitTypes.push_back("1");
@@ -587,6 +588,37 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
 			      m_inputDir.Data(), mass, width, xsVals[i_t]));
       if (!(toyAna->areInputFilesOK())) {
 	printer("CLScan: ERROR with toy scan option.", true);
+      }
+      
+      if (m_config->getBool("PlotToysForScan")) {
+	
+	// Plot the toy MC nuisance parameter, global observables, and PoI:
+	std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
+	std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
+	std::vector<TString> namesPars = toyAna->getNamesPoI();
+	for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
+	  if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
+	    toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data
+	    toyAna->plotHist(namesGlobs[i_g], 1);// Mu=1 data
+	  }
+	}
+	for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
+	  if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
+	    toyAna->plotHist(namesNuis[i_n], 0);
+	    toyAna->plotHist(namesNuis[i_n], 1);
+	  }
+	}
+	for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
+	  toyAna->plotHist(namesPars[i_p], 0);
+	  toyAna->plotHist(namesPars[i_p], 1);
+	}
+	
+	// Then plot statistics:
+	toyAna->plotProfiledMu();
+	toyAna->plotTestStat("QMu");
+	toyAna->plotTestStat("Q0");
+	toyAna->plotTestStatComparison("QMu");
+	toyAna->plotTestStatComparison("Q0");
       }
       
       // Calculate the expected qmu:

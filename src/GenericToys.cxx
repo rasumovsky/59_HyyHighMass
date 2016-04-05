@@ -48,6 +48,8 @@ void mapToVectors(std::map<std::string,double> map,
    to inflate the statistics in the tail of the LLR distributions.
 */
 void runToysSinglePoint(bool doImportanceSampling) {
+  std::cout << "GenericToys::runToysSinglePoint(" << (int)doImportanceSampling
+	    << ")" << std::endl;
   
   // Default snapshot to be used in the toy generation and prior to fitting:
   TString snapshotName = (m_inputPoIVal == 0) ? 
@@ -61,6 +63,22 @@ void runToysSinglePoint(bool doImportanceSampling) {
   
   // The statistics class, for calculating qMu etc. 
   TestStat *testStat = new TestStat(m_configFile, "new", workspace);
+    
+  // Set the PoI ranges for this study:
+  std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
+  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+    std::vector<double> currRange
+      = m_config->getNumV(Form("PoIRange_%s", (listPoI[i_p]).Data()));
+    if (testStat->theWorkspace()->var(listPoI[i_p])) {
+      testStat->theWorkspace()->var(listPoI[i_p])
+	->setRange(currRange[0], currRange[1]);
+    }
+    else {
+      std::cout << "GlobalP0Toys: Workspace has no variable " << listPoI[i_p]
+		<< std::endl;
+      exit(0);
+    }
+  }
   
   //----------------------------------------//
   // Prepare model parameters for tossing and fitting toy MC:
@@ -87,7 +105,6 @@ void runToysSinglePoint(bool doImportanceSampling) {
   TString poiForWidth = m_config->getStr("PoIForWidth");
   
   // For setting the PoI values in toy creation and fitting:
-  std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
   std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
   std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
   
@@ -96,7 +113,9 @@ void runToysSinglePoint(bool doImportanceSampling) {
   // parameters of interest because the background-only fits and toys should 
   // still have the spurious signal randomized and fitted at the proper mass.
   if (m_options.Contains("ToyMLPoint")) {
-    
+    std::cout << "GenericToys: Creating toy with ToyMLPoint option."
+	      << std::endl;
+
     // Load the background-only snapshot (signal + background snapshot)
     // for background-only toys (signal + background toys).
     snapshotName = (m_inputPoIVal == 0) ? 
@@ -126,6 +145,9 @@ void runToysSinglePoint(bool doImportanceSampling) {
   // The snaphshots for fits at the scan points probably don't exist, so we must
   // perform these fits before doing anything else. 
   else if (m_options.Contains("ToyForScan")) {
+    std::cout << "GenericToys: Creating toy with ToyForScan option and mass="
+	      << m_toyMass << ", width=" << m_toyWidth << ", xs= " 
+	      << m_toyXSection << std::endl;
     
     // Map for Mu = 0 parameters of interest:
     mapPoIMu0[m_config->getStr("PoIForNormalization")] = 0.0;
@@ -138,6 +160,7 @@ void runToysSinglePoint(bool doImportanceSampling) {
     mapPoIMu1[m_config->getStr("PoIForWidth")] = m_toyWidth;
     
     // Be sure that snapshot is saved in workspace during fit:
+    testStat->setNominalSnapshot(snapshotName);
     testStat->saveSnapshots(true);
     
     // Perform the fit:
@@ -155,10 +178,7 @@ void runToysSinglePoint(bool doImportanceSampling) {
     snapshotName = Form("paramsProfilePoI%d", m_inputPoIVal);
     testStat->setNominalSnapshot(snapshotName);
   }
-
-
-
-
+  
   //----------------------------------------//
   // Preparations for importance sampling:
   int nImportanceDensities = 1;
@@ -213,10 +233,10 @@ void runToysSinglePoint(bool doImportanceSampling) {
 	((double)(nImportanceDensities-(importanceDensityToUse+1)) / 
 	 (double)nImportanceDensities); 
     }
+      
+    // Importance sampling is unnecessary in absence of extreme excess:
+    if (nImportanceDensities < 1) doImportanceSampling = false;
   }
-  
-  // Importance sampling is unnecessary in absence of extreme excess:
-  if (nImportanceDensities < 1) doImportanceSampling = false;
   
   //----------------------------------------//
   // Create the pseudo data:
