@@ -120,14 +120,15 @@ void haddCurrentFiles() {
     for (int i_w = 0; i_w < (int)m_widthValues.size(); i_w++) {
       for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
 	for (int mu = 0; mu < 2; mu++) {
-	  TString outputFile = Form("%s/toy_ALL_mu%d_ForScan_mass%d_width%d_xs%d.root", m_outputDir.Data(), mu, m_massValues[i_m], m_widthValues[i_w], m_xsValues[i_x]);
+	  TString outputFile1 = Form("%s/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root", m_outputDir.Data(), mu, m_massValues[i_m], m_widthValues[i_w], m_xsValues[i_x]);
+	  TString outputFile2 = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root", mu, m_massValues[i_m], m_widthValues[i_w], m_xsValues[i_x]);
 	  TString inputFile = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_*_ForScan_mass%d_width%d_xs%d.root", mu, m_massValues[i_m], m_widthValues[i_w], m_xsValues[i_x]);
 	  // This three-step is done to prevent the output from being deleted
 	  // but also to allow previous outputs to be added together.
-	  system(Form("hadd -dummy.root %s %s", inputFile.Data()));
+	  system(Form("hadd -f dummy.root %s", inputFile.Data()));
 	  system(Form("rm %s", inputFile.Data()));
-	  system(Form("mv dummy.root %s", outputFile.Data()));
-
+	  system(Form("cp dummy.root %s", outputFile1.Data()));
+	  system(Form("mv dummy.root %s", outputFile2.Data()));
 	}
       }
     }

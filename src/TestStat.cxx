@@ -286,6 +286,8 @@ void TestStat::clearData() {
   m_graphNLL = NULL;
   m_fitOptions = ""; 
   m_nominalSnapshot = "paramsOrigin";
+  m_AsimovScaleFactor = 1.0;
+  m_AsimovVarsToScale.clear();
 }
 
 /**
@@ -304,9 +306,83 @@ void TestStat::clearFitParamSettings() {
    @param valPoI - The value of the parameter of interest.
    @param snapshotName - The name of the parameter snapshot to load.
    @param namesAndValsPoI - The names and values of the parameters of interest.
-   @param luminosity - The luminosity for asimov data.
    @return - An Asimov dataset.
 */
+RooAbsData* TestStat::createAsimovData(int valPoI, TString snapshotName,
+				     std::map<TString,double> namesAndValsPoI) {
+  
+  printer(Form("TestStat::createAsimovData(PoI=%d, snapshot=%s)", 
+	       valPoI, snapshotName.Data()), false);
+  
+  // Load the parameters from profiling data:
+  if (m_workspace->getSnapshot(snapshotName)) {
+    m_workspace->loadSnapshot(snapshotName);
+    printer(Form("TestStat: Loaded snapshot %s", snapshotName.Data()), false);
+  }
+  else {
+    printer(Form("TestStat: ERROR! No snapshot %s", snapshotName.Data()), true);
+  }
+  
+  // First check that PDF is of simultaneous type:
+  if (!((TString)(m_mc->GetPdf()->ClassName())).Contains("Simultaneous")) {
+    printer("TestStat::createPseudoData() ERROR. PDF not RooSimultaneous",true);
+  }
+    
+  // Set the values of parameters of interest as specified in the input.
+  for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
+       iterPoI != namesAndValsPoI.end(); iterPoI++) {
+    if (m_workspace->var(iterPoI->first)) {
+      m_workspace->var(iterPoI->first)->setVal(iterPoI->second);
+      m_workspace->var(iterPoI->first)->setConstant(true);
+    }
+    else {
+      printer(Form("TestStat: ERROR! %s parameter missing",
+		   (iterPoI->first).Data()), true);
+    }
+  }
+  
+  // Check if other parameter settings have been specified for toys:
+  // WARNING! This overrides the randomization settings above!
+  for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
+       iterParam != m_paramValToSet.end(); iterParam++) {
+    if (m_workspace->var(iterParam->first)) {
+      m_workspace->var(iterParam->first)->setVal(iterParam->second);
+      m_workspace->var(iterParam->first)
+	->setConstant(m_paramConstToSet[iterParam->first]);
+    }
+    else {
+      m_workspace->Print("v");
+      printer(Form("TestStat: Error! Parameter %s not found in workspace! See printout above for clues...", (iterParam->first).Data()), true);
+    }
+  }
+
+  // Scale Asimov data if set by user:
+  for (int i_v = 0; i_v < (int)m_AsimovVarsToScale.size(); i_v++) {
+    double currValue = m_workspace->var(m_AsimovVarsToScale[i_v])->getVal();
+    m_workspace->var(m_AsimovVarsToScale[i_v])
+      ->setVal(currValue * m_AsimovScaleFactor);
+  }
+  
+  // Create and return the Asimov dataset:
+  RooAbsData* asimovData
+    = RooStats::AsymptoticCalculator::GenerateAsimovData(*m_mc->GetPdf(), 
+						       *m_mc->GetObservables());
+  asimovData->SetNameTitle(Form("asimovDataMu%d",valPoI),
+			   Form("asimovDataMu%d",valPoI));
+  m_workspace->import(*asimovData);
+  return asimovData;
+}
+
+/*
+   -----------------------------------------------------------------------------
+   Create an Asimov dataset. WARNING! Method currently assumes inclusive
+   categorization scheme in order to get category normalization.
+   @param valPoI - The value of the parameter of interest.
+   @param snapshotName - The name of the parameter snapshot to load.
+   @param namesAndValsPoI - The names and values of the parameters of interest.
+   @param luminosity - The luminosity for asimov data.
+   @return - An Asimov dataset.
+
 RooDataSet* TestStat::createAsimovData(int valPoI, TString snapshotName,
 				       std::map<TString,double> namesAndValsPoI,
 				       double luminosity) {
@@ -422,7 +498,7 @@ RooDataSet* TestStat::createAsimovData(int valPoI, TString snapshotName,
     can->Print(Form("data_%s.eps",cateName.Data()));
   }
   
-  // Create the combined toy RooDataSet:
+  // Get the RooCategory object:
   RooCategory *categories = NULL;
   TString nameRooCategory = m_config->getStr("WorkspaceRooCategory");
   if (m_workspace->obj(nameRooCategory)) {
@@ -442,6 +518,7 @@ RooDataSet* TestStat::createAsimovData(int valPoI, TString snapshotName,
   m_workspace->import(*asimovData);
   return asimovData;
 }
+*/
 
 /**
    -----------------------------------------------------------------------------
@@ -1527,6 +1604,17 @@ void TestStat::resetParamsAfterFit(bool doResetParamsAfterFit) {
 */
 void TestStat::saveSnapshots(bool doSaveSnapshot) {
   m_doSaveSnapshot = doSaveSnapshot;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Use if Asimov data should be scaled. Set the scale factor and the variable
+   names for which this scale factor should be applied.
+*/
+void TestStat::scaleAsimovData(double scaleFactor,
+			       std::vector<TString> varsToScale) {
+  m_AsimovScaleFactor = scaleFactor;
+  m_AsimovVarsToScale = varsToScale;
 }
 
 /**

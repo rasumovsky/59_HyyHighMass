@@ -38,9 +38,8 @@ class TestStat {
   //void calculateNewP0(TString type);
   void clearData();
   void clearFitParamSettings();
-  RooDataSet* createAsimovData(int valPoI, TString snapshotName,
-			       std::map<TString,double> namesAndValsPoI,
-			       double luminosity);
+  RooAbsData* createAsimovData(int valPoI, TString snapshotName,
+			       std::map<TString,double> namesAndValsPoI);
   RooDataSet* createPseudoData(int seed, int valPoI, TString snapshotName,
 			       std::map<TString,double> namesAndValsPoI, 
 			       int toyIndex = -1);
@@ -76,6 +75,7 @@ class TestStat {
   TGraph *nllScanGraph();
   void resetParamsAfterFit(bool doResetParamsAfterFit);
   void saveSnapshots(bool doSaveSnapshot);
+  void scaleAsimovData(double scaleFactor, std::vector<TString> varsToScale);
   std::map<int,double> scanNLL(TString scanName, TString datasetName,
 			       TString varToScan,
 			       std::vector<TString> varsToFix);
@@ -150,6 +150,10 @@ class TestStat {
   // In case special parameter settings are used for a fit:
   std::map<TString,double> m_paramValToSet;
   std::map<TString,bool> m_paramConstToSet;
+  
+  // Asimov data settings:
+  double m_AsimovScaleFactor;
+  std::vector<TString> m_AsimovVarsToScale;
   
   // Plot settings:
   bool m_useLogScale;
