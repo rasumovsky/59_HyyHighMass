@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
   
   // Check that arguments are provided.
   if (argc < 3) {
-    std::cout << "\nUsage: " << argv[0] << " <configFile> <options>"
+    std::cout << "\nUsage: " << argv[0] << " <inputDir> <outputDir>"
 	      << std::endl;
     exit(0);
   }

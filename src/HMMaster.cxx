@@ -133,8 +133,7 @@ int main (int argc, char **argv) {
     system(Form("./bin/GlobalP0Analysis %s %s", fullConfigPath.Data(),
 		m_config->getStr("GlobalP0AnalysisOptions").Data()));
   }
-
-
+  
   //--------------------------------------//
   // Step 2.1: Plot pseudo-experiment ensemble results for local significance:
   if (masterOption.Contains("LocalP0Analysis")) {
@@ -151,6 +150,7 @@ int main (int argc, char **argv) {
     system(Form("./bin/PlotCLScan %s %s", fullConfigPath.Data(),
 		m_config->getStr("PlotCLScanOptions").Data()));
   }
+  
   //--------------------------------------//
   // Step 4.0: Extrapolate the 2015 excess using S+B or B-only hypothesis:
   if (masterOption.Contains("ExtrapolateSig")) {

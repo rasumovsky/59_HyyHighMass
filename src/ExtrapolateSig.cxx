@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: GenericToys.cxx                                                     //
+//  Name: ExtrapolateSig.cxx                                                  //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
