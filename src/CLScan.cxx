@@ -362,7 +362,7 @@ void CLScan::scanMass(int width, bool makeNew) {
   gCLExp->Draw("Lsame");
   gCLExp_1s->Draw("3same");
   gCLExp->Draw("LSAME");
-  if (!m_config->getBool("DoBlind")) gCLObs->Draw("LSAME");
+  if (!m_config->getBool("DoBlind")) gCLObs->Draw("PSAME");
   gPad->RedrawAxis();
   leg.Draw("SAME");
   
@@ -503,6 +503,22 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
     TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
     testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
     
+    // Set the PoI ranges for this study:
+    std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
+    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+      std::vector<double> currRange
+	= m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
+      if (testStat->theWorkspace()->var(listPoI[i_p])) {
+	testStat->theWorkspace()->var(listPoI[i_p])
+	  ->setRange(currRange[0], currRange[1]);
+      }
+      else {
+	std::cout << "GlobalP0Toys: Workspace has no variable " << listPoI[i_p]
+		  << std::endl;
+	exit(0);
+      }
+    }
+    
     // Turn off MC stat errors if requested for Graviton jobs:
     if (m_config->isDefined("TurnOffTemplateStat") && 
 	m_config->getBool("TurnOffTemplateStat")) {
@@ -572,7 +588,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
       
       // Load the tool to analyze toys.
       // NOTE: this was moved outside the loop above because of interference
-      // between the DHToyAnalysis class and DHTestStat, which is called
+      // between the ToyAnalysis class and TestStat, which is called
       // in DHToyAnalysis...
       ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, "None");
       toyAna->setOutputDir(Form("%s/ToyPlots_mass%d_width%d_xs%d",
@@ -688,6 +704,8 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   gCLObs->GetYaxis()->SetTitle("#it{CL_{s}} value");
   gCLExp->SetLineColor(kBlack);
   gCLObs->SetLineColor(kBlack);
+  gCLObs->SetMarkerColor(kBlack);
+  gCLObs->SetMarkerStyle(21);  
   gCLExp->SetLineStyle(2);
   gCLObs->SetLineStyle(1);
   gCLExp->SetLineWidth(2);

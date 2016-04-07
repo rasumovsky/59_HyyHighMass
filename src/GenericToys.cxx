@@ -60,7 +60,10 @@ void runToysSinglePoint(bool doImportanceSampling) {
   TFile inputFile(m_copiedFile, "read");
   RooWorkspace *workspace 
     = (RooWorkspace*)inputFile.Get(m_config->getStr("WorkspaceName"));
-  
+    
+  //----------------------------------------//
+  // Prepare model parameters for tossing and fitting toy MC:
+
   // The statistics class, for calculating qMu etc. 
   TestStat *testStat = new TestStat(m_configFile, "new", workspace);
     
@@ -68,7 +71,7 @@ void runToysSinglePoint(bool doImportanceSampling) {
   std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
   for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
     std::vector<double> currRange
-      = m_config->getNumV(Form("PoIRange_%s", (listPoI[i_p]).Data()));
+      = m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
     if (testStat->theWorkspace()->var(listPoI[i_p])) {
       testStat->theWorkspace()->var(listPoI[i_p])
 	->setRange(currRange[0], currRange[1]);
@@ -79,10 +82,7 @@ void runToysSinglePoint(bool doImportanceSampling) {
       exit(0);
     }
   }
-  
-  //----------------------------------------//
-  // Prepare model parameters for tossing and fitting toy MC:
-  
+    
   // Turn off MC stat errors if requested for Graviton jobs:
   if (m_config->isDefined("TurnOffTemplateStat") && 
       m_config->getBool("TurnOffTemplateStat")) {

@@ -6,8 +6,8 @@
 //  Email: ahard@cern.ch                                                      //
 //  Date: 06/04/2016                                                          //
 //                                                                            //
-//  This program extrapolates a given excess to higher luminosities in order  //
-//  to determine when it might be discoverable (or excludable).               //
+//  This program plots the results of ExtrapolateSig.cxx for the scalar and   //
+//  graviton searches with and without signal in 2016.                        //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
   TLine *line = new TLine();
   line->SetLineStyle(2);
   line->SetLineWidth(2);
-  line->SetLineColor(kRed+1);
+  line->SetLineColor(1);
   line->DrawLine(xMin, 5.0, xMax, 5.0);
   
   // Create a TLegend:

@@ -766,6 +766,7 @@ std::vector<double> ToyAnalysis::getStatValues(TString statistic, int toyMu) {
 */
 
 void ToyAnalysis::loadToy(int toyMu, TString toyFileForm) {
+  printer(Form("ToyAnalysis::loadToy(%d, %s)",toyMu,toyFileForm.Data()),false);
   
   // Add all of the individual pseudoexperiment files together:
   TString toyFile = Form("toy_mu%d.root", toyMu);
