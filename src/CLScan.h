@@ -27,15 +27,19 @@ class CLScan {
   virtual ~CLScan() {};
   void clearData();
   double getLimit(int mass, int width, bool expected, int N);
+  double getP0(int mass, int width, bool expected);
   std::vector<int> listMasses();
   std::vector<int> listWidths();
   std::vector<int> listXS();
-  void scanMass(int width, bool makeNew);
+  void scanMassLimit(int width, bool makeNew);
+  void scanMassP0(int width, bool makeNew);
   void setInputDirectory(TString directory);
   void setLimit(int mass, int width, bool expected, int N, double limitValue);
+  void setP0(int mass, int width, bool expected, double p0Value);
   void setOutputDirectory(TString directory);
   bool singleCLScan(int mass, int width, bool makeNew);
-  
+  bool singleP0Test(int mass, int width, bool makeNew);
+
  private:
   
   void detectMassWidthXSFiles(TString toyDirectory);
@@ -56,8 +60,9 @@ class CLScan {
   std::vector<int> m_widthValues;
   std::vector<int> m_xsValues;
   
-  // Store the limit values at a particular point:
+  // Store the statistical values at a particular point:
   std::map<TString,double> m_values95CL;
+  std::map<TString,double> m_valuesP0;
   
 };
 

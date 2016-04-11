@@ -35,6 +35,7 @@ class ToyAnalysis {
   double calculateErrorFromCounting(double pValue, int nToys);
   double calculateErrorCLVal(double qMu);
   double calculateBkgQMuForN(double N);
+  double calculateP0FromToy(double q0);
   double calculatePBFromToy(double qMu);
   double calculatePMuFromToy(double qMu);
   bool doThisFit(TString fitType);
@@ -90,6 +91,8 @@ class ToyAnalysis {
   // Storage of QMu for pMu calculation:
   std::vector<double> m_weightsIS_Mu0;
   std::vector<double> m_weightsIS_Mu1;
+  std::vector<double> m_valuesQ0_Mu0;
+  std::vector<double> m_valuesQ0_Mu1;
   std::vector<double> m_valuesQMu_Mu0;
   std::vector<double> m_valuesQMu_Mu1;
   std::vector<double> m_valuesMuHat_Mu0;

@@ -47,6 +47,8 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
 
   m_weightsIS_Mu0.clear();
   m_weightsIS_Mu1.clear();
+  m_valuesQ0_Mu0.clear();
+  m_valuesQ0_Mu1.clear();
   m_valuesQMu_Mu0.clear();
   m_valuesQMu_Mu1.clear();
   m_valuesMuHat_Mu0.clear();
@@ -207,6 +209,27 @@ double ToyAnalysis::calculateErrorFromCounting(double pValue, int nToys) {
 /**
    -----------------------------------------------------------------------------
    Calculate the fractional number of toys in the mu=0 toy dataset that give a
+   value of Q0 greater than than that observed Q0 in data.
+   @param q0 - The value of the test statistic.
+   @return - The value of p0.
+*/
+double ToyAnalysis::calculateP0FromToy(double q0) {
+  double totalEvents = 0.0;
+  double passingEvents = 0.0;
+  for (int i_e = 0; i_e < (int)m_valuesQ0_Mu0.size(); i_e++) {
+    if (m_valuesQ0_Mu0[i_e] >= q0) passingEvents += m_weightsIS_Mu0[i_e];
+    totalEvents += m_weightsIS_Mu0[i_e];
+  }
+  double probability = (totalEvents > 0.0) ? (passingEvents/totalEvents) : 0.0;
+  
+  printer(Form("calculateP0FromToy(%f) using (%f passing / %f total)",
+	       q0, passingEvents, totalEvents), false);
+  return probability;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the fractional number of toys in the mu=0 toy dataset that give a
    value of QMu less than than that observed QMu in data.
    @param qMu - The value of the test statistic.
    @return - The value of pB.
@@ -335,6 +358,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   if (muValue > 0) {
     m_weightsIS_Mu1.clear();
     m_valuesMuHat_Mu1.clear();
+    m_valuesQ0_Mu1.clear();
     m_valuesQMu_Mu1.clear();
     m_valuesBestFit_AsymZ0_Mu1.clear();
     m_valuesBestFit_AsymCL_Mu1.clear();
@@ -342,6 +366,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   else  {
     m_weightsIS_Mu0.clear();
     m_valuesMuHat_Mu0.clear();
+    m_valuesQ0_Mu0.clear();
     m_valuesQMu_Mu0.clear();
     m_valuesBestFit_AsymZ0_Mu0.clear();
     m_valuesBestFit_AsymCL_Mu0.clear();
@@ -410,9 +435,9 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
         
     // Get the test statistic values:
     double valueQMu = m_ts->getQMuFromNLL(toyTree->nllMu1, toyTree->nllMuFree,
-					    toyTree->profiledPOIVal, 1);
+					  toyTree->profiledPOIVal, 1);
     double valueQ0 = m_ts->getQ0FromNLL(toyTree->nllMu0, toyTree->nllMuFree,
-					  toyTree->profiledPOIVal);
+					toyTree->profiledPOIVal);
     double valueZ0 = m_ts->getZ0FromQ0(valueQ0);
     double valueCL = m_ts->getCLFromQMu(valueQMu, 0);
     
@@ -475,6 +500,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     if (muValue > 0) {
       m_weightsIS_Mu1.push_back(toyWeight);
       m_valuesMuHat_Mu1.push_back(toyTree->profiledPOIVal);
+      m_valuesQ0_Mu1.push_back(valueQ0);
       m_valuesQMu_Mu1.push_back(valueQMu);
       m_valuesBestFit_AsymZ0_Mu1.push_back(valueZ0);
       m_valuesBestFit_AsymCL_Mu1.push_back(valueCL);
@@ -482,6 +508,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     else {
       m_weightsIS_Mu0.push_back(toyWeight);
       m_valuesMuHat_Mu0.push_back(toyTree->profiledPOIVal);
+      m_valuesQ0_Mu0.push_back(valueQ0);
       m_valuesQMu_Mu0.push_back(valueQMu);
       m_valuesBestFit_AsymZ0_Mu0.push_back(valueZ0);
       m_valuesBestFit_AsymCL_Mu0.push_back(valueCL);
@@ -739,6 +766,10 @@ std::vector<double> ToyAnalysis::getStatValues(TString statistic, int toyMu) {
   if (statistic.EqualTo("QMu")) {
     if (toyMu == 0) return m_valuesQMu_Mu0;
     else if (toyMu == 1) return m_valuesQMu_Mu1;
+  }
+  else if (statistic.EqualTo("Q0")) {
+    if (toyMu == 0) return m_valuesQ0_Mu0;
+    else if (toyMu == 1) return m_valuesQ0_Mu1;
   }
   else if (statistic.EqualTo("Z0")) {
     if (toyMu == 0) return m_valuesBestFit_AsymZ0_Mu0;

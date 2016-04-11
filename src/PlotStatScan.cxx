@@ -1,15 +1,16 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: PlotCLScan.cxx                                                      //
+//  Name: PlotStatScan.cxx                                                    //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
-//  Date: 01/04/2016                                                          //
+//  Date: 11/04/2016                                                          //
 //                                                                            //
-//  Plots the resonant analysis limits as a function of MX.                   //
+//  Plots p0 values or CLs limits (observed, expected) as a function of mass. //
 //                                                                            //
 //  Macro options:                                                            //
 //  - "New" or "FromFile"                                                     //
+//  - "95CL" or "p0"                                                          //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -20,10 +21,9 @@
 
 /**
    -----------------------------------------------------------------------------
-   The main method scans the 95% CL for various signal cross-sections.
+   The main method plots the p0 or 95CL values as a function of mass.
    @param configFile - The analysis configuration file.
    @param options - Job options. Can be "toy" or "asymptotic" or "both"
-   @param resMass - The resonance mass.
 */
 int main(int argc, char **argv) {
   
@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
   TString inputDir = Form("%s/%s/GenericToys/single_files",
 			  (config->getStr("MasterOutput")).Data(),
 			  (config->getStr("JobName")).Data());
-  TString outputDir = Form("%s/%s/PlotCLScan", 
+  TString outputDir = Form("%s/%s/PlotStatScan", 
 			   (config->getStr("MasterOutput")).Data(),
 			   (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s", outputDir.Data()));
@@ -51,12 +51,21 @@ int main(int argc, char **argv) {
   CommonFunc::SetAtlasStyle();
   
   // Use the CLScan class to load toys and calculate 95% CL limits:
-  CLScan *scan = new CLScan(configFile, config->getStr("PlotCLScanOptions"));
+  CLScan *scan = new CLScan(configFile, config->getStr("PlotStatScanOptions"));
   scan->setInputDirectory(inputDir);
   scan->setOutputDirectory(outputDir);
   std::vector<int> widths = scan->listWidths();
   for (int i_w = 0; i_w < (int)widths.size(); i_w++) {
-    scan->scanMass(widths[i_w], options.Contains("New"));
+    if (options.Contains("ScanLimit")) {
+      scan->scanMassLimit(widths[i_w], options.Contains("New"));
+    }
+    else if (options.Contains("ScanP0")) {
+      scan->scanMassP0(widths[i_w], options.Contains("New"));
+    }
+    else {
+      std::cout << "PlotStatScan: ERROR! Option must specify p0 or 95CL"
+		<< std::endl;
+    }
   }
   
   return 0;

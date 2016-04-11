@@ -16,6 +16,9 @@
 //    - GlobalP0Toys                                                          //
 //    - GlobalP0Analysis                                                      //
 //    - LocalP0Analysis                                                       //
+//    - PlotLimitScan                                                         //
+//    - PlotP0Scan                                                            //
+//    - ExtrapolateSig                                                        //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -144,11 +147,19 @@ int main (int argc, char **argv) {
   }
   
   //--------------------------------------//
-  // Step 3.0: Plot limits from pseudo-experiments:
-  if (masterOption.Contains("PlotCLScan")) {
-    std::cout << "HMMaster: Step 3.0 - Plot toy limits." << std::endl;
-    system(Form("./bin/PlotCLScan %s %s", fullConfigPath.Data(),
-		m_config->getStr("PlotCLScanOptions").Data()));
+  // Step 3.1: Plot limits from pseudo-experiments:
+  if (masterOption.Contains("PlotLimitScan")) {
+    std::cout << "HMMaster: Step 3.1 - Plot toy limits." << std::endl;
+    system(Form("./bin/PlotStatScan %s %s", fullConfigPath.Data(),
+		m_config->getStr("PlotStatScanOptions").Data()));
+  }
+
+  //--------------------------------------//
+  // Step 3.2: Plot p0 from pseudo-experiments:
+  if (masterOption.Contains("PlotP0Scan")) {
+    std::cout << "HMMaster: Step 3.2 - Plot toy p0." << std::endl;
+    system(Form("./bin/PlotStatScan %s %s", fullConfigPath.Data(),
+		m_config->getStr("PlotStatScanOptions").Data()));
   }
   
   //--------------------------------------//
