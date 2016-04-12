@@ -158,6 +158,7 @@ int main(int argc, char **argv) {
   
   // Create a list of input tar files:
   int maxIndex = 0;
+  int nFilesToAdd = 100;
   system(Form("ls %s | tee tarFileList.txt", m_inputDir.Data()));
   std::ifstream tarFileList("tarFileList.txt");
   if (tarFileList.is_open()) {
@@ -171,7 +172,7 @@ int main(int argc, char **argv) {
       system(Form("tar zxvf %s/%s", m_inputDir.Data(), currTarFile.Data()));
      
       // Continue extraction if fewer than 50 files have been extracted:
-      if (maxIndex < 50) maxIndex++;
+      if (maxIndex < nFilesToAdd) maxIndex++;
       
       // Otherwise hadd the existing files together:
       else {
