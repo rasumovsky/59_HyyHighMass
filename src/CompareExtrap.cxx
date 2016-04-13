@@ -9,6 +9,9 @@
 //  This program plots the results of ExtrapolateSig.cxx for the scalar and   //
 //  graviton searches with and without signal in 2016.                        //
 //                                                                            //
+//  Options:                                                                  //
+//  - "Only2016": Look at standalone significance of 2016 dataset.            //
+//                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
 // Package includes:
@@ -28,9 +31,10 @@
    @param options - The options (see header note).
 */
 int main(int argc, char **argv) {
-  if (argc < 4) {
+  if (argc < 5) {
     std::cout << "Usage: " << argv[0]
-	      << " <configFile> <jobNameGraviton> <jobNameScalar>" << std::endl;
+	      << " <configFile> <jobNameGraviton> <jobNameScalar> <options>"
+	      << std::endl;
     exit(0);
   }
   
@@ -38,7 +42,8 @@ int main(int argc, char **argv) {
   TString configFile = argv[1];
   TString jobNameGraviton = argv[2];
   TString jobNameScalar = argv[3];
-  
+  TString options = argv[4];
+
   // Load the analysis configurations from file:
   Config *config = new Config(configFile);
   
@@ -52,42 +57,53 @@ int main(int argc, char **argv) {
   CommonFunc::SetAtlasStyle();
   
   // Open files, access histograms:
-  TFile fGravitonMu0(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu0_Graviton.root",
+  TString fileTag = options.Contains("Only2016") ? "Only2016" : "Combined";
+  TFile fGravitonMu0(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu0_Graviton_%s.root",
 			  (config->getStr("MasterOutput")).Data(),
-			  jobNameGraviton.Data()));
-  TFile fGravitonMu1(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu1_Graviton.root",
+			  jobNameGraviton.Data(), fileTag.Data()));
+  TFile fGravitonMu1(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu1_Graviton_%s.root",
 			  (config->getStr("MasterOutput")).Data(),
-			  jobNameGraviton.Data()));
-  TFile fScalarMu0(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu0_Scalar.root",
+			  jobNameGraviton.Data(), fileTag.Data()));
+  TFile fScalarMu0(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu0_Scalar_%s.root",
 			(config->getStr("MasterOutput")).Data(),
-			jobNameScalar.Data()));
-  TFile fScalarMu1(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu1_Scalar.root",
+			jobNameScalar.Data(), fileTag.Data()));
+  TFile fScalarMu1(Form("%s/%s/ExtrapolateSig/sigExtrap_Mu1_Scalar_%s.root",
 			(config->getStr("MasterOutput")).Data(),
-			jobNameScalar.Data()));
+			jobNameScalar.Data(), fileTag.Data()));
   
-  TGraphAsymmErrors *gErr_Graviton_Mu1
-    = (TGraphAsymmErrors*)fGravitonMu1.Get("gZOvsLumi_err_Mu1");
+  TGraphAsymmErrors *gErr_Graviton_Mu1 = options.Contains("SqrtL") ? 
+    (TGraphAsymmErrors*)fGravitonMu1.Get("gZOvsLumiSqrt_err_Mu1") :
+    (TGraphAsymmErrors*)fGravitonMu1.Get("gZOvsLumi_err_Mu1");
   gErr_Graviton_Mu1->SetFillStyle(3254);
   gErr_Graviton_Mu1->SetFillColor(kRed+1);
   gErr_Graviton_Mu1->SetLineColor(kRed+1);
   
-  TGraphAsymmErrors *gErr_Scalar_Mu1
-    = (TGraphAsymmErrors*)fScalarMu1.Get("gZOvsLumi_err_Mu1");
+  TGraphAsymmErrors *gErr_Scalar_Mu1 = options.Contains("SqrtL") ? 
+    (TGraphAsymmErrors*)fScalarMu1.Get("gZOvsLumiSqrt_err_Mu1") :
+    (TGraphAsymmErrors*)fScalarMu1.Get("gZOvsLumi_err_Mu1");
   gErr_Scalar_Mu1->SetFillStyle(3245);
   gErr_Scalar_Mu1->SetFillColor(kBlue+1);
   gErr_Scalar_Mu1->SetLineColor(kBlue+1);
     
-  TGraph *gNom_Graviton_Mu1 = (TGraph*)fGravitonMu1.Get("gZOvsLumi_nom_Mu1");
+  TGraph *gNom_Graviton_Mu1 = options.Contains("SqrtL") ? 
+    (TGraph*)fGravitonMu1.Get("gZOvsLumiSqrt_nom_Mu1") :
+    (TGraph*)fGravitonMu1.Get("gZOvsLumi_nom_Mu1");
   gNom_Graviton_Mu1->SetLineColor(kRed+1);
   
-  TGraph *gNom_Scalar_Mu1 = (TGraph*)fScalarMu1.Get("gZOvsLumi_nom_Mu1");
+  TGraph *gNom_Scalar_Mu1 = options.Contains("SqrtL") ? 
+    (TGraph*)fScalarMu1.Get("gZOvsLumiSqrt_nom_Mu1") :
+    (TGraph*)fScalarMu1.Get("gZOvsLumi_nom_Mu1");
   gNom_Scalar_Mu1->SetLineColor(kBlue+1);
   
-  TGraph *gNom_Graviton_Mu0 = (TGraph*)fGravitonMu0.Get("gZOvsLumi_nom_Mu0");
+  TGraph *gNom_Graviton_Mu0 = options.Contains("SqrtL") ? 
+    (TGraph*)fGravitonMu0.Get("gZOvsLumiSqrt_nom_Mu0") :
+    (TGraph*)fGravitonMu0.Get("gZOvsLumi_nom_Mu0");
   gNom_Graviton_Mu0->SetLineColor(kRed+1);
   gNom_Graviton_Mu0->SetLineStyle(2);
   
-  TGraph *gNom_Scalar_Mu0 = (TGraph*)fScalarMu0.Get("gZOvsLumi_nom_Mu0");
+  TGraph *gNom_Scalar_Mu0 = options.Contains("SqrtL") ? 
+    (TGraph*)fScalarMu0.Get("gZOvsLumiSqrt_nom_Mu0") :
+    (TGraph*)fScalarMu0.Get("gZOvsLumi_nom_Mu0");
   gNom_Scalar_Mu0->SetLineColor(kBlue+1);
   gNom_Scalar_Mu0->SetLineStyle(2);
   
@@ -133,7 +149,8 @@ int main(int argc, char **argv) {
   leg.Draw("SAME");
   
   // Then print canvas:
-  can->Print(Form("%s/plot_Z0vsLumi_comparison.eps", outputDir.Data()));
+  can->Print(Form("%s/plot_Z0vsLumi_comparison_%s.eps",
+		  outputDir.Data(), fileTag.Data()));
   
   return 0;
 }

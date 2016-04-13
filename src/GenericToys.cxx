@@ -32,8 +32,11 @@ void mapToVectors(std::map<std::string,double> map,
   values.clear();
   for (std::map<std::string,double>::iterator mapIter = map.begin(); 
        mapIter != map.end(); mapIter++) {
-    names.push_back(mapIter->first);
-    values.push_back(mapIter->second);
+    TString currName = TString(mapIter->first);
+    if (!currName.Contains("gamma_stat_channel_bin")) {
+      names.push_back(mapIter->first);
+      values.push_back(mapIter->second);
+    }
   }
 }
 

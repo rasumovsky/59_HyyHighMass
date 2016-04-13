@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
   
   // Create a list of input tar files:
   int maxIndex = 0;
-  int nFilesToAdd = 100;
+  int nFilesToAdd = 50;
   system(Form("ls %s | tee tarFileList.txt", m_inputDir.Data()));
   std::ifstream tarFileList("tarFileList.txt");
   if (tarFileList.is_open()) {
