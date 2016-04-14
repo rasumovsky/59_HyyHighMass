@@ -745,12 +745,12 @@ std::vector<TString> ToyAnalysis::getNamesPoI() {
    @return - A histogram with the statistical values.
 */
 TH1F* ToyAnalysis::getStatHist(TString statistic, int toyMu) {
-  if (statistic.EqualTo("Q0")) return m_hQ0[toyMu];
-  else if (statistic.EqualTo("QMu")) return m_hQMu[toyMu];
-  else if (statistic.EqualTo("Z0")) return m_hZ0[toyMu];
-  else if (statistic.EqualTo("CL")) return m_hCL[toyMu];
+  if (statistic.EqualTo("Q0") && m_hQ0[toyMu]) return m_hQ0[toyMu];
+  else if (statistic.EqualTo("QMu") && m_hQMu[toyMu]) return m_hQMu[toyMu];
+  else if (statistic.EqualTo("Z0") && m_hZ0[toyMu]) return m_hZ0[toyMu];
+  else if (statistic.EqualTo("CL") && m_hCL[toyMu]) return m_hCL[toyMu];
   //else if (statistic.EqualTo("QMuTilde")) return m_hQMuTilde[toyMu];
-  else printer(Form("ToyAnalysis: ERROR! no %s", statistic.Data()), true);
+  else printer(Form("ToyAnalysis: ERROR! no %s", statistic.Data()), false);
   return NULL;
 }
 
@@ -1102,26 +1102,38 @@ void ToyAnalysis::plotRetries(int muValue) {
    @param statistic -the name of the test statistic to plot.
 */
 void ToyAnalysis::plotTestStat(TString statistic) {
+    std::cout << "CHECK0" << std::endl;
   TH1F *hStatMu0 = getStatHist(statistic, 0);
   TH1F *hStatMu1 = getStatHist(statistic, 1);
-
-  TCanvas *can = new TCanvas("can", "can",800, 800);
+  
+  TCanvas *can = new TCanvas("can", "can");
   can->cd();
-  
-  hStatMu0->GetXaxis()->SetTitle(printStatName(statistic));
-  hStatMu1->GetXaxis()->SetTitle(printStatName(statistic));
-  
-  hStatMu0->GetYaxis()->SetTitle("Normalized entries");  
-  hStatMu1->GetYaxis()->SetTitle("Normalized entries");
-  
-  hStatMu0->SetLineColor(kBlue);
-  hStatMu1->SetLineColor(kRed);
-  
+  std::cout << "CHECK1" << std::endl;
+  if (hStatMu0) {
+    hStatMu0->GetXaxis()->SetTitle(printStatName(statistic));
+    hStatMu0->GetYaxis()->SetTitle("Normalized entries");  
+    hStatMu0->SetLineColor(kBlue);
+  }
+  if (hStatMu1) {
+    hStatMu1->GetXaxis()->SetTitle(printStatName(statistic));
+    hStatMu1->GetYaxis()->SetTitle("Normalized entries");
+    hStatMu1->SetLineColor(kRed);
+  }
+  std::cout << "CHECK2" << std::endl;
   // Draw test statistic histograms:
   gPad->SetLogy();
   //hStatMu0->GetYaxis()->SetRangeUser(0.0001,1.0);
-  hStatMu0->Draw("");
-  hStatMu1->Draw("SAME");
+  if (hStatMu0 && hStatMu1) {
+    hStatMu0->Draw("l");
+    hStatMu1->Draw("SAME");
+  }
+  else if (hStatMu0) hStatMu0->Draw("l");
+  else if (hStatMu1) hStatMu1->Draw("SAME");
+  else {
+    printer(Form("ToyAnalysis::plotTestStat(%s): Nothing to draw!",
+		 statistic.Data()), false);
+    return;
+  }
   
   TH1F *hAsymptotic = getAsymptoticHist(statistic);
   hAsymptotic->SetLineColor(kBlack);
@@ -1131,8 +1143,8 @@ void ToyAnalysis::plotTestStat(TString statistic) {
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
-  leg.AddEntry(hStatMu1, "#mu=1 toy MC","l");
-  leg.AddEntry(hStatMu0, "#mu=0 toy MC","l");
+  if (hStatMu1) leg.AddEntry(hStatMu1, "#mu=1 toy MC","l");
+  if (hStatMu0) leg.AddEntry(hStatMu0, "#mu=0 toy MC","l");
   leg.AddEntry(hAsymptotic, "Asyptotic distribution","l");
   leg.Draw("SAME");
   
@@ -1311,7 +1323,7 @@ void ToyAnalysis::plotTestStatComparison(TString statistic) {
   hStatNominal->GetYaxis()->SetLabelOffset(yLabelOffset*2.0);
   double xWidth = ((m_binMax- m_binMin) / ((double)m_nBins));
   hStatNominal->GetYaxis()->SetTitle(Form("Fraction / %2.2f",xWidth));
-  hStatNominal->Draw("");
+  hStatNominal->Draw("3");
   hAsymptotic->SetLineWidth(2);
   hAsymptotic->SetLineColor(lineColorAsym);
   hAsymptotic->SetFillColor(lineColorAsym);

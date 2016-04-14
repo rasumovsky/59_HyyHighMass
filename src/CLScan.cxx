@@ -523,7 +523,7 @@ void CLScan::scanMassP0(int width, bool makeNew) {
   //leg.Draw("SAME");
   
   // Significance lines and text:
-  TLatex sigma; sigma.SetNDC(); sigma.SetTextColor(kBlack);
+  TLatex sigma; sigma.SetTextColor(kBlack);
   sigma.SetTextFont(42); sigma.SetTextSize(0.05);
   TLine *line = new TLine();
   line->SetLineStyle(2);
@@ -533,19 +533,20 @@ void CLScan::scanMassP0(int width, bool makeNew) {
   for (int i_s = 0; i_s < 4; i_s++) {
     line->DrawLine(gP0Obs->GetXaxis()->GetXmin(), sigmaVals[i_s],
 		   gP0Obs->GetXaxis()->GetXmax(), sigmaVals[i_s]);
-    sigma.DrawLatex(0.2, sigmaVals[i_s], Form("%d#sigma",i_s+1));
+    sigma.DrawLatex(0.9, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s+1));
   }
   
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.05);
-  t.DrawLatex(0.2, 0.87, "ATLAS");
+  t.DrawLatex(0.2, 0.27, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.05);
-  t.DrawLatex(0.32, 0.87, m_config->getStr("ATLASLabel"));
-  t.DrawLatex(0.2, 0.81, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+  t.DrawLatex(0.32, 0.27, m_config->getStr("ATLASLabel"));
+  t.DrawLatex(0.2, 0.21, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
-  t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
-  t.DrawLatex(0.2, 0.69,
+  
+  t.DrawLatex(0.50, 0.27, "Spin-2 Selection");
+  t.DrawLatex(0.50, 0.21,
 	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
 		   ((double)width)/100.0));
   
@@ -1083,7 +1084,9 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
   // Load the tool to analyze toys.
   // NOTE: this was moved  because of intereference between the ToyAnalysis 
   // class and TestStat, which is also called in ToyAnalysis...
-  ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, "None");
+  TString toyAnaOptions
+    = (m_options.Contains("ImportSamp")) ? "ImportSamp" : "None";
+  ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, toyAnaOptions);
   toyAna->setOutputDir(Form("%s/ToyPlots_mass%d_width%d_xs0",
 			    m_outputDir.Data(), mass, width));
   std::vector<TString> fitTypes; fitTypes.clear();
@@ -1098,6 +1101,25 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
   }
   
   if (m_config->getBool("PlotToysForScan")) {
+
+    // Plot the toy MC nuisance parameter, global observables, and PoI:
+    std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
+    std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
+    std::vector<TString> namesPars = toyAna->getNamesPoI();
+    for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
+      if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
+	toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data
+      }
+    }
+    for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
+      if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
+	toyAna->plotHist(namesNuis[i_n], 0);
+      }
+    }
+    for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
+      toyAna->plotHist(namesPars[i_p], 0);
+    }
+    
     // Then plot statistics:
     toyAna->plotTestStat("Q0");
     toyAna->plotTestStatComparison("Q0");
