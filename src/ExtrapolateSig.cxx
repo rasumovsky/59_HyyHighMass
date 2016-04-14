@@ -341,7 +341,7 @@ int main(int argc, char **argv) {
   // Create a graph with the median value:
   TGraph *gZ0vsLumi_nom = new TGraph((int)lumiValues.size(), xValues, yValues);
   TGraph *gZ0vsLumiSqrt_nom
-    = new TGraph((int)lumiValues.size(), xValues, yValues);
+    = new TGraph((int)lumiValues.size(), xValuesSqrt, yValues);
   gZ0vsLumi_nom->SetNameTitle(Form("gZOvsLumi_nom_Mu%d", muHypothesis),
 			      Form("gZOvsLumi_nom_Mu%d", muHypothesis));
   gZ0vsLumiSqrt_nom->SetNameTitle(Form("gZOvsLumiSqrt_nom_Mu%d", muHypothesis),

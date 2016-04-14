@@ -359,7 +359,7 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   gCLExp_1s->SetFillColor(kGreen);
   
   // Legend:
-  TLegend leg(0.61,0.68,0.89,0.91);
+  TLegend leg(0.61, 0.68, 0.89, 0.91);
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
@@ -400,6 +400,16 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   // Print the canvas:
   can->Print(Form("%s/limits_width%d.eps", m_outputDir.Data(), width));
   gPad->SetLogy(false);
+  
+  // Save graphs to file:
+  TFile *outLimitFile = new TFile(Form("%s/limit_graphs_width%d.root",
+				       m_outputDir.Data(), width), "RECREATE");
+  gCLObs->Write();
+  gCLExp->Write();
+  gCLExp_2s->Write();
+  gCLExp_1s->Write();
+  can->Write();
+  outLimitFile->Close();
   
   // Delete pointers:
   printer(Form("CLScan: Finished mass scan for %d!", width), false);
@@ -541,6 +551,14 @@ void CLScan::scanMassP0(int width, bool makeNew) {
   
   // Print the canvas:
   can->Print(Form("%s/p0_width%d.eps", m_outputDir.Data(), width));
+  
+  // Save p0 graphs to file:
+  TFile *outP0File = new TFile(Form("%s/p0_graphs_width%d.root",
+				    m_outputDir.Data(), width), "RECREATE");
+  gP0Obs->Write();
+  can->Write();
+  outP0File->Close();
+  
   gPad->SetLogy(false);
   
   // Delete pointers:

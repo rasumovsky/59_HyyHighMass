@@ -107,11 +107,14 @@ int main(int argc, char **argv) {
   gNom_Scalar_Mu0->SetLineColor(kBlue+1);
   gNom_Scalar_Mu0->SetLineStyle(2);
   
-  double xMin = 0.0; double xMax = 10.0;
+  double xMin = 0.0; double xMax = 8.0;
+  //double yMin = 2.5; double yMax = 8.5;
+  double yMin = 0.0; double yMax = 8.5;
+  
   TH1F *hForRange = new TH1F("hRange", "hRange", 1, xMin, xMax);
   hForRange->Fill(1);
   hForRange->SetLineColor(0);
-  hForRange->GetYaxis()->SetRangeUser(2.5, 8.5);
+  hForRange->GetYaxis()->SetRangeUser(yMin, yMax);
   hForRange->GetXaxis()->SetRangeUser(xMin, xMax);
   hForRange->GetXaxis()->SetTitle(gErr_Scalar_Mu1->GetXaxis()->GetTitle());
   hForRange->GetYaxis()->SetTitle(gErr_Scalar_Mu1->GetYaxis()->GetTitle());
@@ -124,8 +127,10 @@ int main(int argc, char **argv) {
   gErr_Scalar_Mu1->Draw("3SAME");
   gNom_Graviton_Mu1->Draw("LSAME");
   gNom_Scalar_Mu1->Draw("LSAME");
-  gNom_Graviton_Mu0->Draw("LSAME");
-  gNom_Scalar_Mu0->Draw("LSAME");
+  if (!options.Contains("Only2016")) {
+    gNom_Graviton_Mu0->Draw("LSAME");
+    gNom_Scalar_Mu0->Draw("LSAME");
+  }
   
   // 5 sigma line:
   TLine *line = new TLine();
@@ -144,13 +149,21 @@ int main(int argc, char **argv) {
 	       "Profiled #sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma)", "F");
   leg.AddEntry(gErr_Scalar_Mu1,
 	       "Profiled #sigma_{X}#timesBR(X#rightarrow#gamma#gamma)", "F");
-  leg.AddEntry(gNom_Graviton_Mu0, "Background-only", "L");
-  leg.AddEntry(gNom_Scalar_Mu0, "Background-only", "L");
+  if (!options.Contains("Only2016")) {
+    leg.AddEntry(gNom_Graviton_Mu0, "Absence of signal", "L");
+    leg.AddEntry(gNom_Scalar_Mu0, "Absence of signal", "L");
+  }
   leg.Draw("SAME");
   
   // Then print canvas:
-  can->Print(Form("%s/plot_Z0vsLumi_comparison_%s.eps",
-		  outputDir.Data(), fileTag.Data()));
+  if (options.Contains("SqrtL")) {
+    can->Print(Form("%s/plot_Z0vsSqrtLumi_comparison_%s.eps",
+		    outputDir.Data(), fileTag.Data()));
+  }
+  else {
+    can->Print(Form("%s/plot_Z0vsLumi_comparison_%s.eps",
+		    outputDir.Data(), fileTag.Data()));
+  }
   
   return 0;
 }

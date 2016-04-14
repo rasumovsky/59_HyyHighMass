@@ -1,16 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: PlotStatScan.cxx                                                    //
+//  Name: PlotCLScan.cxx                                                      //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
-//  Date: 11/04/2016                                                          //
+//  Date: 01/04/2016                                                          //
 //                                                                            //
-//  Plots p0 values or CLs limits (observed, expected) as a function of mass. //
+//  Plots CLs limits (observed, expected) as a function of mass.              //
 //                                                                            //
 //  Macro options:                                                            //
 //  - "New" or "FromFile"                                                     //
-//  - "95CL" or "p0"                                                          //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -21,7 +20,7 @@
 
 /**
    -----------------------------------------------------------------------------
-   The main method plots the p0 or 95CL values as a function of mass.
+   The main method scans the 95% CL for various signal cross-sections.
    @param configFile - The analysis configuration file.
    @param options - Job options. Can be "toy" or "asymptotic" or "both"
 */
@@ -42,7 +41,7 @@ int main(int argc, char **argv) {
   TString inputDir = Form("%s/%s/GenericToys/single_files",
 			  (config->getStr("MasterOutput")).Data(),
 			  (config->getStr("JobName")).Data());
-  TString outputDir = Form("%s/%s/PlotStatScan", 
+  TString outputDir = Form("%s/%s/PlotCLScan", 
 			   (config->getStr("MasterOutput")).Data(),
 			   (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s", outputDir.Data()));
@@ -56,22 +55,8 @@ int main(int argc, char **argv) {
   scan->setOutputDirectory(outputDir);
   std::vector<int> widths = scan->listWidths();
   for (int i_w = 0; i_w < (int)widths.size(); i_w++) {
-    std::cout << "PlotStatScan: Start scan for width " << widths[i_w]
-	      << std::endl;
-    if (options.Contains("ScanLimit")) {
-      scan->scanMassLimit(widths[i_w], options.Contains("New"));
-    }
-    else if (options.Contains("ScanP0")) {
-      scan->scanMassP0(widths[i_w], options.Contains("New"));
-    }
-    else {
-      std::cout << "PlotStatScan: ERROR! Option must specify p0 or 95CL"
-		<< std::endl;
-    }
-    std::cout << "PlotStatScan: Finished scan for width " << widths[i_w]
-	      << std::endl;
+    scan->scanMassLimit(widths[i_w], options.Contains("New"));
   }
-  std::cout << "PlotStatScan: Finished looping over " << widths.size() 
-	    << " widths." << std::endl;
+  
   return 0;
 }
