@@ -27,7 +27,7 @@ class CLScan {
   virtual ~CLScan() {};
   void clearData();
   double getLimit(int mass, int width, bool expected, int N);
-  double getP0(int mass, int width, bool expected);
+  double getP0(int mass, int width, bool expected, bool asymptotic);
   std::vector<int> listMasses();
   std::vector<int> listWidths();
   std::vector<int> listXS();
@@ -35,7 +35,8 @@ class CLScan {
   void scanMassP0(int width, bool makeNew);
   void setInputDirectory(TString directory);
   void setLimit(int mass, int width, bool expected, int N, double limitValue);
-  void setP0(int mass, int width, bool expected, double p0Value);
+  void setP0(int mass, int width, bool expected, bool asymptotic, 
+	     double p0Value);
   void setOutputDirectory(TString directory);
   bool singleCLScan(int mass, int width, bool makeNew);
   bool singleP0Test(int mass, int width, bool makeNew);

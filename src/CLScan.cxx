@@ -190,11 +190,14 @@ double CLScan::getLimit(int mass, int width, bool expected, int N) {
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
    @param expected - True for expected limit (false for observed).
+   @param asymptotic - True iff asymptotic result is desired.
    @return - The p0 value.
 */
-double CLScan::getP0(int mass, int width, bool expected) {
+double CLScan::getP0(int mass, int width, bool expected, bool asymptotic) {
   TString key = expected ? Form("exp_mass%d_width%d", mass, width) : 
     Form("obs_mass%d_width%d", mass, width);
+  if (asymptotic) key.Prepend("asymptotic_");
+  else key.Prepend("toy_");
   if (m_valuesP0.count(key) > 0) return m_valuesP0[key];
   else printer(Form("CLScan: ERROR no value for key %s", key.Data()), true);
   return 0.0;
@@ -467,8 +470,8 @@ void CLScan::scanMassP0(int width, bool makeNew) {
     if (p0FileIn.is_open()) {
       while (p0FileIn >> currMass >> p0Obs[nToyPoints] >> p0Exp[nToyPoints]) {
 	varValues[nToyPoints] = currMass;
-	setP0(currMass, width, false, p0Obs[nToyPoints]);
-	setP0(currMass, width, true, p0Exp[nToyPoints]);
+	setP0(currMass, width, false, false, p0Obs[nToyPoints]);
+	setP0(currMass, width, true, false, p0Exp[nToyPoints]);
 	std::cout << currMass << " " << p0Obs[nToyPoints] << " " 
 		  << p0Exp[nToyPoints] << std::endl;
 	nToyPoints++;
@@ -519,37 +522,41 @@ void CLScan::scanMassP0(int width, bool makeNew) {
   
   gPad->SetLogy();
   //if (m_config->getBool("DoBlind")) gP0Exp->Draw("AP");
-  gP0Obs->Draw("AP");
+  gP0Obs->Draw("ALP");
   //leg.Draw("SAME");
   
   // Significance lines and text:
-  TLatex sigma; sigma.SetTextColor(kBlack);
-  sigma.SetTextFont(42); sigma.SetTextSize(0.05);
+  TLatex sigma; sigma.SetTextColor(kRed+1);
+  sigma.SetTextFont(42); sigma.SetTextSize(0.04);
   TLine *line = new TLine();
   line->SetLineStyle(2);
-  line->SetLineWidth(2);
-  line->SetLineColor(kRed);
+  line->SetLineWidth(1);
+  line->SetLineColor(kRed+1);
   double sigmaVals[5] = {0.158655, 0.02275, 0.001349, 0.000032, 0.0000002867};
   for (int i_s = 0; i_s < 4; i_s++) {
+    double sigmaXPos = gP0Obs->GetXaxis()->GetXmax()
+      - (0.07*(gP0Obs->GetXaxis()->GetXmax() - gP0Obs->GetXaxis()->GetXmin()));
     line->DrawLine(gP0Obs->GetXaxis()->GetXmin(), sigmaVals[i_s],
 		   gP0Obs->GetXaxis()->GetXmax(), sigmaVals[i_s]);
-    sigma.DrawLatex(0.9, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s+1));
+    sigma.DrawLatex(sigmaXPos, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s+1));
   }
   
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.05);
-  t.DrawLatex(0.2, 0.27, "ATLAS");
+  t.DrawLatex(0.25, 0.27, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.05);
-  t.DrawLatex(0.32, 0.27, m_config->getStr("ATLASLabel"));
-  t.DrawLatex(0.2, 0.21, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+  t.DrawLatex(0.37, 0.27, m_config->getStr("ATLASLabel"));
+  t.DrawLatex(0.25,0.21, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
   
-  t.DrawLatex(0.50, 0.27, "Spin-2 Selection");
-  t.DrawLatex(0.50, 0.21,
+  t.DrawLatex(0.65, 0.27, "Spin-2 Selection");
+  t.DrawLatex(0.65, 0.21,
 	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
 		   ((double)width)/100.0));
-  
+
+  gP0Obs->Draw("LPSAME");
+
   // Print the canvas:
   can->Print(Form("%s/p0_width%d.eps", m_outputDir.Data(), width));
   
@@ -605,11 +612,16 @@ void CLScan::setLimit(int mass, int width, bool expected, int N,
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
    @param expected - True for expected limits (false for observed).
+   @param asymptotic - True iff. asymptotic value being set.
    @param p0Value - The p0 value to set.
 */
-void CLScan::setP0(int mass, int width, bool expected, double p0Value) {
-  if (expected) m_valuesP0[Form("exp_mass%d_width%d", mass, width)] = p0Value;
-  else m_valuesP0[Form("obs_mass%d_width%d", mass, width)] = p0Value;
+void CLScan::setP0(int mass, int width, bool expected, bool asymptotic, 
+		   double p0Value) {
+  TString key = expected ? Form("exp_mass%d_width%d", mass, width) :
+    Form("obs_mass%d_width%d", mass, width);
+  if (asymptotic) key.Prepend("asymptotic_");
+  else key.Prepend("toy_");
+  m_valuesP0[key] = p0Value;
 }
 
 /**
@@ -679,7 +691,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   }
   
   //----------------------------------------//
-  // Calculate value of qMu observed before processing toy files:
+  // Calculate value of q0 observed before processing toy files:
   else {
     // Open the workspace:
     TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
@@ -746,9 +758,11 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
       mapPoIMu1[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
       
       // Perform the mu=1 fit and mu-free fit (necessary for qmu calculation):
+      std::cout << "CLScanTesting: Mu 1 fit about to start" << std::endl;
       double nllObsMu1
 	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
 			      1, true, mapPoIMu1, false);
+      std::cout << "CLScanTesting: Mu Free fit about to start" << std::endl;
       double nllObsMuFree
 	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
 			      1, false, mapPoIMu1, false);
@@ -1025,9 +1039,8 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
 	->setRange(currRange[0], currRange[1]);
     }
     else {
-      std::cout << "GlobalP0Toys: Workspace has no variable " << listPoI[i_p]
-		<< std::endl;
-      exit(0);
+      printer(Form("GlobalP0Toys: Workspace has no variable %s",
+		   listPoI[i_p].Data()), true);
     }
   }
   
@@ -1053,24 +1066,27 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
   testStat->setParam(m_config->getStr("PoIForWidth"),(((double)width)/100.0), 
 		     true);
   
-  // map of names and values of pois to set for fit.
+  // Map of names and values of pois to set for fit:
   std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
   mapPoIMu0[m_config->getStr("PoIForNormalization")] = 0.0;//cross-section
   mapPoIMu0[m_config->getStr("PoIForMass")] = (double)mass;
   mapPoIMu0[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
   
-  // Perform the mu=0 fit and mu-free fit (necessary for qmu calculation):
+  // Perform the mu=0 fit:
   double nllObsMu0 = testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-					 0, true, mapPoIMu0, false);
-  double nllObsMuFree =testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-					   1, false, mapPoIMu0, false);
+					 0, true, mapPoIMu0, true);
   
-  // Get profiled signal strength from the mu-free fit:
+  // Perform mu-free fit (necessary for q0 calculation) and get signal:
+  double nllObsMuFree =testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
+					   1, false, mapPoIMu0, true);
   std::map<std::string,double> poiFromFit = testStat->getPoIs();
   double obsXSValue
     = poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
+  
+  // Calculate q0 and asymptotic p0:
   double q0Observed
     = testStat->getQ0FromNLL(nllObsMu0, nllObsMuFree, obsXSValue);
+  double p0Asymptotic = testStat->getP0FromQ0(q0Observed);
   
   // Delete pointers and close files:  
   delete testStat;
@@ -1130,8 +1146,8 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
   delete toyAna;
   
   // Store the p0 for this mass and width:
-  setP0(mass, width, false, observedP0);
-  //setP0(mass, width, true, expectedP0);
+  setP0(mass, width, false, false, observedP0);
+  //setP0(mass, width, true, false, expectedP0);
   
   // Then print to screen:
   std::cout << "\nCLScan: P0 Results" << std::endl;

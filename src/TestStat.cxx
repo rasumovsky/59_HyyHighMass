@@ -906,6 +906,7 @@ double TestStat::getFitNLL(TString datasetName, int valPoI, bool fixPoI,
   
   double nllValue = varNLL->getVal();
   delete varNLL;
+  delete fitResult;
   
   // Save names and values of nuisance parameters, globs, other parameters:
   storeParams(nuisanceParameters, m_mapNP);

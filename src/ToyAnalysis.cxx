@@ -38,7 +38,7 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
 		    jobName.Data()));
   
   // Set the internal (private) variable initial conditions:
-  m_nBins = 500;
+  m_nBins = 100;//500;
   m_binMin = 0;
   m_binMax = 20;
   
@@ -57,6 +57,26 @@ ToyAnalysis::ToyAnalysis(TString newConfigFile, TString options) {
   m_valuesBestFit_AsymCL_Mu0.clear();
   m_valuesBestFit_AsymZ0_Mu1.clear();
   m_valuesBestFit_AsymCL_Mu1.clear();
+  
+  
+  // Histograms:
+  m_hAsymptoticQ0 = NULL;
+  m_hAsymptoticQMu = NULL;
+  for (int i_h = 0; i_h < 2; i_h++) {
+    m_hMuProfiled[i_h] = NULL;
+    m_hQ0[i_h] = NULL;
+    m_hQMu[i_h] = NULL;
+    m_hZ0[i_h] = NULL;
+    m_hCL[i_h] = NULL;
+    m_hRetries[i_h] = NULL;
+    m_hImprovement[i_h] = NULL;
+    m_hMedImprovement[i_h] = NULL;
+    m_hCounter[i_h] = NULL;
+    m_h2RetriesZ[i_h] = NULL;
+    m_h2ZImprovement[i_h] = NULL;
+    m_hImpAtThisStep[i_h] = NULL;
+    for (int i_t = 0; i_t < 50; i_t++) m_hZ0Retries[i_h][i_t] = NULL;
+  }
   
   // Set the default fit types:
   m_fitTypes.clear();
@@ -1102,35 +1122,39 @@ void ToyAnalysis::plotRetries(int muValue) {
    @param statistic -the name of the test statistic to plot.
 */
 void ToyAnalysis::plotTestStat(TString statistic) {
-    std::cout << "CHECK0" << std::endl;
+  std::cout << "CHECK1" << std::endl;
   TH1F *hStatMu0 = getStatHist(statistic, 0);
   TH1F *hStatMu1 = getStatHist(statistic, 1);
-  
+  std::cout << "CHECK2" << std::endl;  
   TCanvas *can = new TCanvas("can", "can");
   can->cd();
-  std::cout << "CHECK1" << std::endl;
+  
   if (hStatMu0) {
     hStatMu0->GetXaxis()->SetTitle(printStatName(statistic));
     hStatMu0->GetYaxis()->SetTitle("Normalized entries");  
-    hStatMu0->SetLineColor(kBlue);
+    hStatMu0->SetLineColor(kBlue+1);
+    hStatMu0->SetFillColor(kBlue+1);
+    hStatMu0->SetFillStyle(3354);
   }
   if (hStatMu1) {
     hStatMu1->GetXaxis()->SetTitle(printStatName(statistic));
     hStatMu1->GetYaxis()->SetTitle("Normalized entries");
-    hStatMu1->SetLineColor(kRed);
+    hStatMu1->SetLineColor(kRed+1);
+    hStatMu1->SetFillColor(kRed+1);
+    hStatMu1->SetFillStyle(3345);
   }
-  std::cout << "CHECK2" << std::endl;
+  std::cout << "CHECK3" << std::endl;
   // Draw test statistic histograms:
   gPad->SetLogy();
   //hStatMu0->GetYaxis()->SetRangeUser(0.0001,1.0);
   if (hStatMu0 && hStatMu1) {
-    hStatMu0->Draw("l");
-    hStatMu1->Draw("SAME");
+    hStatMu0->Draw("HIST");
+    hStatMu1->Draw("HISTSAME");
   }
-  else if (hStatMu0) hStatMu0->Draw("l");
-  else if (hStatMu1) hStatMu1->Draw("SAME");
+  else if (hStatMu0) hStatMu0->Draw("HIST");
+  else if (hStatMu1) hStatMu1->Draw("HISTSAME");
   else {
-    printer(Form("ToyAnalysis::plotTestStat(%s): Nothing to draw!",
+    printer(Form("ToyAnalysis::plotTestStat(%s): No histograms to draw...",
 		 statistic.Data()), false);
     return;
   }
@@ -1143,8 +1167,8 @@ void ToyAnalysis::plotTestStat(TString statistic) {
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
-  if (hStatMu1) leg.AddEntry(hStatMu1, "#mu=1 toy MC","l");
-  if (hStatMu0) leg.AddEntry(hStatMu0, "#mu=0 toy MC","l");
+  if (hStatMu1) leg.AddEntry(hStatMu1, "#mu=1 toy MC","F");
+  if (hStatMu0) leg.AddEntry(hStatMu0, "#mu=0 toy MC","F");
   leg.AddEntry(hAsymptotic, "Asyptotic distribution","l");
   leg.Draw("SAME");
   
