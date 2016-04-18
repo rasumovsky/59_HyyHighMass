@@ -16,7 +16,7 @@
 
 #include "CommonFunc.h"
 #include "CommonHead.h"
-#include "CLScan.h"
+#include "StatScan.h"
 #include "Config.h"
 
 /**
@@ -50,9 +50,11 @@ int main(int argc, char **argv) {
   // Set the plot Style to ATLAS defaults:
   CommonFunc::SetAtlasStyle();
   
-  // Use the CLScan class to load toys and calculate 95% CL limits:
-  CLScan *scan = new CLScan(configFile, config->getStr("PlotStatScanOptions"));
-  scan->setInputDirectory(inputDir);
+  // Use the StatScan class to load toys and calculate 95% CL limits:
+  StatScan *scan = new StatScan(configFile, 
+				config->getStr("PlotStatScanOptions"));
+  if (options.Contains("New")) scan->setInputDirectory(inputDir);
+  else scan->setInputDirectory(outputDir);
   scan->setOutputDirectory(outputDir);
   std::vector<int> widths = scan->listWidths();
   for (int i_w = 0; i_w < (int)widths.size(); i_w++) {

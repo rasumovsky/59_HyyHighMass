@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: CLScan.cxx                                                          //
+//  Name: StatScan.cxx                                                        //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
@@ -11,29 +11,29 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "CLScan.h"
+#include "StatScan.h"
 
 /**
    -----------------------------------------------------------------------------
-   Constructor for the CLScan class.
+   Constructor for the StatScan class.
    @param configFileName - The name of the analysis config file.
    @param options - Options for the CL scan.
 */
-CLScan::CLScan(TString configFileName, TString options) {
+StatScan::StatScan(TString configFileName, TString options) {
     
   // Load the config file:
   m_configFileName = configFileName;
   m_config = new Config(m_configFileName);
   m_options = options;
 
-  printer(Form("CLScan::CLScan(%s, %s)", configFileName.Data(), options.Data()),
-	  false);
-
+  printer(Form("StatScan::StatScan(%s, %s)", configFileName.Data(), 
+	       options.Data()), false);
+  
   // Set output directory:
   setInputDirectory(Form("%s/%s/GenericToys/single_files",
 			 (m_config->getStr("MasterOutput")).Data(),
 			 (m_config->getStr("JobName")).Data()));
-  setOutputDirectory(Form("%s/%s/CLScan",
+  setOutputDirectory(Form("%s/%s/StatScan",
 			  (m_config->getStr("MasterOutput")).Data(),
 			  (m_config->getStr("JobName")).Data()));
   
@@ -48,7 +48,7 @@ CLScan::CLScan(TString configFileName, TString options) {
    -----------------------------------------------------------------------------
    Clear the class data.
 */
-void CLScan::clearData() {
+void StatScan::clearData() {
   m_massValues.clear();
   m_widthValues.clear();
   m_xsValues.clear();
@@ -62,7 +62,7 @@ void CLScan::clearData() {
    section values have associated pseudo-experiment ensembles.
    @param toyDirectory - The directory in which the toy MC files reside.
 */
-void CLScan::detectMassWidthXSFiles(TString toyDirectory) {
+void StatScan::detectMassWidthXSFiles(TString toyDirectory) {
 
   // First clear existing list:
   m_massValues.clear();
@@ -75,7 +75,9 @@ void CLScan::detectMassWidthXSFiles(TString toyDirectory) {
   TString currToyName;
   while (toyFileList >> currToyName) {
     // Only look at toys made for scans:
-    if (currToyName.Contains("ForScan")) {
+    if ((currToyName.Contains("ForScan") && currToyName.Contains(".root")) ||
+	(currToyName.Contains("scan_CL_values") && 
+	 currToyName.Contains(".txt"))) {
       
       // Split up the file name into components:
       TObjArray *array = currToyName.Tokenize("_");
@@ -94,6 +96,7 @@ void CLScan::detectMassWidthXSFiles(TString toyDirectory) {
 	else if (currElement.Contains("width")) {
 	  TString widthStr = currElement;
 	  widthStr.ReplaceAll("width", "");
+	  widthStr.ReplaceAll(".txt", "");
 	  int widthVal = widthStr.Atoi();
 	  if (!vectorContainsValue(m_widthValues, widthVal)) {
 	    m_widthValues.push_back(widthVal);
@@ -129,7 +132,7 @@ void CLScan::detectMassWidthXSFiles(TString toyDirectory) {
    @param valueToIntercept - The y-value to intercept.
    @return - The x-value of the intercept.
 */
-double CLScan::getIntercept(TGraph *graph, double valueToIntercept) {
+double StatScan::getIntercept(TGraph *graph, double valueToIntercept) {
   
   // Loop over points in the graph to get search range:
   double rangeMin = 0.0; double rangeMax = 0.0;
@@ -161,7 +164,7 @@ double CLScan::getIntercept(TGraph *graph, double valueToIntercept) {
   
   // Print error message and return bad value if convergence not achieved:
   if (nIterations == maxIterations) {
-    std::cout << "CLScan: ERROR! Intercept not found." << std::cout;
+    std::cout << "StatScan: ERROR! Intercept not found." << std::cout;
     return -999;
   } 
   return currXValue;
@@ -176,11 +179,11 @@ double CLScan::getIntercept(TGraph *graph, double valueToIntercept) {
    @param N - For bands, use +2,+1,-1,-2. For medians, use 0.
    @return - The 95% CL value of the cross-section.
 */
-double CLScan::getLimit(int mass, int width, bool expected, int N) {
+double StatScan::getLimit(int mass, int width, bool expected, int N) {
   TString key = expected ? Form("exp_mass%d_width%d_N%d", mass, width, N) : 
     Form("obs_mass%d_width%d_N%d", mass, width, N);
   if (m_values95CL.count(key) > 0) return m_values95CL[key];
-  else printer(Form("CLScan: ERROR no value for key %s", key.Data()), true);
+  else printer(Form("StatScan: ERROR no value for key %s", key.Data()), true);
   return 0.0;
 }
 
@@ -193,13 +196,13 @@ double CLScan::getLimit(int mass, int width, bool expected, int N) {
    @param asymptotic - True iff asymptotic result is desired.
    @return - The p0 value.
 */
-double CLScan::getP0(int mass, int width, bool expected, bool asymptotic) {
+double StatScan::getP0(int mass, int width, bool expected, bool asymptotic) {
   TString key = expected ? Form("exp_mass%d_width%d", mass, width) : 
     Form("obs_mass%d_width%d", mass, width);
   if (asymptotic) key.Prepend("asymptotic_");
   else key.Prepend("toy_");
   if (m_valuesP0.count(key) > 0) return m_valuesP0[key];
-  else printer(Form("CLScan: ERROR no value for key %s", key.Data()), true);
+  else printer(Form("StatScan: ERROR no value for key %s", key.Data()), true);
   return 0.0;
 }
 
@@ -207,7 +210,7 @@ double CLScan::getP0(int mass, int width, bool expected, bool asymptotic) {
    -----------------------------------------------------------------------------
    Get a list of the mass values stored in the scan tool.
 */
-std::vector<int> CLScan::listMasses() {
+std::vector<int> StatScan::listMasses() {
   return m_massValues;
 }
 
@@ -215,7 +218,7 @@ std::vector<int> CLScan::listMasses() {
    -----------------------------------------------------------------------------
    Get a list of the width values stored in the scan tool.
 */
-std::vector<int> CLScan::listWidths() {
+std::vector<int> StatScan::listWidths() {
   return m_widthValues;
 }
 
@@ -223,7 +226,7 @@ std::vector<int> CLScan::listWidths() {
    -----------------------------------------------------------------------------
    Get a list of the cross-section values stored in the scan tool.
 */
-std::vector<int> CLScan::listXS() {
+std::vector<int> StatScan::listXS() {
   return m_xsValues;
 }
 
@@ -233,7 +236,7 @@ std::vector<int> CLScan::listXS() {
    @param statement - The statement to print.
    @param isFatal - True iff. this should trigger an exit command.
 */
-void CLScan::printer(TString statement, bool isFatal) {
+void StatScan::printer(TString statement, bool isFatal) {
   if (m_config->getBool("Verbose") || isFatal) {
     std::cout << statement << std::endl;
   }
@@ -246,7 +249,7 @@ void CLScan::printer(TString statement, bool isFatal) {
    @param width - The width integer for the scan.
    @param makeNew - True iff. calculating things from toys directly.
 */
-void CLScan::scanMassLimit(int width, bool makeNew) {
+void StatScan::scanMassLimit(int width, bool makeNew) {
   
   TString limitFileName = Form("%s/limit_values_width%d.txt",
 			       m_outputDir.Data(), width);
@@ -265,7 +268,7 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   // Access results either by loading toy MC or stored limit computations:
   // Loop over the mass points to load CL results
   if (makeNew || m_options.Contains("ForceScan")) {
-    printer("CLScan: Calculating limits vs. mass from scratch", false);
+    printer("StatScan: Calculating limits vs. mass from scratch", false);
     
     std::ofstream limitFileOut(limitFileName);
     for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
@@ -288,7 +291,7 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   }
   // Or load from text file:
   else {
-    printer("CLScan: Loading limits vs. mass from file.", false);
+    printer("StatScan: Loading limits vs. mass from file.", false);
     
     double currMass = 0.0;
     std::ifstream limitFileIn(limitFileName);
@@ -353,11 +356,15 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   gCLExp_2s->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
   
   gCLExp->SetLineColor(kBlack);
-  gCLObs->SetLineColor(kBlack);
   gCLExp->SetLineStyle(2);
-  gCLObs->SetLineStyle(1);
   gCLExp->SetLineWidth(2);
+  
+  gCLObs->SetLineColor(kBlack);
+  gCLObs->SetLineStyle(1);
   gCLObs->SetLineWidth(2);
+  gCLObs->SetMarkerColor(kBlack);
+  gCLObs->SetMarkerStyle(21);
+  
   gCLExp_2s->SetFillColor(kYellow);
   gCLExp_1s->SetFillColor(kGreen);
   
@@ -367,7 +374,7 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
   if (!m_config->getBool("DoBlind")) {
-    leg.AddEntry(gCLObs,"Observed #it{CL_{s}} limit","l");
+    leg.AddEntry(gCLObs,"Observed #it{CL_{s}} limit","P");
   }
   leg.AddEntry(gCLExp,"Expected #it{CL_{s}} limit","l");
   leg.AddEntry(gCLExp_1s,"Expected #pm 1#sigma_{exp}","F");
@@ -376,7 +383,7 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   // Plotting options:
   gCLExp_2s->GetXaxis()->SetRangeUser(m_massValues[0], 
 				      m_massValues[m_massValues.size()-1]);
-  gCLExp_2s->GetYaxis()->SetRangeUser(0.1, 1000);
+  gCLExp_2s->GetYaxis()->SetRangeUser(1, 1000);
   
   gPad->SetLogy();
   gCLExp_2s->Draw("A3");
@@ -415,7 +422,7 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
   outLimitFile->Close();
   
   // Delete pointers:
-  printer(Form("CLScan: Finished mass scan for %d!", width), false);
+  printer(Form("StatScan: Finished mass scan for %d!", width), false);
   delete can;
   delete gCLObs;
   delete gCLExp;
@@ -429,7 +436,7 @@ void CLScan::scanMassLimit(int width, bool makeNew) {
    @param width - The width integer for the scan.
    @param makeNew - True iff. calculating things from toys directly.
 */
-void CLScan::scanMassP0(int width, bool makeNew) {
+void StatScan::scanMassP0(int width, bool makeNew) {
   
   TString p0FileName = Form("%s/p0_values_width%d.txt",
 			    m_outputDir.Data(), width);
@@ -444,14 +451,14 @@ void CLScan::scanMassP0(int width, bool makeNew) {
   // Access results either by loading toy MC or stored limit computations:
   // Loop over the mass points to load CL results
   if (makeNew || m_options.Contains("ForceScan")) {
-    printer("CLScan: Calculating limits vs. mass from scratch", false);
+    printer("StatScan: Calculating limits vs. mass from scratch", false);
     
     std::ofstream p0FileOut(p0FileName);
     for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
       if (singleP0Test(m_massValues[i_m], width, makeNew)) {
 	varValues[nToyPoints] = m_massValues[i_m];
-	p0Obs[nToyPoints] = getP0(m_massValues[i_m], width, false);
-	//p0Exp[nToyPoints] = getP0(m_massValues[i_m], width, true);
+	p0Obs[nToyPoints] = getP0(m_massValues[i_m], width, false, false);
+	//p0Exp[nToyPoints] = getP0(m_massValues[i_m], width, true, false);
 	p0Exp[nToyPoints] = 0.5;// CURRENTLY NOT IMPLEMENTED
 	// ISSUE IS: WHAT XSECTION TO EXPECT IN TOY ANALYSIS?
 	p0FileOut << m_massValues[i_m] << " " << p0Obs[nToyPoints] << " " 
@@ -463,7 +470,7 @@ void CLScan::scanMassP0(int width, bool makeNew) {
   }
   // Or load from text file:
   else {
-    printer("CLScan: Loading p0 vs. mass from file.", false);
+    printer("StatScan: Loading p0 vs. mass from file.", false);
     
     double currMass = 0.0;
     std::ifstream p0FileIn(p0FileName);
@@ -570,7 +577,7 @@ void CLScan::scanMassP0(int width, bool makeNew) {
   gPad->SetLogy(false);
   
   // Delete pointers:
-  printer(Form("CLScan: Finished p0 mass scan for %d!", width), false);
+  printer(Form("StatScan: Finished p0 mass scan for %d!", width), false);
   delete can;
   delete gP0Obs;
   //delete gP0Exp;
@@ -581,7 +588,7 @@ void CLScan::scanMassP0(int width, bool makeNew) {
    Set the input file location.
    @param directory - The directory containing input files.
 */
-void CLScan::setInputDirectory(TString directory) {
+void StatScan::setInputDirectory(TString directory) {
   m_inputDir = directory;
   // Also detect the input files in this new directory:
   detectMassWidthXSFiles(m_inputDir);
@@ -596,7 +603,7 @@ void CLScan::setInputDirectory(TString directory) {
    @param N - For bands, use +2,+1,-1,-2. For medians, use 0.
    @param limitValue - The limit value to set.
 */
-void CLScan::setLimit(int mass, int width, bool expected, int N, 
+void StatScan::setLimit(int mass, int width, bool expected, int N, 
 		      double limitValue) {
   if (expected) {
     m_values95CL[Form("exp_mass%d_width%d_N%d", mass, width, N)] = limitValue;
@@ -615,7 +622,7 @@ void CLScan::setLimit(int mass, int width, bool expected, int N,
    @param asymptotic - True iff. asymptotic value being set.
    @param p0Value - The p0 value to set.
 */
-void CLScan::setP0(int mass, int width, bool expected, bool asymptotic, 
+void StatScan::setP0(int mass, int width, bool expected, bool asymptotic, 
 		   double p0Value) {
   TString key = expected ? Form("exp_mass%d_width%d", mass, width) :
     Form("obs_mass%d_width%d", mass, width);
@@ -629,7 +636,7 @@ void CLScan::setP0(int mass, int width, bool expected, bool asymptotic,
    Set the output file location.
    @param directory - The directory for storing output files.
 */
-void CLScan::setOutputDirectory(TString directory) {
+void StatScan::setOutputDirectory(TString directory) {
   m_outputDir = directory;
   // Create output directory if it doesn't already exist:
   system(Form("mkdir -vp %s", m_outputDir.Data()));
@@ -644,7 +651,7 @@ void CLScan::setOutputDirectory(TString directory) {
    @param makeNew - True if from toy MC, false if from text file storage.
    @return - True iff loaded successfully.
 */
-bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
+bool StatScan::singleCLScan(int mass, int width, bool makeNew) {
   printer(Form("singleCLScan(mass=%d, width=%d, makeNew=%d",
 	       mass, width, (int)makeNew), false);
   
@@ -684,7 +691,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
       }
     }
     else {
-      printer(Form("CLScan: ERROR opnening toy file %s", inputName.Data()), 
+      printer(Form("StatScan: ERROR opnening toy file %s", inputName.Data()), 
 	      false);
     }
     inputFile.close();
@@ -740,10 +747,10 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
 			       m_outputDir.Data(), mass, width));
     
     // Loop over cross-section:
-    printer("CLScan: Loop over cross-sections to get qMuObs", false);
+    printer("StatScan: Loop over cross-sections to get qMuObs", false);
     for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
       double crossSection = ((double)m_xsValues[i_x])/1000.0;
-      std::cout << "CLScan: cross-section = " << crossSection << std::endl;
+      std::cout << "StatScan: cross-section = " << crossSection << std::endl;
       
       // Also force the mass and width to be constant always:
       testStat->setParam(m_config->getStr("PoIForMass"), 
@@ -758,18 +765,19 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
       mapPoIMu1[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
       
       // Perform the mu=1 fit and mu-free fit (necessary for qmu calculation):
-      std::cout << "CLScanTesting: Mu 1 fit about to start" << std::endl;
+      std::cout << "StatScanTesting: Mu 1 fit about to start" << std::endl;
       double nllObsMu1
 	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
 			      1, true, mapPoIMu1, false);
-      std::cout << "CLScanTesting: Mu Free fit about to start" << std::endl;
+      std::cout << "StatScanTesting: Mu Free fit about to start" << std::endl;
       double nllObsMuFree
 	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
 			      1, false, mapPoIMu1, false);
       
       // Get profiled signal strength from the mu-free fit:
       std::map<std::string,double> poiFromFit = testStat->getPoIs();
-      double obsXSValue = poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
+      double obsXSValue 
+	= poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
       double muHatValue = obsXSValue / crossSection;
       
       qMuObs[nToyPoints]
@@ -784,7 +792,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
     
     //----------------------------------------//
     // Process the toy MC files to obtain the CL values:
-    printer("CLScan: Processing toy MC in loop over cross-sections", false);
+    printer("StatScan: Processing toy MC in loop over cross-sections", false);
     for (int i_t = 0; i_t < nToyPoints; i_t++) {
       
       // Load the tool to analyze toys.
@@ -804,7 +812,7 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
       toyAna->loadToy(1, Form("%s/toy_mu1*ForScan_mass%d_width%d_xs%d.root",
 			      m_inputDir.Data(), mass, width, xsVals[i_t]));
       if (!(toyAna->areInputFilesOK())) {
-	printer("CLScan: ERROR with toy scan option.", true);
+	printer("StatScan: ERROR with toy scan option.", true);
       }
       
       if (m_config->getBool("PlotToysForScan")) {
@@ -988,8 +996,8 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
   std::cout << "\texpected CL -2 = " << expectedCL_n2 << std::endl;
   
   // Delete pointers, close files, return:
-  printer(Form("CLScan::singleCLScan finished mass %d width %d\n", mass, width),
-	  false);
+  printer(Form("StatScan::singleCLScan finished mass %d width %d\n", 
+	       mass, width), false);
   
   delete line;
   delete can;
@@ -1012,13 +1020,13 @@ bool CLScan::singleCLScan(int mass, int width, bool makeNew) {
    @param makeNew - True if from toy MC, false if from text file storage.
    @return - True iff loaded successfully.
 */
-bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
+bool StatScan::singleP0Test(int mass, int width, bool makeNew) {
   printer(Form("singleP0Test(mass=%d, width=%d, makeNew=%d",
 	       mass, width, (int)makeNew), false);
   
   //----------------------------------------//
   // Step 1: get observed q0 (no expected!)
-  printer("CLScan: Calculating observed q0 for p0 test", false);
+  printer("StatScan: Calculating observed q0 for p0 test", false);
   
   // Open the workspace:
   TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
@@ -1095,7 +1103,7 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
   
   //----------------------------------------//
   // Process the toy MC files to obtain the CL values:
-  printer("CLScan: Computing p0 from toy MC", false);
+  printer("StatScan: Computing p0 from toy MC", false);
   
   // Load the tool to analyze toys.
   // NOTE: this was moved  because of intereference between the ToyAnalysis 
@@ -1113,7 +1121,7 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
   toyAna->loadToy(0, Form("%s/toy_mu0*ForScan_mass%d_width%d_xs*.root",
 			  m_inputDir.Data(), mass, width));
   if (!(toyAna->areInputFilesOK())) {
-    printer("CLScan: ERROR with toy scan option.", true);
+    printer("StatScan: ERROR with toy scan option.", true);
   }
   
   if (m_config->getBool("PlotToysForScan")) {
@@ -1150,13 +1158,13 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
   //setP0(mass, width, true, false, expectedP0);
   
   // Then print to screen:
-  std::cout << "\nCLScan: P0 Results" << std::endl;
+  std::cout << "\nStatScan: P0 Results" << std::endl;
   std::cout << "\tobserved p0 = " << observedP0 << std::endl;
   //std::cout << "\texpected p0 = " << expectedP0 << std::endl;
   
   // Delete pointers, close files, return:
-  printer(Form("CLScan::singleP0Test finished mass %d width %d\n", mass, width),
-	  false);
+  printer(Form("StatScan::singleP0Test finished mass %d width %d\n", 
+	       mass, width), false);
   
   // Return true iff. calculation was successful:
   if (toyAna->areInputFilesOK() && observedP0 > 0.0 && observedP0 < 1.0) {
@@ -1172,7 +1180,7 @@ bool CLScan::singleP0Test(int mass, int width, bool makeNew) {
    @param theValue - The value to check for membership in the vector.
    @return - True iff the vector already contains the value.
 */
-bool CLScan::vectorContainsValue(std::vector<int> theVector, int theValue) {
+bool StatScan::vectorContainsValue(std::vector<int> theVector, int theValue) {
   for (int i_v = 0; i_v < (int)theVector.size(); i_v++) {
     if (theVector[i_v] == theValue) return true;
   }

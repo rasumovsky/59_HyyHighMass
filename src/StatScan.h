@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  CLScan.h                                                                  //
-//  Class: CLScan.cxx                                                         //
+//  StatScan.h                                                                //
+//  Class: StatScan.cxx                                                       //
 //                                                                            //
 //  Author: Andrew Hard                                                       //
 //  Email: ahard@cern.ch                                                      //
@@ -9,8 +9,8 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef CLScan_h
-#define CLScan_h
+#ifndef StatScan_h
+#define StatScan_h
 
 // Package libraries:
 #include "CommonHead.h"
@@ -19,12 +19,12 @@
 #include "TestStat.h"
 #include "ToyAnalysis.h"
 
-class CLScan {
+class StatScan {
 
  public:
   
-  CLScan(TString configFileName, TString options);
-  virtual ~CLScan() {};
+  StatScan(TString configFileName, TString options);
+  virtual ~StatScan() {};
   void clearData();
   double getLimit(int mass, int width, bool expected, int N);
   double getP0(int mass, int width, bool expected, bool asymptotic);
