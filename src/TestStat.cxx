@@ -69,10 +69,7 @@ TestStat::TestStat(TString newConfigFile, TString newOptions,
   
   // Reset nuisance parameters after fitting by default:
   resetParamsAfterFit(true);
-  
-  // Map storing all calculations:
-  m_calculatedValues.clear();
-  
+    
   // Use linear plot y-axis by default:
   setPlotAxis(false, 0.0, 100.0, 1.0);
   setSubPlot("Subtraction");
@@ -84,9 +81,6 @@ TestStat::TestStat(TString newConfigFile, TString newOptions,
   system(Form("mkdir -vp %s", m_outputDir.Data()));
   system(Form("mkdir -vp %s/CL/", m_outputDir.Data()));
   system(Form("mkdir -vp %s/p0/", m_outputDir.Data()));
-  
-  // Make new or load old values:
-  if (m_options.Contains("FromFile")) loadStatsFromFile();
   
   // Finished instantiating the test statistic class. 
   std::cout << "TestStat: Initialized Successfully!" << std::endl;
@@ -113,17 +107,147 @@ void TestStat::addGhostEvents(RooAbsData *dataset, RooRealVar* observable,
 
 /**
    -----------------------------------------------------------------------------
-   Get the value of one of the test statistics.
-   @param testStat - The test stat. name (p0, CL, CLs).
-   @param observed - True iff observed, false if expected. 
-   @param N - The standard deviation (-2, -1, 0, +1, +2). 
-   @return - The test statistic value.
+   Calculate the asymptotic CL values using fits.
+   @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
+   @param datasetName - The name of the dataset in the workspace.
+   @param snapshotName - The name of the ML snapshot for generating mu=0 Asimov.
+   @param poiForNorm - The name of the normalization poi.
+   @return - A vector with obs, exp+2s, exp+1s, exp, exp-1s, exp-2s CL values.
 */
-double TestStat::accessValue(TString testStat, bool observed, int N) {
-  TString currMapKey = getKey(testStat, observed, N);
-  // Check that corresponding entry exists:
-  if (mapValueExists(currMapKey)) return m_calculatedValues[currMapKey];
-  else return 0;
+std::vector<double> TestStat::asymptoticCL(std::map<TString,double> mapPoI, 
+					   TString datasetName, 
+					   TString snapshotName,
+					   TString poiForNorm) {
+  printer(Form("TestStat::asymptoticCL(%s, %s)",
+	       datasetName.Data(), poiForNorm.Data()), false);
+  
+  // Create unique Asimov dataset name based on PoI:
+  TString asimovDataMu0Name = "asimovDataMu0";
+
+  // Need to set the non-norm PoI constant...
+  for (std::map<TString,double>::iterator poiIter = mapPoI.begin(); 
+       poiIter != mapPoI.end(); poiIter++) {
+    TString poiName = poiIter->first;
+    double poiValue = poiIter->second;
+    if (!poiName.EqualTo(poiForNorm)) setParam(poiName, poiValue, true);
+    asimovDataMu0Name.Append(Form("_%s%2.2f", poiName.Data(), poiValue));
+  }
+  
+  // Generate mu0 asimov data, 
+  if (!m_workspace->data(asimovDataMu0Name)) {
+    double originNorm = mapPoI[poiForNorm];
+    mapPoI[poiForNorm] = 0.0;//temporarily set the signal strength to zero.
+    createAsimovData(0.0, snapshotName, mapPoI, asimovDataMu0Name);
+    mapPoI[poiForNorm] = originNorm;//restore the non-zero signal strength.
+  }
+
+  // Calculate observed qmu: 
+  double nllMu1Obs = getFitNLL(datasetName, 1.0, true, mapPoI, false);
+  double nllMuHatObs = getFitNLL(datasetName, 1.0, false, mapPoI, false);
+  double profiledNormObs = (getPoIs())[(std::string)(poiForNorm)];
+  double muHatObs = (profiledNormObs / mapPoI[poiForNorm]);
+  double obsQMu = getQMuFromNLL(nllMu1Obs, nllMuHatObs, muHatObs, 1);
+    
+  // Calculate expected qmu:
+  double nllMu1Exp = getFitNLL(asimovDataMu0Name, 1.0, true, mapPoI, false);
+  double nllMuHatExp = getFitNLL(asimovDataMu0Name, 0.0, false, mapPoI, false);
+  double profiledNormExp = (getPoIs())[(std::string)(poiForNorm)];
+  double muHatExp = (profiledNormExp / mapPoI[poiForNorm]);
+  double expQMu = getQMuFromNLL(nllMu1Exp, nllMuHatExp, muHatExp, 1);
+  
+  // Calculate CL:
+  double expCLn2 = getCLFromQMu(expQMu, -2);
+  double expCLn1 = getCLFromQMu(expQMu, -1);
+  double expCLp1 = getCLFromQMu(expQMu, 1);
+  double expCLp2 = getCLFromQMu(expQMu, 2);
+  double expCL = getCLFromQMu(expQMu, 0);
+  double obsCL = getCLFromQMu(obsQMu, 0);
+  
+  // Print summary:
+  std::cout << "\n\t expected CL +2s = " << expCLp2 << std::endl;
+  std::cout << "\t expected CL +1s = " << expCLp1 << std::endl;
+  std::cout << "\t expected CL nom = " << expCL    << std::endl;
+  std::cout << "\t expected CL -1s = " << expCLn1 << std::endl;
+  std::cout << "\t expected CL -2s = " << expCLn2 << std::endl;
+  std::cout << "\t observed CL = " << obsCL << "\n" << std::endl;
+  
+  // Return observed and expected CL values:
+  std::vector<double> resultsCL;
+  resultsCL.clear();
+  resultsCL.push_back(obsCL);
+  resultsCL.push_back(expCLn2);
+  resultsCL.push_back(expCLn1);
+  resultsCL.push_back(expCL);
+  resultsCL.push_back(expCLp1);
+  resultsCL.push_back(expCLp2);
+  return resultsCL;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the p0 value using model fits.
+   @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
+   @param datasetName - The name of the dataset in the workspace.
+   @param snapshotName - The name of the ML snapshot for generating mu=1 Asimov.
+   @param poiForNorm - The name of the normalization poi.
+   @return - A vector with obs, exp.
+*/
+std::vector<double> TestStat::asymptoticP0(std::map<TString,double> mapPoI, 
+					   TString datasetName,
+					   TString snapshotName,
+					   TString poiForNorm) {
+  printer(Form("TestStat::asymptoticP0(%s, %s)", 
+	       datasetName.Data(), poiForNorm.Data()), false);
+  
+  // Create unique Asimov dataset name based on PoI:
+  TString asimovDataMu1Name = "asimovDataMu1";
+
+  // Need to set the non-norm PoI constant...
+  for (std::map<TString,double>::iterator poiIter = mapPoI.begin(); 
+       poiIter != mapPoI.end(); poiIter++) {
+    TString poiName = poiIter->first;
+    double poiValue = poiIter->second;
+    if (!poiName.EqualTo(poiForNorm)) setParam(poiName, poiValue, true);
+    asimovDataMu1Name.Append(Form("_%s%2.2f", poiName.Data(), poiValue));
+  }
+  
+  // Generate mu1 asimov data:
+  if (!m_workspace->data(asimovDataMu1Name)) {
+    createAsimovData(1.0, snapshotName, mapPoI, asimovDataMu1Name);
+  }
+  
+  // Then set the signal strength to zero for fitting:
+  double originNorm = mapPoI[poiForNorm];
+  mapPoI[poiForNorm] = 0.0;
+  
+  // Calculate observed q0: 
+  double nllMu0Obs = getFitNLL(datasetName, 0.0, true, mapPoI, false);
+  double nllMuHatObs = getFitNLL(datasetName, 0.0, false, mapPoI, false);
+  double profiledNormObs = (getPoIs())[(std::string)(poiForNorm)];
+  double muHatObs = (profiledNormObs / originNorm);
+  double obsQ0 = getQ0FromNLL(nllMu0Obs, nllMuHatObs, muHatObs);
+  
+  // Calculate expected q0:
+  double nllMu0Exp = getFitNLL(asimovDataMu1Name, 0.0, true, mapPoI, false);
+  double nllMuHatExp = getFitNLL(asimovDataMu1Name, 0.0, false, mapPoI, false);
+  double profiledNormExp = (getPoIs())[(std::string)(poiForNorm)];
+  double muHatExp = (profiledNormExp / originNorm);
+  double expQ0 = getQ0FromNLL(nllMu0Exp, nllMuHatExp, muHatExp);
+  
+  // Calculate p0 from q0:
+  double expP0 = getP0FromQ0(expQ0);
+  double obsP0 = getP0FromQ0(obsQ0);
+  
+  // Print summary:
+  std::cout << "\n\t Expected p0 = " << expP0 << std::endl;
+  std::cout << "\t Observed p0 = " << obsP0 << "\n" << std::endl;
+  
+  // Return observed and expected p0 values:
+  std::vector<double> resultsP0;
+  resultsP0.clear();
+  resultsP0.push_back(obsP0);
+  resultsP0.push_back(expP0);
+  return resultsP0;
 }
 
 /**
@@ -162,120 +286,10 @@ RooAbsData *TestStat::binDataSet(TString binnedDataName,
 
 /**
    -----------------------------------------------------------------------------
-   Calculate the CL and CLs values using model fits.
-   @param type - "Exp" "Obs" or "Both".
-
-void TestStat::calculateNewCL() {
-  printer("TestStat::calculateNewCL()", false);
-  
-  // Calculate observed qmu: 
-  double muHatObs = 0.0;
-  double nllMu1Obs = getFitNLL(m_dataForObsQMu, 1.0, true, muHatObs);
-  double nllMuHatObs = getFitNLL(m_dataForObsQMu, 1.0, false, muHatObs);
-  double obsQMu = getQMuFromNLL(nllMu1Obs, nllMuHatObs, muHatObs, 1);
-  
-  // Calculate expected qmu:
-  double muHatExp = 0.0;
-  double nllMu1Exp = getFitNLL(m_dataForExpQMu, 1.0, true, muHatExp);
-  double nllMuHatExp = getFitNLL(m_dataForExpQMu, 0.0, false, muHatExp);
-  double expQMu = getQMuFromNLL(nllMu1Exp, nllMuHatExp, muHatExp, 1);
-  
-  // Calculate CL:
-  double expCLn2 = getCLFromQMu(expQMu, -2);
-  double expCLn1 = getCLFromQMu(expQMu, -1);
-  double expCLp1 = getCLFromQMu(expQMu, 1);
-  double expCLp2 = getCLFromQMu(expQMu, 2);
-  double expCL = getCLFromQMu(expQMu, 0);
-  double obsCL = getCLFromQMu(obsQMu, 0);
-  
-  // Write CL values to file:
-  ofstream textCL;
-  textCL.open(Form("%s/CL/CL_values_%s.txt",
-		   m_outputDir.Data(), m_anaType.Data()));
-  textCL << m_anaType << " " << obsCL << " " << expCLn2 << " " << expCLn1
-	 << " " << expCL << " " << expCLp1 << " " << expCLp2 << std::endl;
-  textCL.close();
-  
-  // Print summary:
-  std::cout << "  expected CL +2s = " << expCLp2 << std::endl;
-  std::cout << "  expected CL +1s = " << expCLp1 << std::endl;
-  std::cout << "  expected CL nom = " << expCL    << std::endl;
-  std::cout << "  expected CL -1s = " << expCLn1 << std::endl;
-  std::cout << "  expected CL -2s = " << expCLn2 << std::endl;
-  std::cout << "  observed CL = " << obsCL << std::endl;
-  std::cout << " " << std::endl;
-  if (m_allGoodFits) std::cout << "All good fits? True" << std::endl;
-  else std::cout << "All good fits? False" << std::endl;
-  cout << " " << endl;
-  if (obsQMu < 0) std::cout << "WARNING! obsQMu < 0 : " << obsQMu << std::endl;
-  if (expQMu < 0) std::cout << "WARNING! expQMu < 0 : " << expQMu << std::endl;
-  
-  // Save CL and CLs for later access:
-  m_calculatedValues[getKey("CL",0,-2)] = expCLn2;
-  m_calculatedValues[getKey("CL",0,-1)] = expCLn1;
-  m_calculatedValues[getKey("CL",0,0)] = expCL;
-  m_calculatedValues[getKey("CL",0,1)] = expCLp1;
-  m_calculatedValues[getKey("CL",0,2)] = expCLp2;
-  m_calculatedValues[getKey("CL",1,0)] = obsCL;
-  
-  m_calculatedValues[getKey("CLs",0,-2)] = getCLsFromCL(expCLn2);
-  m_calculatedValues[getKey("CLs",0,-1)] = getCLsFromCL(expCLn1);
-  m_calculatedValues[getKey("CLs",0,0)] = getCLsFromCL(expCL);
-  m_calculatedValues[getKey("CLs",0,1)] = getCLsFromCL(expCLp1);
-  m_calculatedValues[getKey("CLs",0,2)] = getCLsFromCL(expCLp2);
-  m_calculatedValues[getKey("CLs",1,0)] = getCLsFromCL(obsCL);
-}
-*/
-
-/**
-   -----------------------------------------------------------------------------
-   Calculate the p0 value using model fits.
-
-void TestStat::calculateNewP0() {
-  printer("TestStat::calculateNewP0()", false);
-  
-  // Calculate observed q0: 
-  double muHatObs = 0.0;
-  double nllMu0Obs = getFitNLL(m_dataForObsQ0, 0.0, true, muHatObs);
-  double nllMuHatObs = getFitNLL(m_dataForObsQ0, 0.0, false, muHatObs);
-  double obsQ0 = getQ0FromNLL(nllMu0Obs, nllMuHatObs, muHatObs);
-  
-  // Calculate expected q0:
-  double muHatExp = 0.0;
-  double nllMu0Exp = getFitNLL(m_dataForExpQ0, 0.0, true, muHatExp);
-  double nllMuHatExp = getFitNLL(m_dataForExpQ0, 0.0, false, muHatExp);
-  double expQ0 = getQ0FromNLL(nllMu0Exp, nllMuHatExp, muHatExp);
-  
-  // Calculate p0 from q0:
-  double expP0 = getP0FromQ0(expQ0);
-  double obsP0 = getP0FromQ0(obsQ0);
-  
-  // Write p0 values to file:
-  ofstream textP0;
-  textP0.open(Form("%s/p0/p0_values_%s.txt", 
-		   m_outputDir.Data(), m_anaType.Data()));
-  textP0 << m_anaType << " " << expP0 << " " << obsP0 << std::endl;
-  textP0.close();
-  
-  // Print summary:
-  std::cout << "\n  Expected p0 = " << expP0 << std::endl;
-  std::cout << "\n  Observed p0 = " << obsP0 << std::endl;
-  if (fitsAllConverged()) std::cout << "All good fits? True\n" << std::endl;
-  else std::cout << "All good fits? False\n" << std::endl;
-  
-  // Save p0 for later access:
-  m_calculatedValues[getKey("p0", 1, 0)] = obsP0;
-  m_calculatedValues[getKey("p0", 0, 0)] = expP0;
-}
-*/
-
-/**
-   -----------------------------------------------------------------------------
    Clears all data stored by the class, but does not modify the workspace.
 */
 void TestStat::clearData() {
   m_allGoodFits = true;
-  m_calculatedValues.clear();
   m_mapGlobs.clear();
   m_mapNP.clear();
   m_mapPoI.clear();
@@ -306,10 +320,12 @@ void TestStat::clearFitParamSettings() {
    @param valPoI - The value of the parameter of interest.
    @param snapshotName - The name of the parameter snapshot to load.
    @param namesAndValsPoI - The names and values of the parameters of interest.
+   @param asimovDataName - Specify a name for asimov data if default is no good.
    @return - An Asimov dataset.
 */
 RooAbsData* TestStat::createAsimovData(int valPoI, TString snapshotName,
-				     std::map<TString,double> namesAndValsPoI) {
+				       std::map<TString,double> namesAndValsPoI,
+				       TString asimovDataName) {
   
   printer(Form("TestStat::createAsimovData(PoI=%d, snapshot=%s)", 
 	       valPoI, snapshotName.Data()), false);
@@ -367,8 +383,11 @@ RooAbsData* TestStat::createAsimovData(int valPoI, TString snapshotName,
   RooAbsData* asimovData
     = RooStats::AsymptoticCalculator::GenerateAsimovData(*m_mc->GetPdf(), 
 						       *m_mc->GetObservables());
-  asimovData->SetNameTitle(Form("asimovDataMu%d",valPoI),
-			   Form("asimovDataMu%d",valPoI));
+  if (asimovDataName.EqualTo("")) {
+    asimovData->SetNameTitle(Form("asimovDataMu%d",valPoI),
+			     Form("asimovDataMu%d",valPoI));
+  }
+  else asimovData->SetNameTitle(asimovDataName, asimovDataName);
   m_workspace->import(*asimovData);
   return asimovData;
 }
@@ -937,25 +956,6 @@ std::map<std::string,double> TestStat::getGlobalObservables() {
 
 /**
    -----------------------------------------------------------------------------
-   Get the key for the value map.
-   @param testStat - The test statistic.
-   @param observed - True iff. observed.
-   @param N - The sigma value (-2,-1,0,1,2).
-*/
-TString TestStat::getKey(TString testStat, bool observed, int N) {
-  TString currKey = testStat;
-  
-  if (observed) currKey += "_obs";
-  else currKey += "_exp";
-  
-  if (N > 0) currKey += Form("_p%d",N);
-  else if (N < 0) currKey += Form("_n%d",N);
-  
-  return currKey;
-}
-
-/**
-   -----------------------------------------------------------------------------
    Get the number of events in each category in the most recent pseudo-dataset.
    @return - A vector containing the weighted # events per category.
 */
@@ -1160,63 +1160,6 @@ double TestStat::graphIntercept(TGraph *graph, double valueToIntercept) {
   return currXValue;
 }
 
-/**
-   -----------------------------------------------------------------------------
-   Load the statistics files (p0 and CL) that were previously generated. If none
-   are found, then create from scratch automatically.
-*/
-void TestStat::loadStatsFromFile() {
-  
-  // Load input p0 file:
-  ifstream textP0;
-  textP0.open(Form("%s/p0/p0_values_%s.txt", 
-		   m_outputDir.Data(), m_anaType.Data()));
-  
-  // Load input CL file:
-  ifstream textCL;
-  textCL.open(Form("%s/CL/CL_values_%s.txt", 
-		   m_outputDir.Data(), m_anaType.Data()));
-  
-  // If the input files don't exist, create from scratch:
-  if (!textCL || !textP0) {
-    printer("TestStat: ERROR! Stats don't exist. Exiting.", true);
-    //calculateNewCL();
-    //calculateNewP0();
-    return;
-  }
-  
-  // Read p0 values:
-  TString inName; double inExpP0; double inObsP0; 
-  while (!textP0.eof()) {
-    textP0 >> inName >> inExpP0 >> inObsP0;
-    textP0.close();
-  }
-  m_calculatedValues[getKey("p0",1,0)] = inObsP0;
-  m_calculatedValues[getKey("p0",0,0)] = inExpP0;
-  
-  // Read CL values:
-  double inObsCL, inExpCLn2, inExpCLn1, inExpCL, inExpCLp1, inExpCLp2;
-  while (!textCL.eof()) {
-    textCL >> inName >> inObsCL >> inExpCLn2 >> inExpCLn1 >> inExpCL
-	   >> inExpCLp1 >> inExpCLp2;
-  }
-  textCL.close();
-  
-  // save CL and CLs for later access:
-  m_calculatedValues[getKey("CL", 0, -2)] = inExpCLn2;
-  m_calculatedValues[getKey("CL", 0, -1)] = inExpCLn1;
-  m_calculatedValues[getKey("CL", 0, 0)] = inExpCL;
-  m_calculatedValues[getKey("CL", 0, 1)] = inExpCLp1;
-  m_calculatedValues[getKey("CL", 0, 2)] = inExpCLp2;
-  m_calculatedValues[getKey("CL", 1, 0)] = inObsCL;
-  
-  m_calculatedValues[getKey("CLs", 0, -2)] = getCLsFromCL(inExpCLn2);
-  m_calculatedValues[getKey("CLs", 0, -1)] = getCLsFromCL(inExpCLn1);
-  m_calculatedValues[getKey("CLs", 0, 0)] = getCLsFromCL(inExpCL);
-  m_calculatedValues[getKey("CLs", 0, 1)] = getCLsFromCL(inExpCLp1);
-  m_calculatedValues[getKey("CLs", 0, 2)] = getCLsFromCL(inExpCLp2);
-  m_calculatedValues[getKey("CLs", 1, 0)] = getCLsFromCL(inObsCL);
-}
 /**
    -----------------------------------------------------------------------------
    Takes in a variable declaration such as "name[1,0,5]" and returns "name".
@@ -1540,23 +1483,6 @@ TGraphErrors* TestStat::plotSubtract(TString dataName, TString pdfName,
   observable->setMin(minOrigin);
   observable->setMax(maxOrigin);
   return result;
-}
-
-/**
-   -----------------------------------------------------------------------------
-   Check whether the specified map entry exists.
-    @param mapKey - The key for which we are finding a value:
-    @return - True iff the categorization has been defined. 
-*/
-bool TestStat::mapValueExists(TString mapKey) {
-
-  // Checks if there is a key corresponding to mapKey in the map: 
-  bool nonExistent = (m_calculatedValues.find(mapKey) ==
-		      m_calculatedValues.end());
-  if (nonExistent) {
-    std::cout << "TestStat: key " << mapKey << " not defined!" << std::endl;
-  }
-  return !nonExistent;
 }
 
 /**

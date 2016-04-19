@@ -28,18 +28,21 @@ class TestStat {
 	   RooWorkspace *newWorkspace);
   virtual ~TestStat() {};
   
-  double accessValue(TString testStat, bool observed, int N);
   void addGhostEvents(RooAbsData *dataset, RooRealVar *observable, 
 		      RooRealVar *weight);
+  std::vector<double> asymptoticCL(std::map<TString,double> mapPoI, 
+				   TString datasetName, TString snapshotName,
+				   TString poiForNorm);
+  std::vector<double> asymptoticP0(std::map<TString,double> mapPoI, 
+				   TString datasetName, TString snapshotName,
+				   TString poiForNorm);
   RooAbsData *binDataSet(TString binnedDataName, RooAbsData *unbinnedDataSet, 
 			 RooRealVar* observable, RooRealVar* weight);
-  
-  //void calculateNewCL(TString type);
-  //void calculateNewP0(TString type);
   void clearData();
   void clearFitParamSettings();
   RooAbsData* createAsimovData(int valPoI, TString snapshotName,
-			       std::map<TString,double> namesAndValsPoI);
+			       std::map<TString,double> namesAndValsPoI,
+			       TString asimovDataName="");
   RooDataSet* createPseudoData(int seed, int valPoI, TString snapshotName,
 			       std::map<TString,double> namesAndValsPoI, 
 			       int toyIndex = -1);
@@ -71,7 +74,6 @@ class TestStat {
   double getZFromP(double p);
   double getZMuFromQMu(double qMu);
   double graphIntercept(TGraph *graph, double valueToIntercept);
-  void loadStatsFromFile();
   TGraph *nllScanGraph();
   void resetParamsAfterFit(bool doResetParamsAfterFit);
   void saveSnapshots(bool doSaveSnapshot);
@@ -91,8 +93,6 @@ class TestStat {
   
  private:
   
-  TString getKey(TString testStat, bool observed, int N);
-  bool mapValueExists(TString mapKey);
   TString nameOfVar(TString varForm);
   TGraphErrors* plotDivision(TString dataName, TString pdfName, TString obsName,
 			     double xMin, double xMax, double xBins);
@@ -135,9 +135,6 @@ class TestStat {
   ModelConfig *m_mc;
   TGraph *m_graphNLL;
   TString m_nominalSnapshot;
-  
-  // Store the calculated values:
-  std::map<TString,double> m_calculatedValues;
   
   // Store fit parameters from NLL calculation:
   std::map<std::string,double> m_mapGlobs;
