@@ -50,24 +50,38 @@ int main(int argc, char **argv) {
   // Set the plot Style to ATLAS defaults:
   CommonFunc::SetAtlasStyle();
   
+  // Define the scan settings:
+  bool makeNew = config->getBool("MakeNewScan");
+  bool useAsymptotics = config->getBool("UseAsymptoticsForScan");
+  
   // Use the StatScan class to load toys and calculate 95% CL limits:
   StatScan *scan = new StatScan(configFile, 
 				config->getStr("PlotStatScanOptions"));
   if (options.Contains("New")) scan->setInputDirectory(inputDir);
   else scan->setInputDirectory(outputDir);
   scan->setOutputDirectory(outputDir);
+  
+  // Get scan points from config file for asymptotics:
+  if (useAsymptotics) {
+    scan->useTheseMasses(config->getIntV("AsympStatScanMasses"));
+    scan->useTheseWidths(config->getIntV("AsympStatScanWidths"));
+    scan->useTheseXS(config->getIntV("AsympStatScanXS"));
+  }
+  
+  // Loop over widths:
   std::vector<int> widths = scan->listWidths();
   for (int i_w = 0; i_w < (int)widths.size(); i_w++) {
     std::cout << "PlotStatScan: Start scan for width " << widths[i_w]
 	      << std::endl;
+    
     if (options.Contains("ScanLimit")) {
-      scan->scanMassLimit(widths[i_w], options.Contains("New"));
+      scan->scanMassLimit(widths[i_w], makeNew, useAsymptotics);
     }
     else if (options.Contains("ScanP0")) {
-      scan->scanMassP0(widths[i_w], options.Contains("New"));
+      scan->scanMassP0(widths[i_w], makeNew, useAsymptotics);
     }
     else {
-      std::cout << "PlotStatScan: ERROR! Option must specify p0 or 95CL"
+      std::cout << "PlotStatScan: ERROR! Option must = ScanLimit or ScanP0"
 		<< std::endl;
     }
     std::cout << "PlotStatScan: Finished scan for width " << widths[i_w]

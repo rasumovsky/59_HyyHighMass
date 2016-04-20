@@ -116,9 +116,25 @@ std::vector<TString> Config::getStrV(TString key) {
   return vectorize(m_env.GetValue(key,"")," \t");
 }
 
+/**
+   Access a vector of doubles from the config database
+*/
 std::vector<double> Config::getNumV(TString key) {
   ensureDefined(key);
   return vectorizeNum(m_env.GetValue(key,"")," \t");
+}
+
+/**
+   Access a vector of ints from the config database
+*/
+std::vector<int> Config::getIntV(TString key) {
+  ensureDefined(key);
+  std::vector<double> vecDouble = getNumV(key);
+  std::vector<int> result; result.clear();
+  for (int i_v = 0; i_v < (int)vecDouble.size(); i_v++) {
+    result.push_back((int)vecDouble[i_v]);
+  }
+  return result;
 }
 
 /**

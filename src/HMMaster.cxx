@@ -16,8 +16,7 @@
 //    - GlobalP0Toys                                                          //
 //    - GlobalP0Analysis                                                      //
 //    - LocalP0Analysis                                                       //
-//    - PlotLimitScan                                                         //
-//    - PlotP0Scan                                                            //
+//    - PlotScan                                                              //
 //    - ExtrapolateSig                                                        //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
@@ -147,21 +146,14 @@ int main (int argc, char **argv) {
   }
   
   //--------------------------------------//
-  // Step 3.1: Plot limits from pseudo-experiments:
-  if (masterOption.Contains("PlotLimitScan")) {
-    std::cout << "HMMaster: Step 3.1 - Plot toy limits." << std::endl;
+  // Step 3.1: Plot limits or p0 from asymptotics or pseudo-experiments:
+  if (masterOption.Contains("PlotScan")) {
+    std::cout << "HMMaster: Step 3.0 - Plot asymptotic or toy limits or p0."
+	      << std::endl;
     system(Form("./bin/PlotStatScan %s %s", fullConfigPath.Data(),
 		m_config->getStr("PlotStatScanOptions").Data()));
   }
 
-  //--------------------------------------//
-  // Step 3.2: Plot p0 from pseudo-experiments:
-  if (masterOption.Contains("PlotP0Scan")) {
-    std::cout << "HMMaster: Step 3.2 - Plot toy p0." << std::endl;
-    system(Form("./bin/PlotStatScan %s %s", fullConfigPath.Data(),
-		m_config->getStr("PlotStatScanOptions").Data()));
-  }
-  
   //--------------------------------------//
   // Step 4.0: Extrapolate the 2015 excess using S+B or B-only hypothesis:
   if (masterOption.Contains("ExtrapolateSig")) {

@@ -26,21 +26,32 @@ class StatScan {
   StatScan(TString configFileName, TString options);
   virtual ~StatScan() {};
   void clearData();
-  double getLimit(int mass, int width, bool expected, int N);
+  double getCL(int mass, int width, int crossSection, bool expected,
+	       bool asymptotic, int N);
+  double getLimit(int mass, int width, bool expected, bool asymptotic, int N);
   double getP0(int mass, int width, bool expected, bool asymptotic);
   std::vector<int> listMasses();
   std::vector<int> listWidths();
   std::vector<int> listXS();
-  void scanMassLimit(int width, bool makeNew);
-  void scanMassP0(int width, bool makeNew);
+  void scanMassLimit(int width, bool makeNew, bool asymptotic);
+  void scanMassP0(int width, bool makeNew, bool asymptotic);
   void setInputDirectory(TString directory);
-  void setLimit(int mass, int width, bool expected, int N, double limitValue);
+  void setCL(int mass, int width, int crossSection, bool expected, 
+	     bool asymptotic, int N, double CLValue);
+  void setLimit(int mass, int width, bool expected, bool asymptotic, int N, 
+		double limitValue);
   void setP0(int mass, int width, bool expected, bool asymptotic, 
 	     double p0Value);
   void setOutputDirectory(TString directory);
-  bool singleCLScan(int mass, int width, bool makeNew);
-  bool singleP0Test(int mass, int width, bool makeNew);
-
+  bool singleCLScan(int mass, int width, bool makeNew, bool asymptotic);
+  bool singleCLTest(int mass, int width, int crossSection, bool makeNew,
+		    bool asymptotic);
+  bool singleP0Test(int mass, int width, int crossSection, bool makeNew, 
+		    bool asymptotic);
+  void useTheseMasses(std::vector<int> massValues);
+  void useTheseWidths(std::vector<int> widthValues);
+  void useTheseXS(std::vector<int> xsValues);
+  
  private:
   
   void detectMassWidthXSFiles(TString toyDirectory);
@@ -62,7 +73,8 @@ class StatScan {
   std::vector<int> m_xsValues;
   
   // Store the statistical values at a particular point:
-  std::map<TString,double> m_values95CL;
+  std::map<TString,double> m_valuesCL;
+  std::map<TString,double> m_valuesLimit;
   std::map<TString,double> m_valuesP0;
   
 };

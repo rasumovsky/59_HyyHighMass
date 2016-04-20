@@ -9,6 +9,9 @@
 //  Performs a scan of the 95% CL using toy MC at various mass-width-cross-   //
 //  section points.                                                           //
 //                                                                            //
+//  Options:                                                                  //
+//  - ImportSamp: implements importance sampling for p0 calculation.          //
+//                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "StatScan.h"
@@ -20,7 +23,7 @@
    @param options - Options for the CL scan.
 */
 StatScan::StatScan(TString configFileName, TString options) {
-    
+  
   // Load the config file:
   m_configFileName = configFileName;
   m_config = new Config(m_configFileName);
@@ -52,7 +55,8 @@ void StatScan::clearData() {
   m_massValues.clear();
   m_widthValues.clear();
   m_xsValues.clear();
-  m_values95CL.clear();
+  m_valuesCL.clear();
+  m_valuesLimit.clear();
   m_valuesP0.clear();
 }
 
@@ -172,19 +176,44 @@ double StatScan::getIntercept(TGraph *graph, double valueToIntercept) {
 
 /**
    -----------------------------------------------------------------------------
+   Get the CL which was computed for a given mass, width, and sigma.
+   @param mass - The mass integer for the point of interest.
+   @param width - The width integer for the point of interest.
+   @param crossSection - The crossSection integer for the point of interest.
+   @param expected - True for expected limit (false for observed).
+   @param asymptotic - True iff asymptotic result is desired.
+   @param N - For bands, use +2,+1,-1,-2. For medians, use 0.
+   @return - The 95% CL value of the cross-section.
+*/
+double StatScan::getCL(int mass, int width, int crossSection, bool expected,
+		       bool asymptotic, int N) {
+  TString key = Form("mass%d_width%d_xs%d_exp%d_asym%d_N%d", mass, width,
+		     crossSection, (int)expected, (int)asymptotic, N);
+  if (m_valuesCL.count(key) == 0) {
+    printer(Form("StatScan:getCL ERROR no value for key %s", key.Data()), true);
+  }
+  return m_valuesCL[key];
+}
+
+/**
+   -----------------------------------------------------------------------------
    Get the limit which was computed for a given mass, width, and sigma.
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
    @param expected - True for expected limit (false for observed).
+   @param asymptotic - True iff asymptotic result is desired.
    @param N - For bands, use +2,+1,-1,-2. For medians, use 0.
    @return - The 95% CL value of the cross-section.
 */
-double StatScan::getLimit(int mass, int width, bool expected, int N) {
-  TString key = expected ? Form("exp_mass%d_width%d_N%d", mass, width, N) : 
-    Form("obs_mass%d_width%d_N%d", mass, width, N);
-  if (m_values95CL.count(key) > 0) return m_values95CL[key];
-  else printer(Form("StatScan: ERROR no value for key %s", key.Data()), true);
-  return 0.0;
+double StatScan::getLimit(int mass, int width, bool expected, bool asymptotic,
+			  int N) {
+  TString key = Form("mass%d_width%d_exp%d_asym%d_N%d", mass, width,
+		     (int)expected, (int)asymptotic, N);
+  if (m_valuesLimit.count(key) == 0) {
+    printer(Form("StatScan:getLimit ERROR no value for key %s", key.Data()),
+	    true);
+  }
+  return m_valuesLimit[key];
 }
 
 /**
@@ -197,13 +226,12 @@ double StatScan::getLimit(int mass, int width, bool expected, int N) {
    @return - The p0 value.
 */
 double StatScan::getP0(int mass, int width, bool expected, bool asymptotic) {
-  TString key = expected ? Form("exp_mass%d_width%d", mass, width) : 
-    Form("obs_mass%d_width%d", mass, width);
-  if (asymptotic) key.Prepend("asymptotic_");
-  else key.Prepend("toy_");
-  if (m_valuesP0.count(key) > 0) return m_valuesP0[key];
-  else printer(Form("StatScan: ERROR no value for key %s", key.Data()), true);
-  return 0.0;
+  TString key = Form("mass%d_width%d_exp%d_asym%d", mass, width,
+		     (int)expected, (int)asymptotic);
+  if (m_valuesP0.count(key) == 0) {
+    printer(Form("StatScan:getP0 ERROR no value for key %s", key.Data()), true);
+  }
+  return m_valuesP0[key];
 }
 
 /**
@@ -248,75 +276,55 @@ void StatScan::printer(TString statement, bool isFatal) {
    Plot the limits as a function of mass, for a given width slice.
    @param width - The width integer for the scan.
    @param makeNew - True iff. calculating things from toys directly.
+   @param asymptotic - True iff. asymptotic results are desired. 
 */
-void StatScan::scanMassLimit(int width, bool makeNew) {
+void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic) {
+  printer(Form("StatScan::scanMassLimit(%d, %d, %d)",
+	       width, (int)makeNew, (int)asymptotic), false);
   
-  TString limitFileName = Form("%s/limit_values_width%d.txt",
-			       m_outputDir.Data(), width);
+  TString limitFileName = asymptotic ? 
+    Form("%s/asymptotic_limit_values_width%d.txt", m_outputDir.Data(), width) :
+    Form("%s/toy_limit_values_width%d.txt", m_outputDir.Data(), width);
   
-  // Arrays to store band information:
-  double varValues[100] = {0};  
-  double CLObs[100]     = {0};
-  double CLExp_p2[100]  = {0};  
-  double CLExp_p1[100]  = {0};
-  double CLExp[100]     = {0};
-  double CLExp_n1[100]  = {0};
-  double CLExp_n2[100]  = {0};
+  // Arrays to store limit graph information (medians and error bands):
   int nToyPoints = 0;
+  double observableValues[100] = {0};  
+  double limitObs[100] = {0};
+  double limitExp_p2[100] = {0};  
+  double limitExp_p1[100] = {0};
+  double limitExp[100] = {0};
+  double limitExp_n1[100] = {0};
+  double limitExp_n2[100] = {0};
   
   //----------------------------------------//
-  // Access results either by loading toy MC or stored limit computations:
-  // Loop over the mass points to load CL results
-  if (makeNew || m_options.Contains("ForceScan")) {
-    printer("StatScan: Calculating limits vs. mass from scratch", false);
-    
-    std::ofstream limitFileOut(limitFileName);
-    for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
-      if (singleCLScan(m_massValues[i_m], width, makeNew)) {
-	varValues[nToyPoints] = m_massValues[i_m];
-	CLObs[nToyPoints] = getLimit(m_massValues[i_m], width, false, 0);
-	CLExp_p2[nToyPoints] = getLimit(m_massValues[i_m], width, true, -2);
-	CLExp_p1[nToyPoints] = getLimit(m_massValues[i_m], width, true, -1);
-	CLExp[nToyPoints] = getLimit(m_massValues[i_m], width, true, 0);
-	CLExp_n1[nToyPoints] = getLimit(m_massValues[i_m], width, true, 1);
-	CLExp_n2[nToyPoints] = getLimit(m_massValues[i_m], width, true, 2);
-	limitFileOut << m_massValues[i_m] << " " << CLObs[nToyPoints] << " " 
-		  << CLExp_p2[nToyPoints] << " " << CLExp_p1[nToyPoints] << " " 
-		  << CLExp[nToyPoints] << " " << CLExp_n1[nToyPoints] << " " 
-		  << CLExp_n2[nToyPoints] << " " << std::endl;
-	nToyPoints++;
-      }
+  // Loop over the mass points to load or calculate limit results:
+  std::ofstream limitFileOut(limitFileName);
+  for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
+    if (singleCLScan(m_massValues[i_m], width, makeNew, asymptotic)) {
+      observableValues[nToyPoints] = m_massValues[i_m];
+      limitObs[nToyPoints]
+	= getLimit(m_massValues[i_m], width, false, asymptotic, 0);
+      limitExp_p2[nToyPoints] 
+	= getLimit(m_massValues[i_m], width, true, asymptotic, -2);
+      limitExp_p1[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, -1);
+      limitExp[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, 0);
+      limitExp_n1[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, 1);
+      limitExp_n2[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, 2);
+      limitFileOut << m_massValues[i_m] << " " 
+		   << limitObs[nToyPoints] << " " 
+		   << limitExp_p2[nToyPoints] << " " 
+		   << limitExp_p1[nToyPoints] << " "
+		   << limitExp[nToyPoints] << " " 
+		   << limitExp_n1[nToyPoints] << " " 
+		   << limitExp_n2[nToyPoints] << " " << std::endl;
+      nToyPoints++;
     }
-    limitFileOut.close();
   }
-  // Or load from text file:
-  else {
-    printer("StatScan: Loading limits vs. mass from file.", false);
-    
-    double currMass = 0.0;
-    std::ifstream limitFileIn(limitFileName);
-    if (limitFileIn.is_open()) {
-      while (limitFileIn >> currMass >> CLObs[nToyPoints]
-	     >> CLExp_p2[nToyPoints] >> CLExp_p1[nToyPoints] 
-	     >> CLExp[nToyPoints] >> CLExp_n1[nToyPoints] 
-	     >> CLExp_n2[nToyPoints]) {
-	varValues[nToyPoints] = currMass;
-        setLimit(currMass, width, false, 0, CLObs[nToyPoints]);
-	setLimit(currMass, width, true, -2, CLExp_p2[nToyPoints]);
-	setLimit(currMass, width, true, -1, CLExp_p1[nToyPoints]);
-	setLimit(currMass, width, true, 0, CLExp[nToyPoints]);
-	setLimit(currMass, width, true, 1, CLExp_n1[nToyPoints]);
-	setLimit(currMass, width, true, 2, CLExp_n2[nToyPoints]);
-	
-	std::cout << currMass << " " << CLObs[nToyPoints] << " " 
-		  << CLExp_p2[nToyPoints] << " " << CLExp_p1[nToyPoints] << " " 
-		  << CLExp[nToyPoints] << " " << CLExp_n1[nToyPoints] << " " 
-		  << CLExp_n2[nToyPoints] << " " << std::endl;
-	nToyPoints++;
-      }
-    }
-    limitFileIn.close();
-  }
+  limitFileOut.close();
   
   //----------------------------------------//
   // Plot the results:
@@ -325,48 +333,47 @@ void StatScan::scanMassLimit(int width, bool makeNew) {
   double errExp_n1[100] = {0};
   double errExp_n2[100] = {0};
   for (int i_t = 0; i_t < nToyPoints; i_t++) {
-    errExp_p2[i_t] = fabs(CLExp_p2[i_t] - CLExp[i_t]);
-    errExp_p1[i_t] = fabs(CLExp_p1[i_t] - CLExp[i_t]);
-    errExp_n1[i_t] = fabs(CLExp_n1[i_t] - CLExp[i_t]);
-    errExp_n2[i_t] = fabs(CLExp_n2[i_t] - CLExp[i_t]);
+    errExp_p2[i_t] = fabs(limitExp_p2[i_t] - limitExp[i_t]);
+    errExp_p1[i_t] = fabs(limitExp_p1[i_t] - limitExp[i_t]);
+    errExp_n1[i_t] = fabs(limitExp_n1[i_t] - limitExp[i_t]);
+    errExp_n2[i_t] = fabs(limitExp_n2[i_t] - limitExp[i_t]);
   }
   
-  // Median expected and observed results:
-  TGraph *gCLExp = new TGraph(nToyPoints, varValues, CLExp);
-  TGraph *gCLObs = new TGraph(nToyPoints, varValues, CLObs);
+  // Graphs for the median expected and observed results:
+  TGraph *gLimitExp = new TGraph(nToyPoints, observableValues, limitExp);
+  TGraph *gLimitObs = new TGraph(nToyPoints, observableValues, limitObs);
   
-  // Also plot the bands:
-  TGraphAsymmErrors *gCLExp_2s
-    = new TGraphAsymmErrors(nToyPoints, varValues, CLExp, 0, 0, 
+  // Graphs for the expected error bands:
+  TGraphAsymmErrors *gLimitExp_2s 
+    = new TGraphAsymmErrors(nToyPoints, observableValues, limitExp, 0, 0, 
  			    errExp_n2, errExp_p2);
-  TGraphAsymmErrors *gCLExp_1s
-    = new TGraphAsymmErrors(nToyPoints, varValues, CLExp, 0, 0, 
+  TGraphAsymmErrors *gLimitExp_1s
+    = new TGraphAsymmErrors(nToyPoints, observableValues, limitExp, 0, 0, 
 			    errExp_n1, errExp_p1);
   
-  // Start plotting:
+  // Canvas and graph formatting:
   TCanvas *can = new TCanvas("can","can");
   can->cd();
   
-  // Toy graph formatting:
-  gCLExp->GetXaxis()->SetTitle("m_{G*} [GeV]");
-  gCLObs->GetXaxis()->SetTitle("m_{G*} [GeV]");
-  gCLExp_2s->GetXaxis()->SetTitle("m_{G*} [GeV]");
-  gCLExp->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
-  gCLObs->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
-  gCLExp_2s->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
+  gLimitExp->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  gLimitObs->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  gLimitExp_2s->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  gLimitExp->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
+  gLimitObs->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
+  gLimitExp_2s->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
   
-  gCLExp->SetLineColor(kBlack);
-  gCLExp->SetLineStyle(2);
-  gCLExp->SetLineWidth(2);
+  gLimitExp->SetLineColor(kBlack);
+  gLimitExp->SetLineStyle(2);
+  gLimitExp->SetLineWidth(2);
   
-  gCLObs->SetLineColor(kBlack);
-  gCLObs->SetLineStyle(1);
-  gCLObs->SetLineWidth(2);
-  gCLObs->SetMarkerColor(kBlack);
-  gCLObs->SetMarkerStyle(21);
+  gLimitObs->SetLineColor(kBlack);
+  gLimitObs->SetLineStyle(1);
+  gLimitObs->SetLineWidth(2);
+  gLimitObs->SetMarkerColor(kBlack);
+  gLimitObs->SetMarkerStyle(21);
   
-  gCLExp_2s->SetFillColor(kYellow);
-  gCLExp_1s->SetFillColor(kGreen);
+  gLimitExp_2s->SetFillColor(kYellow);
+  gLimitExp_1s->SetFillColor(kGreen);
   
   // Legend:
   TLegend leg(0.61, 0.68, 0.89, 0.91);
@@ -374,23 +381,23 @@ void StatScan::scanMassLimit(int width, bool makeNew) {
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
   if (!m_config->getBool("DoBlind")) {
-    leg.AddEntry(gCLObs,"Observed #it{CL_{s}} limit","P");
+    leg.AddEntry(gLimitObs,"Observed #it{CL_{s}} limit","P");
   }
-  leg.AddEntry(gCLExp,"Expected #it{CL_{s}} limit","l");
-  leg.AddEntry(gCLExp_1s,"Expected #pm 1#sigma_{exp}","F");
-  leg.AddEntry(gCLExp_2s,"Expected #pm 2#sigma_{exp}","F");
+  leg.AddEntry(gLimitExp,"Expected #it{CL_{s}} limit","l");
+  leg.AddEntry(gLimitExp_1s,"Expected #pm 1#sigma_{exp}","F");
+  leg.AddEntry(gLimitExp_2s,"Expected #pm 2#sigma_{exp}","F");
   
   // Plotting options:
-  gCLExp_2s->GetXaxis()->SetRangeUser(m_massValues[0], 
-				      m_massValues[m_massValues.size()-1]);
-  gCLExp_2s->GetYaxis()->SetRangeUser(1, 1000);
+  gLimitExp_2s->GetXaxis()->SetRangeUser(m_massValues[0], 
+					 m_massValues[m_massValues.size()-1]);
+  gLimitExp_2s->GetYaxis()->SetRangeUser(1, 1000);
   
   gPad->SetLogy();
-  gCLExp_2s->Draw("A3");
-  gCLExp->Draw("Lsame");
-  gCLExp_1s->Draw("3same");
-  gCLExp->Draw("LSAME");
-  if (!m_config->getBool("DoBlind")) gCLObs->Draw("PSAME");
+  gLimitExp_2s->Draw("A3");
+  gLimitExp->Draw("Lsame");
+  gLimitExp_1s->Draw("3same");
+  gLimitExp->Draw("LSAME");
+  if (!m_config->getBool("DoBlind")) gLimitObs->Draw("PSAME");
   gPad->RedrawAxis();
   leg.Draw("SAME");
   
@@ -412,22 +419,24 @@ void StatScan::scanMassLimit(int width, bool makeNew) {
   gPad->SetLogy(false);
   
   // Save graphs to file:
-  TFile *outLimitFile = new TFile(Form("%s/limit_graphs_width%d.root",
-				       m_outputDir.Data(), width), "RECREATE");
-  gCLObs->Write();
-  gCLExp->Write();
-  gCLExp_2s->Write();
-  gCLExp_1s->Write();
+  TString graphFileName = asymptotic ? 
+    Form("%s/asymptotic_limit_graphs_width%d.root", m_outputDir.Data(), width) :
+    Form("%s/toy_limit_graphs_width%d.root", m_outputDir.Data(), width);
+  TFile *outLimitFile = new TFile(graphFileName, "RECREATE");
+  gLimitObs->Write();
+  gLimitExp->Write();
+  gLimitExp_2s->Write();
+  gLimitExp_1s->Write();
   can->Write();
   outLimitFile->Close();
   
   // Delete pointers:
   printer(Form("StatScan: Finished mass scan for %d!", width), false);
   delete can;
-  delete gCLObs;
-  delete gCLExp;
-  delete gCLExp_2s;
-  delete gCLExp_1s;
+  delete gLimitObs;
+  delete gLimitExp;
+  delete gLimitExp_2s;
+  delete gLimitExp_1s;
 }
 
 /**
@@ -435,77 +444,48 @@ void StatScan::scanMassLimit(int width, bool makeNew) {
    Plot the p0 value as a function of mass, for a given width slice.
    @param width - The width integer for the scan.
    @param makeNew - True iff. calculating things from toys directly.
+   @param asymptotic - True iff. asymptotic results are desired. 
 */
-void StatScan::scanMassP0(int width, bool makeNew) {
+void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
+  printer(Form("StatScan::scanMassP0(%d, %d, %d)",
+	       width, (int)makeNew, (int)asymptotic), false);
   
-  TString p0FileName = Form("%s/p0_values_width%d.txt",
-			    m_outputDir.Data(), width);
-  
-  // Arrays to store band information:
-  double varValues[100] = {0};  
+  // Arrays to store p0 graph information:
+  int nToyPoints = 0;
+  double observableValues[100] = {0};  
   double p0Obs[100] = {0};
   double p0Exp[100] = {0};
-  int nToyPoints = 0;
   
   //----------------------------------------//
-  // Access results either by loading toy MC or stored limit computations:
-  // Loop over the mass points to load CL results
-  if (makeNew || m_options.Contains("ForceScan")) {
-    printer("StatScan: Calculating limits vs. mass from scratch", false);
-    
-    std::ofstream p0FileOut(p0FileName);
-    for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
-      if (singleP0Test(m_massValues[i_m], width, makeNew)) {
-	varValues[nToyPoints] = m_massValues[i_m];
-	p0Obs[nToyPoints] = getP0(m_massValues[i_m], width, false, false);
-	//p0Exp[nToyPoints] = getP0(m_massValues[i_m], width, true, false);
-	p0Exp[nToyPoints] = 0.5;// CURRENTLY NOT IMPLEMENTED
-	// ISSUE IS: WHAT XSECTION TO EXPECT IN TOY ANALYSIS?
-	p0FileOut << m_massValues[i_m] << " " << p0Obs[nToyPoints] << " " 
-		 << p0Exp[nToyPoints] << std::endl;
-	nToyPoints++;
-      }
+  // Loop over the mass points to load or calculate p0:
+  printer("StatScan: Calculating limits vs. mass from scratch", false);
+  for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
+    double currentXS = 1.0;
+    if (singleP0Test(m_massValues[i_m], width, currentXS, makeNew, asymptotic)){
+      observableValues[nToyPoints] = m_massValues[i_m];
+      p0Obs[nToyPoints] = getP0(m_massValues[i_m], width, false, asymptotic);
+      p0Exp[nToyPoints] = getP0(m_massValues[i_m], width, true, asymptotic);
+      nToyPoints++;
     }
-    p0FileOut.close();
-  }
-  // Or load from text file:
-  else {
-    printer("StatScan: Loading p0 vs. mass from file.", false);
-    
-    double currMass = 0.0;
-    std::ifstream p0FileIn(p0FileName);
-    if (p0FileIn.is_open()) {
-      while (p0FileIn >> currMass >> p0Obs[nToyPoints] >> p0Exp[nToyPoints]) {
-	varValues[nToyPoints] = currMass;
-	setP0(currMass, width, false, false, p0Obs[nToyPoints]);
-	setP0(currMass, width, true, false, p0Exp[nToyPoints]);
-	std::cout << currMass << " " << p0Obs[nToyPoints] << " " 
-		  << p0Exp[nToyPoints] << std::endl;
-	nToyPoints++;
-      }
-    }
-    p0FileIn.close();
   }
   
   //----------------------------------------//
   // Plot the results:
-    
+  
   // Median expected and observed results:
-  //TGraph *gP0Exp = new TGraph(nToyPoints, varValues, p0Exp);
-  TGraph *gP0Obs = new TGraph(nToyPoints, varValues, p0Obs);
-    
+  TGraph *gP0Exp = new TGraph(nToyPoints, observableValues, p0Exp);
+  TGraph *gP0Obs = new TGraph(nToyPoints, observableValues, p0Obs);
+  
   // Start plotting:
   TCanvas *can = new TCanvas("can","can");
   can->cd();
   
   // Toy graph formatting:
-  /*
   gP0Exp->GetXaxis()->SetTitle("m_{G*} [GeV]");
   gP0Exp->GetYaxis()->SetTitle("p_{0}");
   gP0Exp->SetLineColor(kBlack);
   gP0Exp->SetLineStyle(2);
   gP0Exp->SetLineWidth(2);
-  */
   
   gP0Obs->GetXaxis()->SetTitle("m_{G*} [GeV]");
   gP0Obs->GetYaxis()->SetTitle("p_{0}");  
@@ -514,23 +494,20 @@ void StatScan::scanMassP0(int width, bool makeNew) {
   gP0Obs->SetLineWidth(2);
   
   // Legend:
-  /*
-  TLegend leg(0.61, 0.68, 0.89, 0.91);
+  TLegend leg(0.61, 0.48, 0.59, 0.91);
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
   if (m_config->getBool("DoBlind")) leg.AddEntry(gP0Exp,"Expected p_{0}","P");
   else leg.AddEntry(gP0Obs,"Observed p_{0}","P");
-  */
-
+  
   // Plotting options:
   gP0Obs->GetYaxis()->SetRangeUser(0.0000001, 1.0);
-  //gP0Exp->GetYaxis()->SetRangeUser(0.0000001, 1.0);
-  
+    
   gPad->SetLogy();
-  //if (m_config->getBool("DoBlind")) gP0Exp->Draw("AP");
   gP0Obs->Draw("ALP");
-  //leg.Draw("SAME");
+  gP0Exp->Draw("LPSAME");
+  leg.Draw("SAME");
   
   // Significance lines and text:
   TLatex sigma; sigma.SetTextColor(kRed+1);
@@ -568,8 +545,10 @@ void StatScan::scanMassP0(int width, bool makeNew) {
   can->Print(Form("%s/p0_width%d.eps", m_outputDir.Data(), width));
   
   // Save p0 graphs to file:
-  TFile *outP0File = new TFile(Form("%s/p0_graphs_width%d.root",
-				    m_outputDir.Data(), width), "RECREATE");
+  TString graphFileName = asymptotic ? 
+    Form("%s/asymptotic_p0_graphs_width%d.root", m_outputDir.Data(), width) :
+    Form("%s/toy_p0_graphs_width%d.root", m_outputDir.Data(), width);
+  TFile *outP0File = new TFile(graphFileName, "RECREATE");
   gP0Obs->Write();
   can->Write();
   outP0File->Close();
@@ -580,7 +559,7 @@ void StatScan::scanMassP0(int width, bool makeNew) {
   printer(Form("StatScan: Finished p0 mass scan for %d!", width), false);
   delete can;
   delete gP0Obs;
-  //delete gP0Exp;
+  delete gP0Exp;
 }
 
 /**
@@ -596,21 +575,40 @@ void StatScan::setInputDirectory(TString directory) {
 
 /**
    -----------------------------------------------------------------------------
+   Set the CL which was computed for a given mass, width, and sigma.
+   @param mass - The mass integer for the point of interest.
+   @param width - The width integer for the point of interest.
+   @param crossSection - The cross-section integer for the point of interest.
+   @param expected - True for expected limits (false for observed).
+   @param asymptotic - True iff. asymptotic value being set.
+   @param N - For bands, use +2,+1,-1,-2. For medians, use 0.
+   @param CLValue - The CL value to set.
+*/
+void StatScan::setCL(int mass, int width, int crossSection, bool expected,
+		     bool asymptotic, int N, double CLValue) {
+  TString key = Form("mass%d_width%d_xs%d_exp%d_asym%d_N%d", mass, width,
+		     crossSection, (int)expected, (int)asymptotic, N);
+  m_valuesCL[key] = CLValue;
+  printer(Form("StatScan::setCL(%s)=%f", key.Data(), m_valuesCL[key]), false);
+}
+
+/**
+   -----------------------------------------------------------------------------
    Set the limit which was computed for a given mass, width, and sigma.
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
    @param expected - True for expected limits (false for observed).
+   @param asymptotic - True iff. asymptotic value being set.
    @param N - For bands, use +2,+1,-1,-2. For medians, use 0.
    @param limitValue - The limit value to set.
 */
-void StatScan::setLimit(int mass, int width, bool expected, int N, 
-		      double limitValue) {
-  if (expected) {
-    m_values95CL[Form("exp_mass%d_width%d_N%d", mass, width, N)] = limitValue;
-  }
-  else {
-    m_values95CL[Form("obs_mass%d_width%d_N%d", mass, width, N)] = limitValue;
-  }
+void StatScan::setLimit(int mass, int width, bool expected, bool asymptotic, 
+			int N, double limitValue) {
+  TString key = Form("mass%d_width%d_exp%d_asym%d_N%d", mass, width,
+		     (int)expected, (int)asymptotic, N);
+  m_valuesLimit[key] = limitValue;
+  printer(Form("StatScan::setLimit(%s)=%f", key.Data(), m_valuesLimit[key]), 
+	  false);
 }
 
 /**
@@ -623,12 +621,11 @@ void StatScan::setLimit(int mass, int width, bool expected, int N,
    @param p0Value - The p0 value to set.
 */
 void StatScan::setP0(int mass, int width, bool expected, bool asymptotic, 
-		   double p0Value) {
-  TString key = expected ? Form("exp_mass%d_width%d", mass, width) :
-    Form("obs_mass%d_width%d", mass, width);
-  if (asymptotic) key.Prepend("asymptotic_");
-  else key.Prepend("toy_");
+		     double p0Value) {
+  TString key = Form("mass%d_width%d_exp%d_asym%d", mass, width,
+		     (int)expected, (int)asymptotic);
   m_valuesP0[key] = p0Value;
+  printer(Form("StatScan::setP0(%s)=%f", key.Data(), m_valuesP0[key]), false);
 }
 
 /**
@@ -645,18 +642,18 @@ void StatScan::setOutputDirectory(TString directory) {
 /**
    -----------------------------------------------------------------------------
    The method finds the 95% CL by scanning various signal cross-sections.
-   @param configFile - The analysis configuration file.
-   @param options - Job options: "New","FromFile","toy","asymptotic","NEvents"
-   @param resMass - The resonance mass.
+   @param mass - The mass integer for the point of interest.
+   @param width - The width integer for the point of interest.
    @param makeNew - True if from toy MC, false if from text file storage.
+   @param asymptotic - True iff. asymptotic results are desired. 
    @return - True iff loaded successfully.
 */
-bool StatScan::singleCLScan(int mass, int width, bool makeNew) {
-  printer(Form("singleCLScan(mass=%d, width=%d, makeNew=%d",
+bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
+  printer(Form("StatScan::singleCLScan(mass=%d, width=%d, makeNew=%d",
 	       mass, width, (int)makeNew), false);
   
   // Arrays to store band information:
-  int xsVals[100] = {0};
+  int nToyPoints = 0;
   double varValues[100] = {0};  
   double CLObs[100] = {0};
   double CLExp_p2[100] = {0};  
@@ -665,210 +662,30 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew) {
   double CLExp_n1[100] = {0};
   double CLExp_n2[100] = {0};
   
-  double qMuObs[100] = {0.0};
-  double qMuExp[100] = {0.0};
-  double qMuExp_p2[100] = {0.0};
-  double qMuExp_p1[100] = {0.0};
-  double qMuExp_n1[100] = {0.0};
-  double qMuExp_n2[100] = {0.0};
-  
-  int nToyPoints = 0;
-  
   //----------------------------------------//
-  // Open CL values from file:
-  if (!makeNew) {
-    
-    // Open the saved CL values from toys:
-    TString inputName = Form("%s/scan_CL_values_mass%d_width%d.txt",
-			     m_outputDir.Data(), mass, width);
-    std::ifstream inputFile(inputName);
-    if (inputFile.is_open()) {
-      while (inputFile >> varValues[nToyPoints] >> CLObs[nToyPoints] 
-	     >> CLExp[nToyPoints] >> CLExp_p2[nToyPoints] 
-	     >> CLExp_p1[nToyPoints] >> CLExp_n1[nToyPoints] 
-	     >> CLExp_n2[nToyPoints]) {
-	nToyPoints++;
-      }
-    }
-    else {
-      printer(Form("StatScan: ERROR opnening toy file %s", inputName.Data()), 
-	      false);
-    }
-    inputFile.close();
-  }
-  
-  //----------------------------------------//
-  // Calculate value of q0 observed before processing toy files:
-  else {
-    // Open the workspace:
-    TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
-    RooWorkspace *workspace
-      = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
-    
-    // Instantiate the test statistic class for calculations and plots:
-    TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
-    testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
-    
-    // Set the PoI ranges for this study:
-    std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
-    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
-      std::vector<double> currRange
-	= m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
-      if (testStat->theWorkspace()->var(listPoI[i_p])) {
-	testStat->theWorkspace()->var(listPoI[i_p])
-	  ->setRange(currRange[0], currRange[1]);
-      }
-      else {
-	std::cout << "GlobalP0Toys: Workspace has no variable " << listPoI[i_p]
-		  << std::endl;
-	exit(0);
-      }
-    }
-    
-    // Turn off MC stat errors if requested for Graviton jobs:
-    if (m_config->isDefined("TurnOffTemplateStat") && 
-	m_config->getBool("TurnOffTemplateStat")) {
-      testStat->theWorkspace()
-	->loadSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
-      const RooArgSet *nuisanceParameters
-	= testStat->theModelConfig()->GetNuisanceParameters();
-      TIterator *nuisIter = nuisanceParameters->createIterator();
-      RooRealVar *nuisCurr = NULL;
-      while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
-	TString currName = nuisCurr->GetName();
-	if (currName.Contains("gamma_stat_channel_bin")) {
-	  testStat->setParam(currName, nuisCurr->getVal(), true);
-	}
-      }
-    }
-    
-    // Save values for plotting again!
-    std::ofstream outFile(Form("%s/scan_CL_values_mass%d_width%d.txt",
-			       m_outputDir.Data(), mass, width));
-    
-    // Loop over cross-section:
-    printer("StatScan: Loop over cross-sections to get qMuObs", false);
-    for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
-      double crossSection = ((double)m_xsValues[i_x])/1000.0;
-      std::cout << "StatScan: cross-section = " << crossSection << std::endl;
-      
-      // Also force the mass and width to be constant always:
-      testStat->setParam(m_config->getStr("PoIForMass"), 
-			 (double)mass, true);
-      testStat->setParam(m_config->getStr("PoIForWidth"), 
-			 (((double)width)/100.0), true);
-      
-      // map of names and values of pois to set for fit.
-      std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
-      mapPoIMu1[m_config->getStr("PoIForNormalization")] = crossSection;
-      mapPoIMu1[m_config->getStr("PoIForMass")] = (double)mass;
-      mapPoIMu1[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
-      
-      // Perform the mu=1 fit and mu-free fit (necessary for qmu calculation):
-      std::cout << "StatScanTesting: Mu 1 fit about to start" << std::endl;
-      double nllObsMu1
-	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-			      1, true, mapPoIMu1, false);
-      std::cout << "StatScanTesting: Mu Free fit about to start" << std::endl;
-      double nllObsMuFree
-	= testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-			      1, false, mapPoIMu1, false);
-      
-      // Get profiled signal strength from the mu-free fit:
-      std::map<std::string,double> poiFromFit = testStat->getPoIs();
-      double obsXSValue 
-	= poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
-      double muHatValue = obsXSValue / crossSection;
-      
-      qMuObs[nToyPoints]
-	= testStat->getQMuFromNLL(nllObsMu1, nllObsMuFree, muHatValue, 1);
-      xsVals[nToyPoints] = m_xsValues[i_x];
-      varValues[nToyPoints] = crossSection;
+  // Scan CL for various cross-sections:
+  printer("StatScan::singleCLScan: Loop over cross-sections to get CL", false);
+  for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
+    if (singleCLTest(mass, width, m_xsValues[i_x], makeNew, asymptotic)) {
+      varValues[nToyPoints] = ((double)m_xsValues[i_x])/1000.0;
+      CLObs[nToyPoints]
+	= getCL(mass, width, m_xsValues[i_x], false, asymptotic, 0);
+      CLExp_n2[nToyPoints]
+	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, -2);
+      CLExp_n1[nToyPoints]
+	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, -1);
+      CLExp[nToyPoints]
+	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, 0);
+      CLExp_p1[nToyPoints]
+	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, 1);
+      CLExp_p2[nToyPoints]
+	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, 2);
       nToyPoints++;
     }
-    delete testStat;
-    delete workspace;
-    wsFile.Close();
-    
-    //----------------------------------------//
-    // Process the toy MC files to obtain the CL values:
-    printer("StatScan: Processing toy MC in loop over cross-sections", false);
-    for (int i_t = 0; i_t < nToyPoints; i_t++) {
-      
-      // Load the tool to analyze toys.
-      // NOTE: this was moved outside the loop above because of interference
-      // between the ToyAnalysis class and TestStat, which is called
-      // in DHToyAnalysis...
-      ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, "None");
-      toyAna->setOutputDir(Form("%s/ToyPlots_mass%d_width%d_xs%d",
-				m_outputDir.Data(), mass, width, xsVals[i_t]));
-      std::vector<TString> fitTypes; fitTypes.clear();
-      fitTypes.push_back("0");
-      fitTypes.push_back("1");
-      fitTypes.push_back("Free");
-      toyAna->setFitTypes(fitTypes);
-      toyAna->loadToy(0, Form("%s/toy_mu0*ForScan_mass%d_width%d_xs%d.root",
-			      m_inputDir.Data(), mass, width, xsVals[i_t]));
-      toyAna->loadToy(1, Form("%s/toy_mu1*ForScan_mass%d_width%d_xs%d.root",
-			      m_inputDir.Data(), mass, width, xsVals[i_t]));
-      if (!(toyAna->areInputFilesOK())) {
-	printer("StatScan: ERROR with toy scan option.", true);
-      }
-      
-      if (m_config->getBool("PlotToysForScan")) {
-	
-	// Plot the toy MC nuisance parameter, global observables, and PoI:
-	std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
-	std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
-	std::vector<TString> namesPars = toyAna->getNamesPoI();
-	for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
-	  if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
-	    toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data
-	    toyAna->plotHist(namesGlobs[i_g], 1);// Mu=1 data
-	  }
-	}
-	for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
-	  if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
-	    toyAna->plotHist(namesNuis[i_n], 0);
-	    toyAna->plotHist(namesNuis[i_n], 1);
-	  }
-	}
-	for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
-	  toyAna->plotHist(namesPars[i_p], 0);
-	  toyAna->plotHist(namesPars[i_p], 1);
-	}
-	
-	// Then plot statistics:
-	toyAna->plotProfiledMu();
-	toyAna->plotTestStat("QMu");
-	toyAna->plotTestStat("Q0");
-	toyAna->plotTestStatComparison("QMu");
-	toyAna->plotTestStatComparison("Q0");
-      }
-      
-      // Calculate the expected qmu:
-      qMuExp[i_t] = toyAna->calculateBkgQMuForN(0);
-      qMuExp_p2[i_t] = toyAna->calculateBkgQMuForN(2.0);
-      qMuExp_p1[i_t] = toyAna->calculateBkgQMuForN(1.0);
-      qMuExp_n1[i_t] = toyAna->calculateBkgQMuForN(-1.0);
-      qMuExp_n2[i_t] = toyAna->calculateBkgQMuForN(-2.0);
-      
-      CLObs[i_t] = toyAna->calculateCLFromToy(qMuObs[i_t]);
-      CLExp[i_t] = toyAna->calculateCLFromToy(qMuExp[i_t]);
-      CLExp_p2[i_t] = toyAna->calculateCLFromToy(qMuExp_p2[i_t]);
-      CLExp_p1[i_t] = toyAna->calculateCLFromToy(qMuExp_p1[i_t]);
-      CLExp_n1[i_t] = toyAna->calculateCLFromToy(qMuExp_n1[i_t]);
-      CLExp_n2[i_t] = toyAna->calculateCLFromToy(qMuExp_n2[i_t]);
-      
-      // Write CL values to file:
-      outFile << varValues[i_t] << " " << CLObs[i_t] << " " << CLExp[i_t] << " "
-	      << CLExp_p2[i_t] << " " << CLExp_p1[i_t] << " " 
-	      << CLExp_n1[i_t] << " " << CLExp_n2[i_t] << std::endl;
-      delete toyAna;
+    else {
+      printer(Form("StatScan::singleCLScan: ERROR for cross-section %d", 
+		   m_xsValues[i_x]), false);
     }
-    
-    // Close the files that save CL data:
-    outFile.close();
   }
   
   //----------------------------------------//
@@ -971,29 +788,29 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew) {
   gPad->SetLogx(false);
   
   // Get the actual limit values:
-  double observedCL = getIntercept(gCLObs, 0.95);
-  double expectedCL = getIntercept(gCLExp, 0.95);
-  double expectedCL_p1 = getIntercept(gCLExp_p1, 0.95);
-  double expectedCL_p2 = getIntercept(gCLExp_p2, 0.95);
-  double expectedCL_n1 = getIntercept(gCLExp_n1, 0.95);
-  double expectedCL_n2 = getIntercept(gCLExp_n2, 0.95);  
+  double observedLimit = getIntercept(gCLObs, 0.95);
+  double expectedLimit_n2 = getIntercept(gCLExp_n2, 0.95);  
+  double expectedLimit_n1 = getIntercept(gCLExp_n1, 0.95);
+  double expectedLimit = getIntercept(gCLExp, 0.95);
+  double expectedLimit_p1 = getIntercept(gCLExp_p1, 0.95);
+  double expectedLimit_p2 = getIntercept(gCLExp_p2, 0.95);
   
   // Store the limits for this mass and width:
-  setLimit(mass, width, false, 0, observedCL);
-  setLimit(mass, width, true, 0, expectedCL);
-  setLimit(mass, width, true, 1, expectedCL_p1);
-  setLimit(mass, width, true, 2, expectedCL_p2);
-  setLimit(mass, width, true, -1, expectedCL_n1);
-  setLimit(mass, width, true, -2, expectedCL_n2);
+  setLimit(mass, width, false, asymptotic, 0, observedLimit);
+  setLimit(mass, width, true, asymptotic, -2, expectedLimit_n2);
+  setLimit(mass, width, true, asymptotic, -1, expectedLimit_n1);
+  setLimit(mass, width, true, asymptotic, 0, expectedLimit);
+  setLimit(mass, width, true, asymptotic, 1, expectedLimit_p1);
+  setLimit(mass, width, true, asymptotic, 2, expectedLimit_p2);
   
   // Then print to screen:
   std::cout << "\nCLScan: Results" << std::endl;
-  std::cout << "\tobserved CL = " << observedCL << std::endl;
-  std::cout << "\texpected CL = " << expectedCL << std::endl;
-  std::cout << "\texpected CL +1 = " << expectedCL_p1 << std::endl;
-  std::cout << "\texpected CL +2 = " << expectedCL_p2 << std::endl;
-  std::cout << "\texpected CL -1 = " << expectedCL_n1 << std::endl;
-  std::cout << "\texpected CL -2 = " << expectedCL_n2 << std::endl;
+  std::cout << "\tobserved CL = " << observedLimit << std::endl;
+  std::cout << "\texpected CL = " << expectedLimit << std::endl;
+  std::cout << "\texpected CL +1 = " << expectedLimit_p1 << std::endl;
+  std::cout << "\texpected CL +2 = " << expectedLimit_p2 << std::endl;
+  std::cout << "\texpected CL -1 = " << expectedLimit_n1 << std::endl;
+  std::cout << "\texpected CL -2 = " << expectedLimit_n2 << std::endl;
   
   // Delete pointers, close files, return:
   printer(Form("StatScan::singleCLScan finished mass %d width %d\n", 
@@ -1007,170 +824,508 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew) {
   delete gCLExp_1s;
   
   // Return true iff. calculation was successful:
-  if (nToyPoints < 2 || observedCL < 0 || expectedCL < 0) return false;
+  if (nToyPoints < 2 || observedLimit < 0 || expectedLimit < 0) return false;
   else return true;
 }
 
 /**
    -----------------------------------------------------------------------------
-   Calculate the p0 for a given mass and width hypothesis.
-   @param configFile - The analysis configuration file.
-   @param options - Job options: "New","FromFile","toy","asymptotic","NEvents"
-   @param resMass - The resonance mass.
+   The method finds the 95% CL by scanning various signal cross-sections.
+   @param mass - The mass integer for the point of interest.
+   @param width - The width integer for the point of interest.
+   @param crossSection - The cross-section integer for the point of interest.
    @param makeNew - True if from toy MC, false if from text file storage.
+   @param asymptotic - True iff. asymptotic results are desired. 
    @return - True iff loaded successfully.
 */
-bool StatScan::singleP0Test(int mass, int width, bool makeNew) {
-  printer(Form("singleP0Test(mass=%d, width=%d, makeNew=%d",
+bool StatScan::singleCLTest(int mass, int width, int crossSection,
+			    bool makeNew, bool asymptotic) {
+  printer(Form("StatScan::singleCLTest(mass=%d, width=%d, makeNew=%d)",
 	       mass, width, (int)makeNew), false);
+
+  bool successful = true;
+
+  // Store band information:
+  double CLObs = 0.0;
+  double CLExp_p2 = 0.0;
+  double CLExp_p1 = 0.0;
+  double CLExp = 0.0;
+  double CLExp_n1 = 0.0;
+  double CLExp_n2 = 0.0;
+  
+  TString textFileNameCL = asymptotic ? 
+    Form("%s/asymptotic_CL_values_mass%d_width%d_xs%d.txt", m_outputDir.Data(),
+	 mass, width, crossSection) :
+    Form("%s/toy_CL_values_mass%d_width%d_xs%d.txt", m_outputDir.Data(),
+	 mass, width, crossSection);
   
   //----------------------------------------//
-  // Step 1: get observed q0 (no expected!)
-  printer("StatScan: Calculating observed q0 for p0 test", false);
-  
-  // Open the workspace:
-  TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
-  RooWorkspace *workspace
-    = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
-  
-  // Instantiate the test statistic class for calculations and plots:
-  TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
-  testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
-  
-  // Set the PoI ranges for this study:
-  std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
-  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
-    std::vector<double> currRange
-      = m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
-    if (testStat->theWorkspace()->var(listPoI[i_p])) {
-      testStat->theWorkspace()->var(listPoI[i_p])
-	->setRange(currRange[0], currRange[1]);
+  // Open CL values from file:
+  if (!makeNew) {
+    printer(Form("StatScan::singleCLTest: Loading CL from file %s",
+		 textFileNameCL.Data()), false);
+    
+    // Open the saved CL values from toys:
+    std::ifstream inputFile(textFileNameCL);
+    if (inputFile.is_open()) {
+      while (inputFile >> CLObs >> CLExp_n2 >> CLExp_n1 >> CLExp >> CLExp_p1
+	     >> CLExp_p2) {
+	std::cout << "observed CL = " << CLObs << std::endl;
+	std::cout << "expected CL -2sigma = " << CLExp_n2 << std::endl;
+	std::cout << "expected CL -1sigma = " << CLExp_n1 << std::endl;
+	std::cout << "expected CL = " << CLExp << std::endl;
+	std::cout << "expected CL +1sigma = " << CLExp_p1 << std::endl;
+	std::cout << "expected CL +2sigma = " << CLExp_p2 << std::endl;
+      }
     }
     else {
-      printer(Form("GlobalP0Toys: Workspace has no variable %s",
-		   listPoI[i_p].Data()), true);
+      printer(Form("StatScan: ERROR opnening text file %s",
+		   textFileNameCL.Data()), false);
+      successful = false;
     }
+    inputFile.close();
   }
-  
-  // Turn off MC stat errors if requested for Graviton jobs:
-  if (m_config->isDefined("TurnOffTemplateStat") && 
-      m_config->getBool("TurnOffTemplateStat")) {
-    testStat->theWorkspace()
-      ->loadSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
-    const RooArgSet *nuisanceParameters
-      = testStat->theModelConfig()->GetNuisanceParameters();
-    TIterator *nuisIter = nuisanceParameters->createIterator();
-    RooRealVar *nuisCurr = NULL;
-    while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
-      TString currName = nuisCurr->GetName();
-      if (currName.Contains("gamma_stat_channel_bin")) {
-	testStat->setParam(currName, nuisCurr->getVal(), true);
-      }
-    }
-  }
-  
-  // Also force the mass and width to be constant always:
-  testStat->setParam(m_config->getStr("PoIForMass"), (double)mass, true);
-  testStat->setParam(m_config->getStr("PoIForWidth"),(((double)width)/100.0), 
-		     true);
-  
-  // Map of names and values of pois to set for fit:
-  std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
-  mapPoIMu0[m_config->getStr("PoIForNormalization")] = 0.0;//cross-section
-  mapPoIMu0[m_config->getStr("PoIForMass")] = (double)mass;
-  mapPoIMu0[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
-  
-  // Perform the mu=0 fit:
-  double nllObsMu0 = testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-					 0, true, mapPoIMu0, true);
-  
-  // Perform mu-free fit (necessary for q0 calculation) and get signal:
-  double nllObsMuFree =testStat->getFitNLL(m_config->getStr("WorkspaceObsData"),
-					   1, false, mapPoIMu0, true);
-  std::map<std::string,double> poiFromFit = testStat->getPoIs();
-  double obsXSValue
-    = poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
-  
-  // Calculate q0 and asymptotic p0:
-  double q0Observed
-    = testStat->getQ0FromNLL(nllObsMu0, nllObsMuFree, obsXSValue);
-  double p0Asymptotic = testStat->getP0FromQ0(q0Observed);
-  
-  // Delete pointers and close files:  
-  delete testStat;
-  delete workspace;
-  wsFile.Close();
   
   //----------------------------------------//
-  // Process the toy MC files to obtain the CL values:
-  printer("StatScan: Computing p0 from toy MC", false);
-  
-  // Load the tool to analyze toys.
-  // NOTE: this was moved  because of intereference between the ToyAnalysis 
-  // class and TestStat, which is also called in ToyAnalysis...
-  TString toyAnaOptions
-    = (m_options.Contains("ImportSamp")) ? "ImportSamp" : "None";
-  ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, toyAnaOptions);
-  toyAna->setOutputDir(Form("%s/ToyPlots_mass%d_width%d_xs0",
-			    m_outputDir.Data(), mass, width));
-  std::vector<TString> fitTypes; fitTypes.clear();
-  fitTypes.push_back("0");
-  fitTypes.push_back("1");
-  fitTypes.push_back("Free");
-  toyAna->setFitTypes(fitTypes);
-  toyAna->loadToy(0, Form("%s/toy_mu0*ForScan_mass%d_width%d_xs*.root",
-			  m_inputDir.Data(), mass, width));
-  if (!(toyAna->areInputFilesOK())) {
-    printer("StatScan: ERROR with toy scan option.", true);
-  }
-  
-  if (m_config->getBool("PlotToysForScan")) {
+  // Calculate new CL values:
+  else {
+    printer("StatScan::singleCLTest: Calculating CL from scratch", false);
+    
+    // Save values for plotting again!
+    std::ofstream outFile(textFileNameCL);
 
-    // Plot the toy MC nuisance parameter, global observables, and PoI:
-    std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
-    std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
-    std::vector<TString> namesPars = toyAna->getNamesPoI();
-    for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
-      if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
-	toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data
+    // Set the dataset to fit:
+    TString datasetToFit = m_config->getStr("WorkspaceObsData");
+    
+    double xSectionDouble = ((double)crossSection)/1000.0;
+
+    // Open the workspace:
+    TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
+    RooWorkspace *workspace
+      = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
+    
+    // Instantiate the test statistic class for calculations and plots:
+    TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
+    testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+    
+    // Set the PoI ranges for this study:
+    std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
+    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+      std::vector<double> currRange
+	= m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
+      if (testStat->theWorkspace()->var(listPoI[i_p])) {
+	testStat->theWorkspace()->var(listPoI[i_p])
+	  ->setRange(currRange[0], currRange[1]);
       }
-    }
-    for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
-      if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
-	toyAna->plotHist(namesNuis[i_n], 0);
+      else {
+	std::cout << "StatScan: Workspace has no variable " << listPoI[i_p]
+		  << std::endl;
+	exit(0);
       }
-    }
-    for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
-      toyAna->plotHist(namesPars[i_p], 0);
     }
     
-    // Then plot statistics:
-    toyAna->plotTestStat("Q0");
-    toyAna->plotTestStatComparison("Q0");
+    // Turn off MC stat errors if requested for Graviton jobs:
+    if (m_config->isDefined("TurnOffTemplateStat") && 
+	m_config->getBool("TurnOffTemplateStat")) {
+      testStat->theWorkspace()
+	->loadSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+      const RooArgSet *nuisanceParameters
+	= testStat->theModelConfig()->GetNuisanceParameters();
+      TIterator *nuisIter = nuisanceParameters->createIterator();
+      RooRealVar *nuisCurr = NULL;
+      while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
+	TString currName = nuisCurr->GetName();
+	if (currName.Contains("gamma_stat_channel_bin")) {
+	  testStat->setParam(currName, nuisCurr->getVal(), true);
+	}
+      }
+    }
+    
+    // Map of names and values of PoIs to set for fit:
+    std::map<TString,double> mapPoI; mapPoI.clear();
+    mapPoI[m_config->getStr("PoIForNormalization")] = xSectionDouble;
+    mapPoI[m_config->getStr("PoIForMass")] = (double)mass;
+    mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
+    
+    
+    //----------------------------------------//
+    // Get the asymptotic CL results:
+    if (asymptotic) {
+      std::vector<double> asymptoticCLValues
+	= testStat->asymptoticCL(mapPoI, datasetToFit,
+				 m_config->getStr("WorkspaceSnapshotMu1"),
+				 m_config->getStr("PoIForNormalization"));
+      CLObs = asymptoticCLValues[0];
+      CLExp_n2 = asymptoticCLValues[1];
+      CLExp_n1 = asymptoticCLValues[2];
+      CLExp = asymptoticCLValues[3];
+      CLExp_p1 = asymptoticCLValues[4];
+      CLExp_p2 = asymptoticCLValues[5];
+      
+      successful = testStat->fitsAllConverged();
+      
+      delete testStat;
+      delete workspace;
+    }
+    
+    //----------------------------------------//
+    // Get CL results using toy MC:
+    else {
+      printer("StatScan: Calculating observed qMu...", false);
+      
+      // Also force the mass and width to be constant always:
+      testStat->setParam(m_config->getStr("PoIForMass"), 
+			 (double)mass, true);
+      testStat->setParam(m_config->getStr("PoIForWidth"), 
+			 (((double)width)/100.0), true);
+      
+      // Perform the mu=1 fit and mu-free fit (necessary for qmu calculation):
+      double nllObsMu1 
+	= testStat->getFitNLL(datasetToFit, 1, true, mapPoI, false);
+      double nllObsMuFree
+	= testStat->getFitNLL(datasetToFit, 1, false, mapPoI, false);
+      
+      // Get profiled signal strength from the mu-free fit:
+      std::map<std::string,double> poiFromFit = testStat->getPoIs();
+      double obsXSValue 
+	= poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
+      double muHatValue = obsXSValue / xSectionDouble;
+      
+      double qMuObs = testStat->getQMuFromNLL(nllObsMu1, nllObsMuFree,
+					      muHatValue, 1);
+      
+      delete testStat;
+      delete workspace;
+      wsFile.Close();
+      
+      //----------------------------------------//
+      // Process the toy MC files to obtain the CL values:
+      printer("StatScan: Processing toy MC for qMu->CL", false);
+      
+      // Load the tool to analyze toys.
+      // NOTE: interference between the ToyAnalysis class and TestStat
+      ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, "None");
+      toyAna->setOutputDir(Form("%s/ToyPlots_mass%d_width%d_xs%d",
+				m_outputDir.Data(), mass, width, crossSection));
+      std::vector<TString> fitTypes; fitTypes.clear();
+      fitTypes.push_back("0");
+      fitTypes.push_back("1");
+      fitTypes.push_back("Free");
+      toyAna->setFitTypes(fitTypes);
+      toyAna->loadToy(0, Form("%s/toy_mu0*ForScan_mass%d_width%d_xs%d.root",
+			      m_inputDir.Data(), mass, width, crossSection));
+      toyAna->loadToy(1, Form("%s/toy_mu1*ForScan_mass%d_width%d_xs%d.root",
+			      m_inputDir.Data(), mass, width, crossSection));
+      if (toyAna->areInputFilesOK()) {
+	
+	if (m_config->getBool("PlotToysForScan")) {
+	  
+	  // Plot the toy MC nuisance parameter, global observables, and PoI:
+	  std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
+	  std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
+	  std::vector<TString> namesPars = toyAna->getNamesPoI();
+	  for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
+	    if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
+	      toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data
+	      toyAna->plotHist(namesGlobs[i_g], 1);// Mu=1 data
+	    }
+	  }
+	  for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
+	    if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
+	      toyAna->plotHist(namesNuis[i_n], 0);
+	      toyAna->plotHist(namesNuis[i_n], 1);
+	    }
+	  }
+	  for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
+	    toyAna->plotHist(namesPars[i_p], 0);
+	    toyAna->plotHist(namesPars[i_p], 1);
+	  }
+	  
+	  // Then plot statistics:
+	  toyAna->plotProfiledMu();
+	  toyAna->plotTestStat("QMu");
+	  toyAna->plotTestStat("Q0");
+	  toyAna->plotTestStatComparison("QMu");
+	  toyAna->plotTestStatComparison("Q0");
+	}
+	
+	// Calculate the expected qMu:
+	double qMuExp_n2 = toyAna->calculateBkgQMuForN(-2.0);
+	double qMuExp_n1 = toyAna->calculateBkgQMuForN(-1.0);
+	double qMuExp = toyAna->calculateBkgQMuForN(0);      
+	double qMuExp_p1 = toyAna->calculateBkgQMuForN(1.0);
+	double qMuExp_p2 = toyAna->calculateBkgQMuForN(2.0);
+	
+	// Finally, calculate observed and expected CL:
+	CLObs = toyAna->calculateCLFromToy(qMuObs);
+	CLExp_n2 = toyAna->calculateCLFromToy(qMuExp_n2);
+	CLExp_n1 = toyAna->calculateCLFromToy(qMuExp_n1);
+	CLExp = toyAna->calculateCLFromToy(qMuExp);
+	CLExp_p1 = toyAna->calculateCLFromToy(qMuExp_p1);
+	CLExp_p2 = toyAna->calculateCLFromToy(qMuExp_p2);
+	
+	// Write CL values to file:
+	outFile << CLObs << " " << CLExp_n2 << " " << CLExp_n1 << " " 
+		<< CLExp << " " << CLExp_p1 << " " << CLExp_p2 << std::endl;
+      }
+      else printer("StatScan: ERROR with toy scan option.", false);
+      
+      successful = toyAna->areInputFilesOK();
+      delete toyAna;
+    }
+    
+    // Close the files that save CL data:
+    outFile.close();
   }
   
-  double observedP0 = toyAna->calculateP0FromToy(q0Observed);
-  //double expectedP0 = toyAna->calculateP0FromToy(q0Expected);
-  delete toyAna;
+  if (successful) {
+    setCL(mass, width, crossSection, false, asymptotic, 0, CLObs);
+    setCL(mass, width, crossSection, true, asymptotic, -2, CLExp_n2);
+    setCL(mass, width, crossSection, true, asymptotic, -1, CLExp_n1);
+    setCL(mass, width, crossSection, true, asymptotic, 0, CLExp);
+    setCL(mass, width, crossSection, true, asymptotic, 1, CLExp_p1);
+    setCL(mass, width, crossSection, true, asymptotic, 2, CLExp_p2);
+    
+    // Then print to screen:
+    std::cout << "\nStatScan: CL Results:" << std::endl;
+    std::cout << "\tobserved CL = " << CLObs << std::endl;
+    std::cout << "\texpected CL -2sigma = " << CLExp_n2 << std::endl;
+    std::cout << "\texpected CL -1sigma = " << CLExp_n1 << std::endl;
+    std::cout << "\texpected CL = " << CLExp << std::endl;
+    std::cout << "\texpected CL +1sigma = " << CLExp_p1 << std::endl;
+    std::cout << "\texpected CL +2sigma = " << CLExp_p2 << std::endl;
+  }
+  return successful;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the p0 for a given mass and width hypothesis.
+   @param mass - Integer representing the resonance mass.
+   @param width - Integer representing the resonance width * 100.
+   @param crossSection - Integer representing the cross-section * 1000.
+   @param makeNew - True if from toy MC, false if from text file storage.
+   @param asymptotic - True iff. asymptotic results are desired. 
+   @return - True iff loaded successfully.
+*/
+bool StatScan::singleP0Test(int mass, int width, int crossSection, 
+			    bool makeNew, bool asymptotic){
+  printer(Form("StatScan::singleP0Test(mass=%d, width=%d, New=%d, asympt=%d)",
+	       mass, width, (int)makeNew, (int)asymptotic), false);
   
-  // Store the p0 for this mass and width:
-  setP0(mass, width, false, false, observedP0);
-  //setP0(mass, width, true, false, expectedP0);
+  bool successful = true;
+  double observedP0 = 1.0;
+  double expectedP0 = 1.0;
+  
+  TString textFileNameP0 = asymptotic ? 
+    Form("%s/asymptotic_p0_values_mass%d_width%d.txt", m_outputDir.Data(),
+	 mass, width) :
+    Form("%s/toy_p0_values_mass%d_width%d.txt", m_outputDir.Data(),
+	 mass, width);
+  
+  //----------------------------------------//
+  // Open p0 values from file:
+  if (!makeNew) {
+    printer(Form("StatScan::singleP0Test: Loading p0 from file %s",
+		 textFileNameP0.Data()), false);
+    
+    // Open the saved p0 values from toys:
+    std::ifstream inputFile(textFileNameP0);
+    if (inputFile.is_open()) {
+      while (inputFile >> observedP0 >> expectedP0) {
+	std::cout << "observed p0 = " << observedP0 << std::endl;
+	std::cout << "expected p0 = " << expectedP0 << std::endl;
+      }
+    }
+    else {
+      printer(Form("StatScan: ERROR opening text file %s",
+		   textFileNameP0.Data()), false);
+      successful = false;
+    }
+    inputFile.close();
+  }
+  
+  //----------------------------------------//
+  // Calculate new p0 value.
+  else {
+    printer("StatScan::singleP0Test: Calculating p0 from scratch", false);
+    
+    std::ofstream outputFile(textFileNameP0);    
+    
+    // Set the dataset to fit:
+    TString datasetToFit = m_config->getStr("WorkspaceObsData");
+    
+    // Open the workspace:
+    TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
+    RooWorkspace *workspace
+      = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
+    
+    // Instantiate the test statistic class for calculations and plots:
+    TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
+    testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+    
+    // Set the PoI ranges for this study:
+    std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
+    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+      std::vector<double> currRange
+	= m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
+      if (testStat->theWorkspace()->var(listPoI[i_p])) {
+	testStat->theWorkspace()->var(listPoI[i_p])
+	  ->setRange(currRange[0], currRange[1]);
+      }
+      else {
+	printer(Form("StatScan: Workspace has no variable %s",
+		     listPoI[i_p].Data()), true);
+      }
+    }
+    
+    // Turn off MC stat errors if requested for Graviton jobs:
+    if (m_config->isDefined("TurnOffTemplateStat") && 
+	m_config->getBool("TurnOffTemplateStat")) {
+      testStat->theWorkspace()
+	->loadSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+      const RooArgSet *nuisanceParameters
+	= testStat->theModelConfig()->GetNuisanceParameters();
+      TIterator *nuisIter = nuisanceParameters->createIterator();
+      RooRealVar *nuisCurr = NULL;
+      while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
+	TString currName = nuisCurr->GetName();
+	if (currName.Contains("gamma_stat_channel_bin")) {
+	  testStat->setParam(currName, nuisCurr->getVal(), true);
+	}
+      }
+    }
+    
+    // Map of names and values of PoIs to set for fit:
+    std::map<TString,double> mapPoI; mapPoI.clear();
+    mapPoI[m_config->getStr("PoIForNormalization")]
+      = ((double)crossSection/1000.0);
+    mapPoI[m_config->getStr("PoIForMass")] = (double)mass;
+    mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
+    
+    //----------------------------------------//
+    // Get the asymptotic p0 results:
+    if (asymptotic) {
+      std::vector<double> asymptoticP0Values
+	= testStat->asymptoticP0(mapPoI, datasetToFit,
+				 m_config->getStr("WorkspaceSnapshotMu1"),
+				 m_config->getStr("PoIForNormalization"));
+      observedP0 = asymptoticP0Values[0];
+      expectedP0 = asymptoticP0Values[1];
+      successful = testStat->fitsAllConverged();
+      delete testStat;
+      delete workspace;
+    }
+    
+    //----------------------------------------//
+    // Get p0 results using toy MC:
+    else {
+      
+      // Step 1: get observed q0 (no expected!)
+      
+      // Also force the mass and width to be constant always:
+      testStat->setParam(m_config->getStr("PoIForMass"), (double)mass, true);
+      testStat->setParam(m_config->getStr("PoIForWidth"), 
+			 (((double)width)/100.0), true);
+      
+      // Perform the mu=0 fit, make sure normalization PoI is set to zero:
+      mapPoI[m_config->getStr("PoIForNormalization")] = 0.0;
+      double nllObsMu0 = testStat->getFitNLL(datasetToFit,0,true,mapPoI,true);
+      
+      // Perform mu-free fit (necessary for q0 calculation) and get signal:
+      double nllObsMuFree = testStat->getFitNLL(datasetToFit, 1, false, mapPoI,
+						true);
+      std::map<std::string,double> poiFromFit = testStat->getPoIs();
+      double obsXSValue
+	= poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
+      
+      // Calculate q0 and asymptotic p0:
+      double q0Observed
+	= testStat->getQ0FromNLL(nllObsMu0, nllObsMuFree, obsXSValue);
+      double p0Asymptotic = testStat->getP0FromQ0(q0Observed);
+      
+      // Delete pointers and close files:  
+      delete testStat;
+      delete workspace;
+      wsFile.Close();
+      
+      //----------------------------------------//
+      // Process the toy MC files to obtain the CL values:
+      printer("StatScan: Computing p0 from toy MC", false);
+      
+      // Load the tool to analyze toys.
+      // NOTE: this was moved  because of intereference between the ToyAnalysis 
+      // class and TestStat, which is also called in ToyAnalysis...
+      TString toyAnaOptions
+	= (m_options.Contains("ImportSamp")) ? "ImportSamp" : "None";
+      ToyAnalysis *toyAna = new ToyAnalysis(m_configFileName, toyAnaOptions);
+      toyAna->setOutputDir(Form("%s/ToyPlots_mass%d_width%d_xs0",
+				m_outputDir.Data(), mass, width));
+      std::vector<TString> fitTypes; fitTypes.clear();
+      fitTypes.push_back("0");
+      fitTypes.push_back("1");
+      fitTypes.push_back("Free");
+      toyAna->setFitTypes(fitTypes);
+      toyAna->loadToy(0, Form("%s/toy_mu0*ForScan_mass%d_width%d_xs*.root",
+			      m_inputDir.Data(), mass, width));
+      if (!(toyAna->areInputFilesOK())) {
+	printer("StatScan: ERROR with toy scan option.", true);
+      }
+      
+      if (m_config->getBool("PlotToysForScan")) {
+	
+	// Plot the toy MC nuisance parameter, global observables, and PoI:
+	std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
+	std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
+	std::vector<TString> namesPars = toyAna->getNamesPoI();
+	for (int i_g = 0; i_g < (int)namesGlobs.size(); i_g++) {
+	  if (!(namesGlobs[i_g]).Contains("gamma_stat_channel_bin")) {
+	    toyAna->plotHist(namesGlobs[i_g], 0);// Mu=0 toy data
+	  }
+	}
+	for (int i_n = 0; i_n < (int)namesNuis.size(); i_n++) {
+	  if (!(namesNuis[i_n]).Contains("gamma_stat_channel_bin")) {
+	    toyAna->plotHist(namesNuis[i_n], 0);
+	  }
+	}
+	for (int i_p = 0; i_p < (int)namesPars.size(); i_p++) {
+	  toyAna->plotHist(namesPars[i_p], 0);
+	}
+	
+	// Then plot statistics:
+	toyAna->plotTestStat("Q0");
+	toyAna->plotTestStatComparison("Q0");
+      }
+      
+      observedP0 = toyAna->calculateP0FromToy(q0Observed);
+      double q0Expected = 0.0;//toyAna->calculateExpQ0();
+
+      expectedP0 = toyAna->calculateP0FromToy(q0Expected);
+      
+      successful = (toyAna->areInputFilesOK() && observedP0 > 0.0 &&
+		    observedP0 < 1.0);
+      delete toyAna;
+    }
+    
+    // Save the p0 for this mass and width:
+    outputFile << observedP0 << " " << expectedP0 << std::endl;
+    outputFile.close();
+  }
+  
+  // Store the p0 for this mass and width in the class:
+  setP0(mass, width, false, asymptotic, observedP0);
+  setP0(mass, width, true, asymptotic, expectedP0);
   
   // Then print to screen:
-  std::cout << "\nStatScan: P0 Results" << std::endl;
+  std::cout << "\nStatScan: P0 Results:" << std::endl;
   std::cout << "\tobserved p0 = " << observedP0 << std::endl;
-  //std::cout << "\texpected p0 = " << expectedP0 << std::endl;
+  std::cout << "\texpected p0 = " << expectedP0 << std::endl;
   
   // Delete pointers, close files, return:
   printer(Form("StatScan::singleP0Test finished mass %d width %d\n", 
 	       mass, width), false);
   
-  // Return true iff. calculation was successful:
-  if (toyAna->areInputFilesOK() && observedP0 > 0.0 && observedP0 < 1.0) {
-    return true;
-  }
-  else return false;
+  return successful;
 }
 
 /**
@@ -1185,4 +1340,35 @@ bool StatScan::vectorContainsValue(std::vector<int> theVector, int theValue) {
     if (theVector[i_v] == theValue) return true;
   }
   return false;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Set the list of mass points to use. The vector will be sorted automatically.
+   @param massValues - The new vector of mass values to use.
+*/
+void StatScan::useTheseMasses(std::vector<int> massValues) {
+  m_massValues = massValues;
+  std::sort(m_massValues.begin(), m_massValues.end());
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Set the list of width points to use. The vector will be sorted automatically.
+   @param widthValues - The new vector of width values to use.
+*/
+void StatScan::useTheseWidths(std::vector<int> widthValues) {
+  m_widthValues = widthValues;
+  std::sort(m_widthValues.begin(), m_widthValues.end());
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Set the list of cross-section points to use. The vector will be sorted 
+   automatically.
+   @param xsValues - The new vector of cross-section values to use.
+*/
+void StatScan::useTheseXS(std::vector<int> xsValues) {
+  m_xsValues = xsValues;
+  std::sort(m_xsValues.begin(), m_xsValues.end());
 }

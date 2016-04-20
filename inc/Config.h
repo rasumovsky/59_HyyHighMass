@@ -41,6 +41,7 @@ class Config {
   std::vector<TString>  getStrV(TString key);
   int getInt(TString key);
   int getInt(TString key, int dflt);
+  std::vector<int> getIntV(TString key);
   bool getBool(TString key);
   bool getBool(TString key, bool dflt);
   double getNum(TString key);
