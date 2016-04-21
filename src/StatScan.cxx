@@ -494,12 +494,12 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   gP0Obs->SetLineWidth(2);
   
   // Legend:
-  TLegend leg(0.61, 0.48, 0.59, 0.91);
+  TLegend leg(0.61, 0.30, 0.89, 0.45);
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
-  if (m_config->getBool("DoBlind")) leg.AddEntry(gP0Exp,"Expected p_{0}","P");
-  else leg.AddEntry(gP0Obs,"Observed p_{0}","P");
+  leg.AddEntry(gP0Obs,"Observed p_{0}","LP");
+  leg.AddEntry(gP0Exp,"Expected p_{0}","LP");
   
   // Plotting options:
   gP0Obs->GetYaxis()->SetRangeUser(0.0000001, 1.0);

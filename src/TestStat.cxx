@@ -185,6 +185,131 @@ std::vector<double> TestStat::asymptoticCL(std::map<TString,double> mapPoI,
 
 /**
    -----------------------------------------------------------------------------
+   Calculate the asymptotic limit values using fits.
+   @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
+   @param datasetName - The name of the dataset in the workspace.
+   @param snapshotName - The name of the ML snapshot for generating mu=0 Asimov.
+   @param poiForNorm - The name of the normalization poi.
+   @return - A vector with obs, exp+2s, exp+1s, exp, exp-1s, exp-2s CL values.
+*/
+std::vector<double> TestStat::asymptoticLimit(std::map<TString,double> mapPoI, 
+					      TString datasetName, 
+					      TString snapshotName,
+					      TString poiForNorm) {
+  printer(Form("TestStat::asymptoticLimit(%s, %s)",
+	       datasetName.Data(), poiForNorm.Data()), false);
+  
+  // Create unique Asimov dataset name based on PoI:
+  TString asimovDataMu0Name = "asimovDataMu0";
+  
+  // Need to set the non-norm PoI constant...
+  for (std::map<TString,double>::iterator poiIter = mapPoI.begin(); 
+       poiIter != mapPoI.end(); poiIter++) {
+    TString poiName = poiIter->first;
+    double poiValue = poiIter->second;
+    if (!poiName.EqualTo(poiForNorm)) setParam(poiName, poiValue, true);
+    asimovDataMu0Name.Append(Form("_%s%2.2f", poiName.Data(), poiValue));
+  }
+  
+  // Generate mu0 asimov data, 
+  if (!m_workspace->data(asimovDataMu0Name)) {
+    double originNorm = mapPoI[poiForNorm];
+    mapPoI[poiForNorm] = 0.0;//temporarily set the signal strength to zero.
+    createAsimovData(0.0, snapshotName, mapPoI, asimovDataMu0Name);
+    mapPoI[poiForNorm] = originNorm;//restore the non-zero signal strength.
+  }
+  
+  // Use bisection method to find median observed 95% CL limit on mu:
+  double observedLimit = 0.0; double qMuLimitObs = 0.0;
+  double nllMuHatObs = getFitNLL(datasetName, 0.0, false, mapPoI, false);
+  double profiledNormObs = (getPoIs())[(std::string)(poiForNorm)];
+  asymptoticLimitBisector(mapPoI, datasetName, poiForNorm, nllMuHatObs,
+			  profiledNormObs, observedLimit, qMuLimitObs);
+  
+  // Use bisection method to find median expected 95% CL limit on mu:
+  double expectedLimit = 0.0; double qMuLimitExp = 0.0;
+  double nllMuHatExp = getFitNLL(asimovDataMu0Name, 0.0, false, mapPoI, false);
+  double profiledNormExp = (getPoIs())[(std::string)(poiForNorm)];
+  asymptoticLimitBisector(mapPoI, asimovDataMu0Name, poiForNorm, nllMuHatExp,
+			  profiledNormExp, expectedLimit, qMuLimitExp);
+  
+  // Then calculate expected error bands:
+  double expectedLimit_n2 = findMuUp(expectedLimit, qMuLimitExp, -2);
+  double expectedLimit_n1 = findMuUp(expectedLimit, qMuLimitExp, -1);
+  double expectedLimit_p1 = findMuUp(expectedLimit, qMuLimitExp, 1);
+  double expectedLimit_p2 = findMuUp(expectedLimit, qMuLimitExp, 2);
+  
+  // Print summary:
+  std::cout << "\n\t observed 95% CL limit = " << observedLimit << "\n"
+	    << "\t expected 95% CL limit -2s = " << expectedLimit_n2 << "\n"
+	    << "\t expected 95% CL limit -1s = " << expectedLimit_n1 << "\n"
+	    << "\t expected 95% CL limit nom = " << expectedLimit << "\n"
+	    << "\t expected 95% CL limit +1s = " << expectedLimit_p1 << "\n"
+	    << "\t expected 95% CL limit +2s = " << expectedLimit_p2 << "\n"
+	    << std::endl;
+  
+  // Return observed and expected CL values:
+  std::vector<double> resultsLimit;
+  resultsLimit.clear();
+  resultsLimit.push_back(observedLimit);
+  resultsLimit.push_back(expectedLimit_n2);
+  resultsLimit.push_back(expectedLimit_n1);
+  resultsLimit.push_back(expectedLimit);
+  resultsLimit.push_back(expectedLimit_p1);
+  resultsLimit.push_back(expectedLimit_p2);
+  return resultsLimit;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Bisection method to search for 95% limit intercept. Basically adjust mu for 
+   the numerator in qMu (lMu/lfree) until sqrt(qMu)=1.64. muLimit and qMuLimit
+   are passed by reference and modified to give the 95% CL limit values.
+   @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
+   @param datasetName - The name of the dataset to fit.
+   @param poiForNorm - The name of the normalization poi.
+   @param nllMuHat - The nll value from the maximum likelihood fit.
+   @param profiledNorm - The signal strength from the ML fit.
+   @param muLimit - The variable to store the 95% CL limit on mu.
+   @param qMuLimit - The variable to store the 95% CL limit on qMu.
+*/
+void TestStat::asymptoticLimitBisector(std::map<TString,double> mapPoI, 
+				       TString datasetName, TString poiForNorm,
+				       double nllMuHat, double profiledNorm,
+				       double& muLimit, double& qMuLimit) {
+  double precision = 0.001;
+  int nIterations = 0;
+  int maxIterations = 30;
+  double stepSize = (m_workspace->var("poiForNorm")->getMax() - 
+		     m_workspace->var("poiForNorm")->getMin()) / 2.0;
+  muLimit = (m_workspace->var("poiForNorm")->getMax() + 
+	     m_workspace->var("poiForNorm")->getMin()) / 2.0;
+  qMuLimit = 0.0;
+  
+  double qMuIntercept = 1.64; // 1-phi(1.64) = 0.05 -> 95% CL.
+  while ((fabs(sqrt(qMuLimit) - qMuIntercept) / qMuIntercept) > precision && 
+	 nIterations <= maxIterations) {
+    
+    // Set the signal strength:
+    mapPoI[poiForNorm] = muLimit;
+    
+    // Calculate expected qmu:
+    double nllMu1 = getFitNLL(datasetName, 1.0, true, mapPoI, false);
+    double muHat = (profiledNorm / mapPoI[poiForNorm]);
+    qMuLimit = getQMuFromNLL(nllMu1, nllMuHat, muHat, 1);
+    
+    // Increase the iteration count and reduce the step size:
+    nIterations++;
+    stepSize = 0.5 * stepSize;
+    
+    // Update the value of the mu limit:
+    if (sqrt(qMuLimit) > qMuIntercept) muLimit -= stepSize;
+    else muLimit += stepSize;
+  } // At this point, muLimit should be the 95% CL limit on signal strength.
+}
+
+/**
+   -----------------------------------------------------------------------------
    Calculate the p0 value using model fits.
    @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
    @param datasetName - The name of the dataset in the workspace.
@@ -726,6 +851,23 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
   // Import into the workspace then return:
   m_workspace->import(*pseudoData);
   return pseudoData;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get the expected limit for error band (CLs).
+   @param muUpMed - The median 95% CLs mu value.
+   @param qMuAsimov - The value of qMu from fitting mu=0 Asimov data
+   @param N - The Gaussian quintile.
+   @param alpha = The probability (alpha=0.05 for 95% limits).
+   @return - The 95% CLs limit.
+*/
+double TestStat::findMuUp(double muUpMed, double qMuAsimov, int N,
+			  double alpha) {
+  double sigma = sqrt( (muUpMed * muUpMed) / qMuAsimov);
+  double muUpN = sigma *
+    (TMath::NormQuantile(1.0 - (alpha * ROOT::Math::gaussian_cdf(N))) + N);
+  return muUpN;
 }
 
 /**

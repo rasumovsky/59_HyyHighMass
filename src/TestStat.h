@@ -33,6 +33,13 @@ class TestStat {
   std::vector<double> asymptoticCL(std::map<TString,double> mapPoI, 
 				   TString datasetName, TString snapshotName,
 				   TString poiForNorm);
+  std::vector<double> asymptoticLimit(std::map<TString,double> mapPoI, 
+  				      TString datasetName, TString snapshotName,
+  				      TString poiForNorm);
+  void asymptoticLimitBisector(std::map<TString,double> mapPoI, 
+  			       TString datasetName, TString poiForNorm, 
+  			       double nllMuHat, double profiledNorm,
+  			       double& muLimit, double& qMuLimit);
   std::vector<double> asymptoticP0(std::map<TString,double> mapPoI, 
 				   TString datasetName, TString snapshotName,
 				   TString poiForNorm);
@@ -46,6 +53,7 @@ class TestStat {
   RooDataSet* createPseudoData(int seed, int valPoI, TString snapshotName,
 			       std::map<TString,double> namesAndValsPoI, 
 			       int toyIndex = -1);
+  double findMuUp(double muUpMed, double qMuAsimov, int N, double alpha=0.05);
   bool fitsAllConverged();
   double functionQ0(double x);
   double functionQMu(double x);
