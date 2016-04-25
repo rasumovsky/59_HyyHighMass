@@ -295,13 +295,40 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic) {
   double limitExp[100] = {0};
   double limitExp_n1[100] = {0};
   double limitExp_n2[100] = {0};
+
+  // Load from file here. 
+  if (asymptotic && !makeNew) {
+    std::ifstream limitFileIn(limitFileName);
+    while (limitFileIn >> m_massValues[nToyPoints] >> limitObs[nToyPoints] 
+	   >> limitExp_n2[nToyPoints] >> limitExp_n1[nToyPoints]
+	   >> limitExp[nToyPoints] >> limitExp_p1[nToyPoints] 
+	   >> limitExp_p2[nToyPoints]) {
+      // Store the limits for this mass and width:
+      setLimit(m_massValues[nToyPoints], width, false, asymptotic, 0, 
+	       limitObs[nToyPoints]);
+      setLimit(m_massValues[nToyPoints], width, true, asymptotic, -2, 
+	       limitExp_n2[nToyPoints]);
+      setLimit(m_massValues[nToyPoints], width, true, asymptotic, -1, 
+	       limitExp_n1[nToyPoints]);
+      setLimit(m_massValues[nToyPoints], width, true, asymptotic, 0, 
+	       limitExp[nToyPoints]);
+      setLimit(m_massValues[nToyPoints], width, true, asymptotic, 1, 
+	       limitExp_p1[nToyPoints]);
+      setLimit(m_massValues[nToyPoints], width, true, asymptotic, 2, 
+	       limitExp_p2[nToyPoints]);
+      nToyPoints++;
+    }
+  }
   
   //----------------------------------------//
   // Loop over the mass points to load or calculate limit results:
   std::ofstream limitFileOut(limitFileName);
   for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
-    if (singleCLScan(m_massValues[i_m], width, makeNew, asymptotic)) {
+    if ((asymptotic && singleLimitTest(m_massValues[i_m], width)) || 
+	(!asymptotic && singleCLScan(m_massValues[i_m],width,makeNew,false))) {
+      
       observableValues[nToyPoints] = m_massValues[i_m];
+      /*
       limitObs[nToyPoints]
 	= getLimit(m_massValues[i_m], width, false, asymptotic, 0);
       limitExp_p2[nToyPoints] 
@@ -314,13 +341,27 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic) {
 	= getLimit(m_massValues[i_m], width, true, asymptotic, 1);
       limitExp_n2[nToyPoints]
 	= getLimit(m_massValues[i_m], width, true, asymptotic, 2);
+      */      
+      limitObs[nToyPoints]
+	= getLimit(m_massValues[i_m], width, false, asymptotic, 0);
+      limitExp_n2[nToyPoints] 
+	= getLimit(m_massValues[i_m], width, true, asymptotic, -2);
+      limitExp_n1[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, -1);
+      limitExp[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, 0);
+      limitExp_p1[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, 1);
+      limitExp_p2[nToyPoints]
+	= getLimit(m_massValues[i_m], width, true, asymptotic, 2);
+
       limitFileOut << m_massValues[i_m] << " " 
 		   << limitObs[nToyPoints] << " " 
-		   << limitExp_p2[nToyPoints] << " " 
-		   << limitExp_p1[nToyPoints] << " "
+		   << limitExp_n2[nToyPoints] << " " 
+		   << limitExp_n1[nToyPoints] << " "
 		   << limitExp[nToyPoints] << " " 
-		   << limitExp_n1[nToyPoints] << " " 
-		   << limitExp_n2[nToyPoints] << " " << std::endl;
+		   << limitExp_p1[nToyPoints] << " " 
+		   << limitExp_p2[nToyPoints] << " " << std::endl;
       nToyPoints++;
     }
   }
@@ -641,7 +682,7 @@ void StatScan::setOutputDirectory(TString directory) {
 
 /**
    -----------------------------------------------------------------------------
-   The method finds the 95% CL by scanning various signal cross-sections.
+   The method finds the 95% CL for a signal by scanning over cross-sections.
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
    @param makeNew - True if from toy MC, false if from text file storage.
@@ -795,13 +836,13 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
   double expectedLimit_p1 = getIntercept(gCLExp_p1, 0.95);
   double expectedLimit_p2 = getIntercept(gCLExp_p2, 0.95);
   
-  // Store the limits for this mass and width:
+  // Store the limits for this mass and width (reverse bands for this):
   setLimit(mass, width, false, asymptotic, 0, observedLimit);
-  setLimit(mass, width, true, asymptotic, -2, expectedLimit_n2);
-  setLimit(mass, width, true, asymptotic, -1, expectedLimit_n1);
+  setLimit(mass, width, true, asymptotic, 2, expectedLimit_n2);
+  setLimit(mass, width, true, asymptotic, 1, expectedLimit_n1);
   setLimit(mass, width, true, asymptotic, 0, expectedLimit);
-  setLimit(mass, width, true, asymptotic, 1, expectedLimit_p1);
-  setLimit(mass, width, true, asymptotic, 2, expectedLimit_p2);
+  setLimit(mass, width, true, asymptotic, -1, expectedLimit_p1);
+  setLimit(mass, width, true, asymptotic, -2, expectedLimit_p2);
   
   // Then print to screen:
   std::cout << "\nCLScan: Results" << std::endl;
@@ -830,7 +871,7 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
 
 /**
    -----------------------------------------------------------------------------
-   The method finds the 95% CL by scanning various signal cross-sections.
+   The method finds the CL for a given signal cross-section.
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
    @param crossSection - The cross-section integer for the point of interest.
@@ -1096,6 +1137,87 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
     std::cout << "\texpected CL +2sigma = " << CLExp_p2 << std::endl;
   }
   return successful;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   The method finds the 95% CL by scanning various signal cross-sections.
+   @param mass - The mass integer for the point of interest.
+   @param width - The width integer for the point of interest.
+   @param asymptotic - True iff. asymptotic results are desired. 
+   @return - True iff calculated successfully.
+*/
+bool StatScan::singleLimitTest(int mass, int width) {
+  printer(Form("StatScan::singleLimitTest(mass=%d, width=%d)", mass, width),
+	  false);
+  
+  // Set the dataset to fit:
+  TString datasetToFit = m_config->getStr("WorkspaceObsData");
+  
+  // Open the workspace:
+  TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
+  RooWorkspace *workspace
+    = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
+  
+  // Instantiate the test statistic class for calculations and plots:
+  TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
+  testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+  
+  // Set the PoI ranges for this study:
+  std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
+  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+    std::vector<double> currRange
+      = m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
+    if (testStat->theWorkspace()->var(listPoI[i_p])) {
+      testStat->theWorkspace()->var(listPoI[i_p])
+	->setRange(currRange[0], currRange[1]);
+    }
+    else {
+      std::cout << "StatScan: Workspace has no variable " << listPoI[i_p]
+		<< std::endl;
+      exit(0);
+    }
+  }
+  
+  // Turn off MC stat errors if requested for Graviton jobs:
+  if (m_config->isDefined("TurnOffTemplateStat") && 
+      m_config->getBool("TurnOffTemplateStat")) {
+    testStat->theWorkspace()
+      ->loadSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+    const RooArgSet *nuisanceParameters
+      = testStat->theModelConfig()->GetNuisanceParameters();
+    TIterator *nuisIter = nuisanceParameters->createIterator();
+    RooRealVar *nuisCurr = NULL;
+    while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
+      TString currName = nuisCurr->GetName();
+      if (currName.Contains("gamma_stat_channel_bin")) {
+	testStat->setParam(currName, nuisCurr->getVal(), true);
+      }
+    }
+  }
+  
+  // Map of names and values of PoIs to set for fit:
+  std::map<TString,double> mapPoI; mapPoI.clear();
+  mapPoI[m_config->getStr("PoIForNormalization")] = 1.0;
+  mapPoI[m_config->getStr("PoIForMass")] = (double)mass;
+  mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
+  
+  //----------------------------------------//
+  // Get the asymptotic limit results:
+  std::vector<double> asymptoticLimitValues
+    = testStat->asymptoticLimit(mapPoI, datasetToFit,
+				m_config->getStr("WorkspaceSnapshotMu1"),
+				m_config->getStr("PoIForNormalization"));
+  setLimit(mass, width, false, true, 0, asymptoticLimitValues[0]);
+  setLimit(mass, width, true, true, -2, asymptoticLimitValues[1]);
+  setLimit(mass, width, true, true, -1, asymptoticLimitValues[2]);
+  setLimit(mass, width, true, true, 0, asymptoticLimitValues[3]);
+  setLimit(mass, width, true, true, 1, asymptoticLimitValues[4]);
+  setLimit(mass, width, true, true, 2, asymptoticLimitValues[5]);
+  
+  delete testStat;
+  delete workspace;
+  return testStat->fitsAllConverged();
 }
 
 /**

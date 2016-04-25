@@ -277,18 +277,23 @@ void TestStat::asymptoticLimitBisector(std::map<TString,double> mapPoI,
 				       TString datasetName, TString poiForNorm,
 				       double nllMuHat, double profiledNorm,
 				       double& muLimit, double& qMuLimit) {
-  double precision = 0.001;
+  printer(Form("TestStat::asymptoticLimitBisector(%s, %s)",
+	       datasetName.Data(), poiForNorm.Data()), false);
+  
+  double precision = 0.0001;
   int nIterations = 0;
   int maxIterations = 30;
-  double stepSize = (m_workspace->var("poiForNorm")->getMax() - 
-		     m_workspace->var("poiForNorm")->getMin()) / 2.0;
-  muLimit = (m_workspace->var("poiForNorm")->getMax() + 
-	     m_workspace->var("poiForNorm")->getMin()) / 2.0;
+  double stepSize = (m_workspace->var(poiForNorm)->getMax() - 
+		     m_workspace->var(poiForNorm)->getMin()) / 2.0;
+  muLimit = (m_workspace->var(poiForNorm)->getMax() + 
+	     m_workspace->var(poiForNorm)->getMin()) / 2.0;
   qMuLimit = 0.0;
-  
   double qMuIntercept = 1.64; // 1-phi(1.64) = 0.05 -> 95% CL.
   while ((fabs(sqrt(qMuLimit) - qMuIntercept) / qMuIntercept) > precision && 
 	 nIterations <= maxIterations) {
+    std::cout << "TestStat:asymptoticLimitBisector: Iteration " << nIterations 
+	      << " starting, muLimit=" << muLimit << ", qMuLimit=" << qMuLimit
+	      << std::endl;
     
     // Set the signal strength:
     mapPoI[poiForNorm] = muLimit;
@@ -306,6 +311,11 @@ void TestStat::asymptoticLimitBisector(std::map<TString,double> mapPoI,
     if (sqrt(qMuLimit) > qMuIntercept) muLimit -= stepSize;
     else muLimit += stepSize;
   } // At this point, muLimit should be the 95% CL limit on signal strength.
+  
+  if (nIterations == maxIterations) {
+    printer("TestStat::asymptoticLimitBisector: Maximum Iterations!", true);
+  }
+  
 }
 
 /**
@@ -1175,6 +1185,7 @@ double TestStat::getPMuFromQMu(double qMu) {
 */
 double TestStat::getQ0FromNLL(double nllMu0, double nllMuHat, double muHat) {
   double q0 = (muHat < 0) ? 0 : (2 * (nllMu0 - nllMuHat));
+  if (q0 < 0.0) q0 = 0.0;
   return q0;
 }
 

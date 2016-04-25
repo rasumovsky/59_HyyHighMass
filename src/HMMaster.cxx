@@ -160,8 +160,8 @@ int main (int argc, char **argv) {
     std::cout << "HMMaster: Step 4.0 - Plot toy limits." << std::endl;
     system(Form("./bin/ExtrapolateSig %s %s 0", fullConfigPath.Data(),
 		m_config->getStr("ExtrapSigOptions").Data()));
-    system(Form("./bin/ExtrapolateSig %s %s 1", fullConfigPath.Data(),
-		m_config->getStr("ExtrapSigOptions").Data()));
+    //system(Form("./bin/ExtrapolateSig %s %s 1", fullConfigPath.Data(),
+    //		m_config->getStr("ExtrapSigOptions").Data()));
   }
   return 0;
 }

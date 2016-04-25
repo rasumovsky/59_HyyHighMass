@@ -98,6 +98,7 @@ int main(int argc, char **argv) {
   TTree fOutputTree("toy", "toy");
   
   // Variables to store in the TTree:
+  double weight = 1.0;
   int bestFitUpdate;
   double numEvents;
   bool convergedMu1, convergedMu0, convergedMuFree;
@@ -118,6 +119,7 @@ int main(int argc, char **argv) {
   std::vector<double> numEventsPerCate; numEventsPerCate.clear();
   std::vector<double> nllPerRetry; nllPerRetry.clear();
 
+  fOutputTree.Branch("weight", &weight, "weight/D");
   fOutputTree.Branch("seed", &seed, "seed/I");
   fOutputTree.Branch("bestFitUpdate", &bestFitUpdate, "bestFitUpdate/I");
   fOutputTree.Branch("numEvents", &numEvents, "numEvents/D");

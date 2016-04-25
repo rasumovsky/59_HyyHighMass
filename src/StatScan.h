@@ -46,6 +46,7 @@ class StatScan {
   bool singleCLScan(int mass, int width, bool makeNew, bool asymptotic);
   bool singleCLTest(int mass, int width, int crossSection, bool makeNew,
 		    bool asymptotic);
+  bool singleLimitTest(int mass, int width);
   bool singleP0Test(int mass, int width, int crossSection, bool makeNew, 
 		    bool asymptotic);
   void useTheseMasses(std::vector<int> massValues);
