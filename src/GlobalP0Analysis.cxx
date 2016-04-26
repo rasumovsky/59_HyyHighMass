@@ -63,7 +63,8 @@ int main(int argc, char **argv) {
   if (options.Contains("StudyRetries")) toyAnaOptions += "StudyRetries";
   ToyAnalysis *toyAna = new ToyAnalysis(configFile, toyAnaOptions);
   toyAna->setOutputDir(outputDir);
-  
+  toyAna->setStatHistRanges(500, 0, 20);
+
   std::vector<TString> fitTypes;
   fitTypes.clear(); fitTypes.push_back("0"); fitTypes.push_back("Free");
   toyAna->setFitTypes(fitTypes);
@@ -133,6 +134,7 @@ int main(int argc, char **argv) {
   hMaxZ0->GetYaxis()->SetTitleSize(0.07);
   hMaxZ0->GetYaxis()->SetTitleOffset(0.9);
   hMaxZ0->GetYaxis()->SetLabelSize(0.06);
+  //hMaxZ0->GetYaxis()->SetRangeUser(0.0001, 0.014);
   hMaxZ0->GetYaxis()->SetRangeUser(0.0001, 0.014);
   hMaxZ0->Draw("hist");
 
@@ -190,7 +192,7 @@ int main(int argc, char **argv) {
 			       (config->getNum("AnalysisLuminosity")/1000.0)));
   
   // Legend:
-  TLegend leg1(0.2, 0.49, 0.45, 0.71);
+  TLegend leg1(0.2, 0.49, 0.49, 0.71);
   leg1.SetTextFont(42); 
   leg1.SetTextSize(0.07);
   leg1.SetBorderSize(0);
