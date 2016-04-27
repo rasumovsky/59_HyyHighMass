@@ -11,6 +11,8 @@ in the configuration files residing in the `data/` directory.
 If you have any questions about the code, please contact the author, who will be
 happy to assist you in getting the code running.
 
+Note: the asymptotic and pseudo-experiment exclusion limit-setting procedure is currently under development. It will be functional by May 2016. 
+
 ### Input files
 
 The analysis requires RooWorkspace objects stored in `.root` files as inputs to 
