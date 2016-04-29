@@ -20,7 +20,7 @@ TString m_outputDir;
 /**
    -----------------------------------------------------------------------------
 */
-void compareHistograms(TString name, TH1F *h1, TH1F *h2) {
+void compareHistograms(TString name, TH1F *h1, TH1F *h2, bool doRatio) {
     
   // Create a canvas with two pads (one main plot, one subtraction plot)
   TCanvas *can = new TCanvas("can", "can", 800, 800);
@@ -55,45 +55,55 @@ void compareHistograms(TString name, TH1F *h1, TH1F *h2) {
   // Then make ratio:
   pad2->cd();
   
-  TH1F *hRatio = new TH1F(Form("hRatio_%s",name.Data()),
-			  Form("hRatio_%s",name.Data()), h1->GetNbinsX(), 
+  TH1F *hSubPlot = new TH1F(Form("hSubPlot_%s",name.Data()),
+			  Form("hSubPlot_%s",name.Data()), h1->GetNbinsX(), 
 			  h1->GetXaxis()->GetXmin(), h1->GetXaxis()->GetXmax());
   for (int i_b = 1; i_b <= h1->GetNbinsX(); i_b++) {
-    if (h1->GetBinContent(i_b) > 0 && h2->GetBinContent(i_b) > 0) {
-      hRatio->SetBinContent(i_b, 
-			    (h1->GetBinContent(i_b)/h2->GetBinContent(i_b)));
-      double error = (hRatio->GetBinContent(i_b) *
-		      sqrt((h1->GetBinError(i_b) / h1->GetBinContent(i_b)) *
-			   (h1->GetBinError(i_b) / h1->GetBinContent(i_b)) +
-			   (h2->GetBinError(i_b) / h2->GetBinContent(i_b)) * 
-			   (h2->GetBinError(i_b) / h2->GetBinContent(i_b))));
-      hRatio->SetBinError(i_b, error);
-    }
-    else {
-      hRatio->SetBinContent(i_b, 0);
-      hRatio->SetBinError(i_b, 0);
-    }
     
+    // Ratio Plot:
+    if (doRatio) {
+      if (h1->GetBinContent(i_b) > 0 && h2->GetBinContent(i_b) > 0) {
+	hSubPlot
+	  ->SetBinContent(i_b, (h1->GetBinContent(i_b)/h2->GetBinContent(i_b)));
+	double error = (hSubPlot->GetBinContent(i_b) *
+			sqrt((h1->GetBinError(i_b) / h1->GetBinContent(i_b)) *
+			     (h1->GetBinError(i_b) / h1->GetBinContent(i_b)) +
+			     (h2->GetBinError(i_b) / h2->GetBinContent(i_b)) * 
+			     (h2->GetBinError(i_b) / h2->GetBinContent(i_b))));
+	hSubPlot->SetBinError(i_b, error);
+      }
+      else {
+	hSubPlot->SetBinContent(i_b, 0);
+	hSubPlot->SetBinError(i_b, 0);
+      }
+    }
+    // Subtraction plot:
+    else hSubPlot->SetBinContent(i_b, (h1->GetBinContent(i_b) -
+				       h2->GetBinContent(i_b)));
   }
-  hRatio->SetLineColor(kBlue+1);
-  hRatio->SetMarkerColor(kBlue+1);
-  hRatio->GetXaxis()->SetTitle(h1->GetXaxis()->GetTitle());
-  hRatio->GetYaxis()->SetTitle("Ratio");
-  hRatio->GetXaxis()->SetTitleSize(0.07);
-  hRatio->GetXaxis()->SetLabelSize(0.06);
-  hRatio->GetYaxis()->SetTitleSize(0.07);
-  hRatio->GetYaxis()->SetTitleOffset(0.9);
-  hRatio->GetYaxis()->SetLabelSize(0.06);
-  hRatio->Draw("E1");
+  hSubPlot->SetLineColor(kBlue+1);
+  hSubPlot->SetMarkerColor(kBlue+1);
+  hSubPlot->GetXaxis()->SetTitle(h1->GetXaxis()->GetTitle());
+  if (doRatio) hSubPlot->GetYaxis()->SetTitle("Ratio");
+  else hSubPlot->GetYaxis()->SetTitle("Difference");
+  hSubPlot->GetXaxis()->SetTitleSize(0.07);
+  hSubPlot->GetXaxis()->SetLabelSize(0.06);
+  hSubPlot->GetYaxis()->SetTitleSize(0.07);
+  hSubPlot->GetYaxis()->SetTitleOffset(0.9);
+  hSubPlot->GetYaxis()->SetLabelSize(0.06);
+  if (doRatio) hSubPlot->Draw("E1");
+  else hSubPlot->Draw("");
 
   // Draw a line at the median:
   TLine *line1 = new TLine();
   line1->SetLineStyle(2);
   line1->SetLineWidth(2);
   line1->SetLineColor(kRed+1);
-  line1->DrawLine(hRatio->GetXaxis()->GetXmin(), 1.0, 
-		  hRatio->GetXaxis()->GetXmax(), 1.0);
-  
+  if (doRatio) line1->DrawLine(hSubPlot->GetXaxis()->GetXmin(), 1.0, 
+			       hSubPlot->GetXaxis()->GetXmax(), 1.0);
+  else line1->DrawLine(hSubPlot->GetXaxis()->GetXmin(), 0.0, 
+		       hSubPlot->GetXaxis()->GetXmax(), 0.0);
+
   // Print the canvas:
   TString printName = Form("%s/comparison_%s.eps", m_outputDir.Data(),
 			   name.Data());
@@ -102,7 +112,7 @@ void compareHistograms(TString name, TH1F *h1, TH1F *h2) {
   //delete can;
   //delete pad1;
   //delete pad2;
-  //delete hRatio;
+  //delete hSubPlot;
   //delete line1;
 }
 
@@ -151,7 +161,7 @@ int main(int argc, char **argv) {
     if (currName.Contains("hist_")) {
       TH1F *h1 = (TH1F*)file1.Get(currName);
       TH1F *h2 = (TH1F*)file2.Get(currName);
-      compareHistograms(currName, h1, h2);
+      compareHistograms(currName, h1, h2, config->getBool("MxAODRatioPlot"));
       delete h1;
       delete h2;
     }
