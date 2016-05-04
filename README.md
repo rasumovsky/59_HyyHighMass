@@ -11,7 +11,12 @@ in the configuration files residing in the `data/` directory.
 If you have any questions about the code, please contact the author, who will be
 happy to assist you in getting the code running.
 
-Note: the asymptotic and pseudo-experiment exclusion limit-setting procedure is currently under development. It will be functional by May 2016. 
+#### Current status:
+As of May 4, 2016, the following features are completely functional: toy MC for 
+local and global significance, toy MC for limits, asymptotic significance tests,
+cutflows and data comparisons using MxAODs, and significance extrapolation. 
+However, there are bugs in the asymptotic limit setting procedure that will be
+resolved soon.
 
 ### Input files
 
@@ -65,6 +70,8 @@ The analysis steps are listed and explained below.
  - GlobalP0Toys: create a pseudo-experiment ensemble to get the global Z value.
  - GlobalP0Analysis: analyze the global toy ensemble to get the global z value.
  - LocalP0Analysis: analyze pseudo-experiments to cross-check asymptotic qmu,q0.
+ - StatScan: Plot the limits or p0 vs mass (toys or asymptotics)
+ - ExtrapolateSig: Extrapolate the 2015 signal into 2016 data with Asimov data
 
 ### Preparation for remote processing
 
