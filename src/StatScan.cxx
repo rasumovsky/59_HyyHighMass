@@ -277,10 +277,12 @@ void StatScan::printer(TString statement, bool isFatal) {
    @param width - The width integer for the scan.
    @param makeNew - True iff. calculating things from toys directly.
    @param asymptotic - True iff. asymptotic results are desired. 
+   @param doTilde - True iff. using qMuTilde instead of qMu.
 */
-void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic) {
-  printer(Form("StatScan::scanMassLimit(%d, %d, %d)",
-	       width, (int)makeNew, (int)asymptotic), false);
+void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
+			     bool doTilde) {
+  printer(Form("StatScan::scanMassLimit(%d, %d, %d, %d)",
+	       width, (int)makeNew, (int)asymptotic, (int)doTilde), false);
   
   TString limitFileName = asymptotic ? 
     Form("%s/asymptotic_limit_values_width%d.txt", m_outputDir.Data(), width) :
@@ -324,7 +326,7 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic) {
   // Loop over the mass points to load or calculate limit results:
   std::ofstream limitFileOut(limitFileName);
   for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
-    if ((asymptotic && singleLimitTest(m_massValues[i_m], width)) || 
+    if ((asymptotic && singleLimitTest(m_massValues[i_m], width, doTilde)) || 
 	(!asymptotic && singleCLScan(m_massValues[i_m],width,makeNew,false))) {
       
       observableValues[nToyPoints] = m_massValues[i_m];
@@ -877,14 +879,20 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
    @param crossSection - The cross-section integer for the point of interest.
    @param makeNew - True if from toy MC, false if from text file storage.
    @param asymptotic - True iff. asymptotic results are desired. 
+   @param doTilde - True iff. using qMuTilde instead of qMu.
    @return - True iff loaded successfully.
 */
 bool StatScan::singleCLTest(int mass, int width, int crossSection,
-			    bool makeNew, bool asymptotic) {
+			    bool makeNew, bool asymptotic, bool doTilde) {
   printer(Form("StatScan::singleCLTest(mass=%d, width=%d, makeNew=%d)",
 	       mass, width, (int)makeNew), false);
 
   bool successful = true;
+  
+  if (!asymptotic) {
+    printer("singleCLTest: ERROR! Toys need to be updated for CL with qmutilde",
+	    true);
+  }
 
   // Store band information:
   double CLObs = 0.0;
@@ -995,7 +1003,8 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
       std::vector<double> asymptoticCLValues
 	= testStat->asymptoticCL(mapPoI, datasetToFit,
 				 m_config->getStr("WorkspaceSnapshotMu1"),
-				 m_config->getStr("PoIForNormalization"));
+				 m_config->getStr("PoIForNormalization"),
+				 doTilde);
       CLObs = asymptoticCLValues[0];
       CLExp_n2 = asymptoticCLValues[1];
       CLExp_n1 = asymptoticCLValues[2];
@@ -1030,10 +1039,20 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
       std::map<std::string,double> poiFromFit = testStat->getPoIs();
       double obsXSValue 
 	= poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];
-      double muHatValue = obsXSValue / xSectionDouble;
-      
+      double muHat = obsXSValue / xSectionDouble;
+      double muForQMu = 1.0;
       double qMuObs = testStat->getQMuFromNLL(nllObsMu1, nllObsMuFree,
-					      muHatValue, 1);
+					      muHat, muForQMu);
+      // If using qMuTilde:
+      if (doTilde) {
+	double originNorm = mapPoI[m_config->getStr("PoIForNormalization")];
+	mapPoI[m_config->getStr("PoIForNormalization")] = 0.0;
+	double nllObsMu0
+	  = testStat->getFitNLL(datasetToFit, 0.0, true, mapPoI, false);
+	mapPoI[m_config->getStr("PoIForNormalization")] = originNorm;
+	qMuObs = testStat->getQMuTildeFromNLL(nllObsMu1, nllObsMu0, 
+					      nllObsMuFree, muHat, muForQMu);
+      }
       
       delete testStat;
       delete workspace;
@@ -1084,8 +1103,10 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
 	  
 	  // Then plot statistics:
 	  toyAna->plotProfiledMu();
+	  toyAna->plotTestStat("QMuTilde");
 	  toyAna->plotTestStat("QMu");
 	  toyAna->plotTestStat("Q0");
+	  toyAna->plotTestStatComparison("QMuTilde");
 	  toyAna->plotTestStatComparison("QMu");
 	  toyAna->plotTestStatComparison("Q0");
 	}
@@ -1141,13 +1162,14 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
 
 /**
    -----------------------------------------------------------------------------
-   The method finds the 95% CL by scanning various signal cross-sections.
+   This method finds the asymptotic 95% CLs exclusion by scanning various 
+   signal cross-sections.
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
-   @param asymptotic - True iff. asymptotic results are desired. 
+   @param doTilde - True iff. using qMuTilde instead of qMu.
    @return - True iff calculated successfully.
 */
-bool StatScan::singleLimitTest(int mass, int width) {
+bool StatScan::singleLimitTest(int mass, int width, bool doTilde) {
   printer(Form("StatScan::singleLimitTest(mass=%d, width=%d)", mass, width),
 	  false);
   
@@ -1204,16 +1226,17 @@ bool StatScan::singleLimitTest(int mass, int width) {
   
   //----------------------------------------//
   // Get the asymptotic limit results:
-  std::vector<double> asymptoticLimitValues
+  std::map<TString,double> asymptoticLimits
     = testStat->asymptoticLimit(mapPoI, datasetToFit,
 				m_config->getStr("WorkspaceSnapshotMu1"),
-				m_config->getStr("PoIForNormalization"));
-  setLimit(mass, width, false, true, 0, asymptoticLimitValues[0]);
-  setLimit(mass, width, true, true, -2, asymptoticLimitValues[1]);
-  setLimit(mass, width, true, true, -1, asymptoticLimitValues[2]);
-  setLimit(mass, width, true, true, 0, asymptoticLimitValues[3]);
-  setLimit(mass, width, true, true, 1, asymptoticLimitValues[4]);
-  setLimit(mass, width, true, true, 2, asymptoticLimitValues[5]);
+				m_config->getStr("PoIForNormalization"),
+				doTilde);
+  setLimit(mass, width, false, true, 0, asymptoticLimits["Obs"]);
+  setLimit(mass, width, true, true, -2, asymptoticLimits["ExpN-2"]);
+  setLimit(mass, width, true, true, -1, asymptoticLimits["ExpN-1"]);
+  setLimit(mass, width, true, true, 0, asymptoticLimits["ExpN0"]);
+  setLimit(mass, width, true, true, 1, asymptoticLimits["ExpN1"]);
+  setLimit(mass, width, true, true, 2, asymptoticLimits["ExpN2"]);
   
   delete testStat;
   delete workspace;

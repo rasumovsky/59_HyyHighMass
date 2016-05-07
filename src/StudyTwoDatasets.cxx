@@ -1,9 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  StudyData.cxx                                                             //
+//  StudyTwoDatasets.cxx                                                      //
 //                                                                            //
 //  Author: Andrew Hard                                                       //
-//  Date: 29/04/2016                                                          //
+//  Date: 01/05/2016                                                          //
 //  Email: ahard@cern.ch                                                      //
 //                                                                            //
 //  This main method provides a tool for plotting various quantities from     //
@@ -20,22 +20,24 @@
 // Globally scoped variables:
 TString m_outputDir;
 std::map<TString,TH1F*> m_histograms;
-HGammaMxAOD *m_treeMxAOD;
-TString m_categoryName;
+HGammaMxAOD *m_treeMxAOD1;
+HGammaMxAOD *m_treeMxAOD2;
+TString m_categorization;
 
 /**
    -----------------------------------------------------------------------------
    Select the proper category for the current event in the HGammaMxAOD. The 
-   categorization to use is based on the global variable m_categoryName.
+   categorization to use is based on the global variable m_categorization.
+   @param tree - The MxAOD to use for the current categorization.
    @return - The category index.
 */
-int chooseCategory() {
+int chooseCategory(HGammaMxAOD *tree) {
 
   // Eta categorization:
-  if (m_categoryName.EqualTo("EtaCate")) {
+  if (m_categorization.EqualTo("EtaCate")) {
     double barrelEnd = 1.37;
-    double eta1 = (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0];
-    double eta2 = (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1];
+    double eta1 = (*tree->HGamPhotonsAuxDyn_eta)[0];
+    double eta2 = (*tree->HGamPhotonsAuxDyn_eta)[1];
     if (fabs(eta1) < barrelEnd && fabs(eta2) < barrelEnd) return 0;
     else if (fabs(eta1) < barrelEnd) return 1;
     else if (fabs(eta2) < barrelEnd) return 2;
@@ -43,9 +45,9 @@ int chooseCategory() {
   }
 
   // Conversion categorization:
-  else if (m_categoryName.EqualTo("ConversionCate")) {
-    int conv1 = (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0];
-    int conv2 = (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1];
+  else if (m_categorization.EqualTo("ConversionCate")) {
+    int conv1 = (*tree->HGamPhotonsAuxDyn_conversionType)[0];
+    int conv2 = (*tree->HGamPhotonsAuxDyn_conversionType)[1];
     if (conv1 == 0 && conv2 == 0) return 0;
     else if (conv1 == 0) return 1;
     else if (conv2 == 0) return 2;
@@ -54,7 +56,8 @@ int chooseCategory() {
  
   // Exit because inputs are unknown:
   else {
-    std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
+    std::cout << "StudyTwoDatasets: ERROR! Categorization not found"
+	      << std::endl;
     exit(0);
   }
 }
@@ -62,18 +65,18 @@ int chooseCategory() {
 /**
    -----------------------------------------------------------------------------
    Get the name for the current category. The categorization to use is based on 
-   the global variable m_categoryName.
+   the global variable m_categorization.
    @param categoryIndex - The index of the current category.
    @return - The category name.
 */
 TString nameCategory(int categoryIndex) {
-  if (m_categoryName.EqualTo("EtaCate")) {
+  if (m_categorization.EqualTo("EtaCate")) {
     if (categoryIndex == 0) return "BarrelBarrel";
     else if (categoryIndex == 1) return "BarrelEndcap";
     else if (categoryIndex == 2) return "EndcapBarrel";
     else return "EndcapEndcap";
   }
-  else if (m_categoryName.EqualTo("ConversionCate")) {
+  else if (m_categorization.EqualTo("ConversionCate")) {
     if (categoryIndex == 0) return "UnconvUnconv";
     else if (categoryIndex == 1) return "UnconvConv";
     else if (categoryIndex == 2) return "ConvUnconv";
@@ -82,7 +85,8 @@ TString nameCategory(int categoryIndex) {
   
   // Exit because inputs are unknown:
   else {
-    std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
+    std::cout << "StudyTwoDatasets: ERROR! Categorization not found" 
+	      << std::endl;
     exit(0);
   }
 }
@@ -176,14 +180,16 @@ void plotHistogram(TString histName) {
    Copy files from a slow resource (e.g. EOS) to the local disk for faster
    processing.
    @param fileNames - The original file names.
+   @param sample - The index of the sample (1 or 2).
    @return - An updated list of file names.
 */
-std::vector<TString> makeLocalFileCopies(std::vector<TString> fileNames) {
-  std::cout << "StudyData: Making local copies of inputs."
+std::vector<TString> makeLocalFileCopies(std::vector<TString> fileNames,
+					 int sample) {
+  std::cout << "StudyTwoDatasets: Making local copies of inputs."
 	    << std::endl;
   std::vector<TString> result; result.clear();
   for (int i_f = 0; i_f < (int)fileNames.size(); i_f++) {
-    TString newName = Form("tempFile%d.root", i_f);
+    TString newName = Form("tempFile%d_s%d.root", i_f, sample);
     if (fileNames[i_f].Contains("root://eosatlas/")) {
       system(Form("xrdcp %s %s", fileNames[i_f].Data(), newName.Data()));
     }
@@ -204,7 +210,7 @@ std::vector<TString> makeLocalFileCopies(std::vector<TString> fileNames) {
    @param fileNames - The original file names.
 */
 void removeLocalFileCopies(std::vector<TString> fileNames) {
-  std::cout << "StudyData: Removing local copies of inputs."
+  std::cout << "StudyTwoDatasets: Removing local copies of inputs."
 	    << std::endl;
   for (int i_f = 0; i_f < (int)fileNames.size(); i_f++) {
     system(Form("rm %s", fileNames[i_f].Data()));
@@ -249,7 +255,7 @@ double minEntry(std::vector<double> currList) {
    @param total - The total number of events.
 */
 void printProgressBar(int index, int total) {
-  if (index%100000 == 0) {
+  if (index%10 == 0) {
     TString print_bar = " [";
     for (int bar = 0; bar < 20; bar++) {
       double current_fraction = double(bar) / 20.0;
@@ -283,7 +289,8 @@ int main(int argc, char *argv[])
   TString options = argv[2];
   
   // Check that output directory exists:
-  m_outputDir = Form("%s/%s/StudyData", (config->getStr("MasterOutput")).Data(),
+  m_outputDir = Form("%s/%s/StudyTwoDatasets",
+		     (config->getStr("MasterOutput")).Data(),
 		     (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s", m_outputDir.Data()));
   
@@ -294,200 +301,147 @@ int main(int argc, char *argv[])
   m_histograms.clear();
   int nBins = 50;
   int nCategories = config->getInt("MxAODNCategories");
-  m_categoryName = config->getStr("MxAODCategorization");
+  m_categorization = config->getStr("MxAODCategorization");
   
-  defineHistograms("z_{vertex} [mm]", nCategories, nBins, -150, 150);
-  defineHistograms("m_{#gamma#gamma} [GeV]", nCategories, nBins, 0, 2000);
-  defineHistograms("p_{T}^{#gamma#gamma} [GeV]", nCategories, nBins, 0, 1000);
-  defineHistograms("cos(#theta*)", nCategories, nBins, 0, 1);
+  defineHistograms("#Delta(z_{vertex}) [mm]", nCategories, nBins, -20, 20);
+  defineHistograms("#Delta(m_{#gamma#gamma}) [GeV]",
+		   nCategories, nBins, -10, 10);
+  defineHistograms("#Delta(p_{T}^{#gamma#gamma}) [GeV]",
+		   nCategories, nBins, -10, 10);
+  defineHistograms("#Delta(cos(#theta*))", nCategories, nBins, -0.2, 0.2);
   
   // Loop over photons:
   for (int i_p = 0; i_p < 2; i_p++) {
-    defineHistograms(Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1),
-		     nCategories, nBins, 0.0, 1000.0);
-    defineHistograms(Form("#eta(#gamma_{%d})",i_p+1),
-		     nCategories, nBins, -2.5, 2.5);
-    defineHistograms(Form("#phi(#gamma_{%d})",i_p+1),
-		     nCategories, nBins, -3.141, 3.141);
-    defineHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1), 
-		     nCategories, nBins, 0.0, 50.0);
+    defineHistograms(Form("#Delta(p_{T}(#gamma_{%d})) [GeV]",i_p+1),
+		     nCategories, nBins, -10.0, 10.0);
+    defineHistograms(Form("#Delta(#eta(#gamma_{%d}))",i_p+1),
+		     nCategories, nBins, -0.5, 0.5);
+    defineHistograms(Form("#Delta(#phi(#gamma_{%d}))",i_p+1),
+		     nCategories, nBins, -0.5, 0.5);
+    defineHistograms(Form("#Delta(p_{T}^{cone20}(#gamma_{%d})) [GeV]",
+			  i_p+1), nCategories, nBins, -5.0, 5.0);
   }
   
-  // Prepare for loop over input MxAOD/TTree:
-  std::vector<TString> fileNames = config->getStrV("MxAODsForData");
   // Make local copies of files if requested, to improve speed:
+  std::vector<TString> fileNames1 = config->getStrV("MxAODsForData1");
+  std::vector<TString> fileNames2 = config->getStrV("MxAODsForData2");
   if (config->getBool("MakeLocalMxAODCopies")) {
-    fileNames = makeLocalFileCopies(fileNames);
+    fileNames1 = makeLocalFileCopies(fileNames1, 1);
+    fileNames2 = makeLocalFileCopies(fileNames2, 2);
   }
-  // Create TChain of input files:
-  TChain *chain = new TChain(config->getStr("MxAODTreeName"));
-  for (int i_f = 0; i_f < (int)fileNames.size(); i_f++) {
-    chain->AddFile(fileNames[i_f]);
-  }
-  m_treeMxAOD = new HGammaMxAOD(chain);
   
-  // Count events:
+  // Create TChain of input files for sample 1:
+  TChain *chain1 = new TChain(config->getStr("MxAODTreeName"));
+  for (int i_f1 = 0; i_f1 < (int)fileNames1.size(); i_f1++) {
+    chain1->AddFile(fileNames1[i_f1]);
+  }
+  m_treeMxAOD1 = new HGammaMxAOD(chain1);
+  
+  // Create TChain of input files for sample 2:
+  TChain *chain2 = new TChain(config->getStr("MxAODTreeName"));
+  for (int i_f2 = 0; i_f2 < (int)fileNames2.size(); i_f2++) {
+    chain2->AddFile(fileNames2[i_f2]);
+  }
+  m_treeMxAOD2 = new HGammaMxAOD(chain2);
+  
+  // Count common events:
   int countPass = 0;
   int countCate[100] = {0};
 
   //--------------------------------------//
-  // Loop over events to build dataset for signal parameterization:
-  
-  int nEvents = m_treeMxAOD->fChain->GetEntries();
-  std::cout << "There are " << nEvents << " events to process." << std::endl;
-  for (int index = 0; index < nEvents; index++) {
+  // Loop over events from dataset 1:  
+  int nEvents1 = m_treeMxAOD1->fChain->GetEntries();
+  std::cout << "There are " << nEvents1 << " events to process." << std::endl;
+  for (int index1 = 0; index1 < nEvents1; index1++) {
 
-    // Load event from MxAOD:
-    m_treeMxAOD->fChain->GetEntry(index);
-    printProgressBar(index, nEvents);
+    // Load event from MxAOD 1:
+    m_treeMxAOD1->fChain->GetEntry(index1);
+    printProgressBar(index1, nEvents1);
     
-    /*
-    if ((m_treeMxAOD->EventInfoAux_runNumber == 280464 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 187603384) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 280862 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 128240362) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 281317 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 144044837) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 282631 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 444615930) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 282712 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1400405523) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 283155 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 212630049) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 283429 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1931043956) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 283608 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 458220275) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 284213 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 151967530) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 284484 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1014170264)) {
-      
-      std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
-		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
-		<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
-		<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
-		<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
-		<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
-		<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
-		<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
-		<< ", pT1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0]
-		<< ", pT2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1]
-	//<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
-		<< std::endl;
-    }
-    */
-
     // Select the event:
     if ((config->getStr("AnalysisType")).EqualTo("Graviton") &&
-	!(m_treeMxAOD->HGamEventInfoAuxDyn_isPassedExotic && 
-	  m_treeMxAOD->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy &&
-	  m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 200000)) {
+	!(m_treeMxAOD1->HGamEventInfoAuxDyn_isPassedExotic && 
+	  m_treeMxAOD1->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy &&
+	  m_treeMxAOD1->HGamEventInfoAuxDyn_m_yy > 200000)) {
       continue;
     }
     else if ((config->getStr("AnalysisType")).EqualTo("Scalar") &&
-	     !(m_treeMxAOD->HGamEventInfoAuxDyn_isPassedLowHighMyy && 
-	       m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 150000)) {
+	     !(m_treeMxAOD1->HGamEventInfoAuxDyn_isPassedLowHighMyy && 
+	       m_treeMxAOD1->HGamEventInfoAuxDyn_m_yy > 150000)) {
       continue;
     }
     
-    // Choose the category:
-    int category = chooseCategory();
-    
-    // Add to event counts:
-    countPass++;
-    countCate[category]++;
-
-    //std::cout << "run = " << m_treeMxAOD->EventInfoAux_runNumber
-    //	      << " event = " << m_treeMxAOD->EventInfoAux_eventNumber
-    //	      << std::endl;
-    // Print out information on specific events:    
-    if ((m_treeMxAOD->EventInfoAux_runNumber == 280319 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 844110200) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 280319 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1844702370) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 280862 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 2428284929) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280231 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 434101590) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280319 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 844110200) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280319 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1844702370) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280862 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 2428284929) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280950 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 202310071) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 284213 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 3096852034)) {
-    
-      std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
-		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
-		<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
-		<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
-		<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
-		<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
-		<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
-		<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
-		<< ", pT1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0]
-		<< ", pT2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1]
-		<< ", zvtx = " << m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ
-		<< ", E0,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[0]
-		<< ", E0,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[1]
+    //--------------------------------------//
+    // Loop over events from dataset 2:
+    int nEvents2 = m_treeMxAOD2->fChain->GetEntries();
+    for (int index2 = 0; index2 < nEvents2; index2++) {
+      
+      m_treeMxAOD2->fChain->GetEntry(index2);
+      
+      if (m_treeMxAOD1->EventInfoAuxDyn_eventNumber == 
+	  m_treeMxAOD2->EventInfoAuxDyn_eventNumber) {
 	
-		<< ", E1,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[0]
-		<< ", E1,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[1]
 	
-		<< ", E2,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[0]
-		<< ", E2,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[1]
-
-		<< ", E3,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[0]
-		<< ", E3,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[1]
-
-	//<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
-		<< std::endl;
-    }
-    
-    /*
-    if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0 > 1600) {
-      std::cout << "\nSPECIAL   "
-		<< "Run = " << m_treeMxAOD->EventInfoAux_runNumber
-		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
-		<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
-		<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
-		<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
-		<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
-		<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
-		<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
-		<< ", pT1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0]
-		<< ", pT2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1]
-		<< ", zvtx = " << m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ
-		<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
-		<< std::endl;
-    }
-    */
-
-    // Fill the event variable histograms:
-    fillHistograms("z_{vertex} [mm]", category,
-		   m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ);
-    fillHistograms("m_{#gamma#gamma} [GeV]", category, 
-		   m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0);
-    fillHistograms("p_{T}^{#gamma#gamma} [GeV]", category, 
-		   m_treeMxAOD->HGamEventInfoAuxDyn_pT_yy / 1000.0);
-    fillHistograms("cos(#theta*)", category,
-		   m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy);
-    
-    // Fill the photon variable histograms in loop over photons:
-    for (int i_p = 0; i_p < 2; i_p++) {
-      fillHistograms(Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p] / 1000.0);
-      fillHistograms(Form("#eta(#gamma_{%d})",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]);
-      fillHistograms(Form("#phi(#gamma_{%d})",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p]);
-      fillHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1),
-		     category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p] / 1000.0);
+	
+	// Select the event:
+	if ((config->getStr("AnalysisType")).EqualTo("Graviton") &&
+	    !(m_treeMxAOD2->HGamEventInfoAuxDyn_isPassedExotic && 
+	      m_treeMxAOD2->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy &&
+	      m_treeMxAOD2->HGamEventInfoAuxDyn_m_yy > 200000)) {
+	  continue;
+	}
+	else if ((config->getStr("AnalysisType")).EqualTo("Scalar") &&
+		 !(m_treeMxAOD2->HGamEventInfoAuxDyn_isPassedLowHighMyy && 
+		   m_treeMxAOD2->HGamEventInfoAuxDyn_m_yy > 150000)) {
+	  continue;
+	}
+	
+	//// Choose the category:
+	int category1 = chooseCategory(m_treeMxAOD2);
+	int category2 = chooseCategory(m_treeMxAOD2);
+	if (category1 != category2) continue;
+	int category = category1;
+	
+	// Count events that pass both selections:
+	countPass++;
+	countCate[category]++;
+	
+	
+	// Fill the event variable histograms:
+	fillHistograms("#Delta(z_{vertex}) [mm]", category,
+		       (m_treeMxAOD2->HGamEventInfoAuxDyn_selectedVertexZ - 
+			m_treeMxAOD1->HGamEventInfoAuxDyn_selectedVertexZ));
+	fillHistograms("#Delta(m_{#gamma#gamma}) [GeV]", category, 
+		       (m_treeMxAOD2->HGamEventInfoAuxDyn_m_yy - 
+			m_treeMxAOD1->HGamEventInfoAuxDyn_m_yy) / 1000.0);
+	fillHistograms("#Delta(p_{T}^{#gamma#gamma}) [GeV]", category, 
+		       (m_treeMxAOD2->HGamEventInfoAuxDyn_pT_yy - 
+			m_treeMxAOD1->HGamEventInfoAuxDyn_pT_yy) / 1000.0);
+	fillHistograms("#Delta(cos(#theta*))", category,
+		       (m_treeMxAOD2->HGamEventInfoAuxDyn_cosTS_yy - 
+			m_treeMxAOD1->HGamEventInfoAuxDyn_cosTS_yy));
+	
+	// Fill the photon variable histograms in loop over photons:
+	for (int i_p = 0; i_p < 2; i_p++) {
+	  fillHistograms(Form("#Delta(p_{T}(#gamma_{%d})) [GeV]",i_p+1),
+			 category, 
+			 ((*m_treeMxAOD2->HGamPhotonsAuxDyn_pt)[i_p] - 
+			  (*m_treeMxAOD1->HGamPhotonsAuxDyn_pt)[i_p]) / 1000.0);
+	  fillHistograms(Form("#Delta(#eta(#gamma_{%d}))",i_p+1), category, 
+			 ((*m_treeMxAOD2->HGamPhotonsAuxDyn_eta)[i_p] - 
+			  (*m_treeMxAOD1->HGamPhotonsAuxDyn_eta)[i_p]));
+	  fillHistograms(Form("#Delta(#phi(#gamma_{%d}))",i_p+1), category, 
+			 ((*m_treeMxAOD2->HGamPhotonsAuxDyn_phi)[i_p] - 
+			  (*m_treeMxAOD1->HGamPhotonsAuxDyn_phi)[i_p]));
+	  fillHistograms(Form("#Delta(p_{T}^{cone20}(#gamma_{%d})) [GeV]",
+			      i_p+1), category, 
+			 ((*m_treeMxAOD2->HGamPhotonsAuxDyn_ptcone20)[i_p] - 
+			  (*m_treeMxAOD1->HGamPhotonsAuxDyn_ptcone20)[i_p]) /
+			 1000.0);
+	}
+		
+	break;
+      }
     }
   }
   
@@ -503,7 +457,10 @@ int main(int argc, char *argv[])
   histogramFile->Close();
   
   // Remove files that were copied:
-  if (config->getBool("MakeLocalMxAODCopies")) removeLocalFileCopies(fileNames);
+  if (config->getBool("MakeLocalMxAODCopies")) {
+    removeLocalFileCopies(fileNames1);
+    removeLocalFileCopies(fileNames2);
+  }
   
   std::ofstream textFile(Form("%s/eventCount.txt", m_outputDir.Data()));
   
@@ -522,8 +479,10 @@ int main(int argc, char *argv[])
   std::cout << "\nCreated ROOT file with histograms: " << histogramFileName 
 	    << std::endl;
   
-  delete m_treeMxAOD;
-  delete chain;
+  delete m_treeMxAOD1;
+  delete m_treeMxAOD2;
+  delete chain1;
+  delete chain2;
   delete config;
   delete histogramFile;
   

@@ -33,7 +33,8 @@ class StatScan {
   std::vector<int> listMasses();
   std::vector<int> listWidths();
   std::vector<int> listXS();
-  void scanMassLimit(int width, bool makeNew, bool asymptotic);
+  void scanMassLimit(int width, bool makeNew, bool asymptotic, 
+		     bool doTilde=false);
   void scanMassP0(int width, bool makeNew, bool asymptotic);
   void setInputDirectory(TString directory);
   void setCL(int mass, int width, int crossSection, bool expected, 
@@ -45,8 +46,8 @@ class StatScan {
   void setOutputDirectory(TString directory);
   bool singleCLScan(int mass, int width, bool makeNew, bool asymptotic);
   bool singleCLTest(int mass, int width, int crossSection, bool makeNew,
-		    bool asymptotic);
-  bool singleLimitTest(int mass, int width);
+		    bool asymptotic, bool doTilde=false);
+  bool singleLimitTest(int mass, int width, bool doTilde=false);
   bool singleP0Test(int mass, int width, int crossSection, bool makeNew, 
 		    bool asymptotic);
   void useTheseMasses(std::vector<int> massValues);

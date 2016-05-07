@@ -278,7 +278,22 @@ int main(int argc, char **argv) {
 	
 	// Also update the mu=1 cross-section to reflect the S+B expectation:
 	if (muHypothesis == 0) mapPoIMu1[poiForNorm] = snapshotXSection;
-	  
+	
+	
+	
+	// Calculate the p0:
+	std::vector<double> p0Values
+	  = testStat->asymptoticP0(mapPoIMu1, "asimovDataMu1", snapshotName,
+				   poiForNorm);
+	double currZ0 = p0Values[0];
+	
+	// Calculate the CL:
+	//std::vector<double> CLValues 
+	//= testStat->asymptoticCL(mapPoIMu1, "asimovDataMu1", snapshotName,
+	//			   poiForNorm, config->getBool("UseQMuTilde"));
+	double currCL = 0.0;//CLValues[0];
+	
+	/*
 	// Mu = 0 fits:
 	std::cout << "ExtrapolateSig: Mu=0 fit starting" << std::endl;
 	double nllMu0 
@@ -318,6 +333,7 @@ int main(int argc, char **argv) {
 	std::cout << "\tcurrQMu " << currQMu << std::endl;
 	std::cout << "\tcurrCL " << currCL << std::endl;
 	std::cout << std::endl;
+	*/
 	
 	// Fill arrays for graphs:
 	if (options.Contains("Only2016")) xValues[i_l] = lumiValues[i_l]/1000.0;

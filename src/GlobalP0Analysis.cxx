@@ -32,6 +32,28 @@ double getZFromP(double p) {
 
 /**
    -----------------------------------------------------------------------------
+   Compute the local significance to the global significance.
+   @param mappingGraph - The graph of z0_local -> z0_global.
+   @param zLocal - The local significance of interest.
+*/
+double convertZLocalToGlobal(TGraphErrors *mappingGraph, double zLocal) {
+  // Calculate the Z0 global value with errors:
+  double xValue = 0.0; double yValue = 0.0;
+  double xError = 0.0; double yError = 0.0;
+  for (int i_p = 0; i_p < mappingGraph->GetN(); i_p++) {
+    mappingGraph->GetPoint(i_p, xValue, yValue);
+    xError = mappingGraph->GetErrorX(i_p);
+    yError = mappingGraph->GetErrorY(i_p);
+    if (((xValue + xError) >= zLocal) &&
+	((xValue - xError) <= zLocal)) {
+      break;
+    }
+  }
+  return yValue;
+}
+
+/**
+   -----------------------------------------------------------------------------
    The main method scans the 95% CL for various signal cross-sections.
    @param configFile - The analysis configuration file.
    @param options - Job options: "New","FromFile","toy","asymptotic","NEvents"
@@ -396,6 +418,12 @@ int main(int argc, char **argv) {
   std::cout << "\tFrom toy: Z0Global( " << observedZ0 << " ) = " 
 	    << yValue << " +/- " << yError << std::endl;
 
+  // Finally, save the TGraph containing the local -> global Z mapping:
+  TFile *outZFile = new TFile(Form("%s/graph_maxZ0_%s.root", outputDir.Data(), 
+				   anaType.Data()), "RECREATE");
+  gZGlobal->Write();
+  outZFile->Close();
+  
   delete config;
   return 0;
 }

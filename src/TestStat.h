@@ -32,14 +32,19 @@ class TestStat {
 		      RooRealVar *weight);
   std::vector<double> asymptoticCL(std::map<TString,double> mapPoI, 
 				   TString datasetName, TString snapshotName,
-				   TString poiForNorm);
-  std::vector<double> asymptoticLimit(std::map<TString,double> mapPoI, 
-  				      TString datasetName, TString snapshotName,
-  				      TString poiForNorm);
-  void asymptoticLimitBisector(std::map<TString,double> mapPoI, 
-  			       TString datasetName, TString poiForNorm, 
-  			       double nllMuHat, double profiledNorm,
-  			       double& muLimit, double& qMuLimit);
+				   TString poiForNorm, bool doTilde=false);
+  //std::vector<double> asymptoticLimit(std::map<TString,double> mapPoI, 
+  //				      TString datasetName, TString snapshotName,
+  //				      TString poiForNorm);
+  std::map<TString,double> asymptoticLimit(std::map<TString,double> mapPoI, 
+					   TString datasetName, 
+					   TString snapshotName,
+					   TString poiForNorm, 
+					   bool doTilde=false);
+  //void asymptoticLimitBisector(std::map<TString,double> mapPoI, 
+  //			       TString datasetName, TString poiForNorm, 
+  //			       double nllMuHat, double profiledNorm,
+  //			       double& muLimit, double& qMuLimit);
   std::vector<double> asymptoticP0(std::map<TString,double> mapPoI, 
 				   TString datasetName, TString snapshotName,
 				   TString poiForNorm);
@@ -53,15 +58,17 @@ class TestStat {
   RooDataSet* createPseudoData(int seed, int valPoI, TString snapshotName,
 			       std::map<TString,double> namesAndValsPoI, 
 			       int toyIndex = -1);
-  double findMuUp(double muUpMed, double qMuAsimov, int N, double alpha=0.05);
+  //double findMuUp(double muUpMed, double qMuAsimov, int N, double alpha=0.05);
   bool fitsAllConverged();
   double functionQ0(double x);
   double functionQMu(double x);
   double functionQMuTilde(double x, double asimovTestStat);
   double getCLFromCLs(double CLs);
   double getCLsFromCL(double CL);
-  double getCLFromQMu(double qMu, double N);
-  double getCLsFromQMu(double qMu, double N);
+  //double getCLFromQMu(double qMu, double N);
+  //double getCLsFromQMu(double qMu, double N);
+  double getCLFromQMu(double qMu, double sigma, double mu);
+  double getCLsFromQMu(double qMu, double sigma, double mu);
   double getFitNLL(TString datasetName, int valPoI, bool fixPoI,
 		   std::map<TString,double> namesAndValsPoI,
 		   bool resetParams = true);
@@ -70,14 +77,26 @@ class TestStat {
   std::map<std::string,double> getNuisanceParameters();
   std::map<std::string,double> getPoIs();
   double getP0FromQ0(double q0);
+  double getP0FromR0(double r0);
   double getPFromN(double N);
   double getPbFromQMu(double qMu, double sigma, double mu);
+  double getPbFromQMuTilde(double qMuTilde, double sigma, double mu);
   double getPMuFromQMu(double qMu);
+  double getPMuFromQMuTilde(double qMuTilde, double sigma, double mu);
+  double getPMuFromRMu(double rMu);
   double getQ0FromNLL(double nllMu0, double nllMuHat, double muHat);
   double getQMuFromNLL(double nllMu, double nllMuHat, double muHat,
 		       double muTest);
   double getQMuTildeFromNLL(double nllMu, double nllMu0, double nllMuHat,
 			    double muHat, double muTest);
+  double getR0FromNLL(double nllMu0, double nllMuHat, double muHat);
+  double getRMuFromNLL(double nllMu, double nllMuHat, double muHat, 
+		       double muTest);
+  double getRMuTildeFromNLL(double nllMu, double nllMu0, double nllMuHat,
+			    double muHat, double muTest);
+  //double getSigma(double qMu, double mu, double muHat, bool doTilde, 
+  //		  int direction);
+  double getSigma(double qMu, double mu, double muHat, bool doTilde=false);
   double getZ0FromQ0(double q0);
   double getZFromP(double p);
   double getZMuFromQMu(double qMu);
@@ -87,8 +106,9 @@ class TestStat {
   void saveSnapshots(bool doSaveSnapshot);
   void scaleAsimovData(double scaleFactor, std::vector<TString> varsToScale);
   std::map<int,double> scanNLL(TString scanName, TString datasetName,
-			       TString varToScan,
-			       std::vector<TString> varsToFix);
+			       TString varToScan, bool fixPoI,
+			       std::map<TString,double> namesAndValsPoI,
+			       int nScanPoints);
   void setFitOptions(TString fitOptions);
   void setNominalSnapshot(TString nominalSnapshot);
   void setPlotAxis(bool useLogScale, double yMin, double yMax, 
@@ -98,9 +118,10 @@ class TestStat {
   void setSubPlot(TString ratioOrSubtraction);
   RooWorkspace *theWorkspace();
   ModelConfig *theModelConfig();
+  void useTwoSidedTestStat(bool useTwoSided);
   
  private:
-  
+
   TString nameOfVar(TString varForm);
   TGraphErrors* plotDivision(TString dataName, TString pdfName, TString obsName,
 			     double xMin, double xMax, double xBins);
@@ -111,7 +132,9 @@ class TestStat {
   void printer(TString statement, bool isFatal);
   void printSet(TString setName, RooArgSet* set);
   void storeParams(RooArgSet *set, std::map<std::string,double>& map);
-
+  double upperLimitFinder(std::map<TString,double> mapPoI, TString datasetName, 
+			  TString poiForNorm, bool doTilde=false);
+  
   // From the initialization:
   TString m_anaType;    // The analysis type ("Res", "NonRes").
   TString m_jobName;    // The name of the group of jobs (for I/O purposes).
@@ -126,7 +149,10 @@ class TestStat {
   TString m_plotDir;    // The output directory for plots (not set by default).
   bool m_doSaveSnapshot;// Option to save snapshots of PoI and nuisance params.
   bool m_doPlot;        // Sets whether or not to plot fit results.
-  
+
+  // Option to use two-sided test-statistics:
+  bool m_useTwoSided;
+
   // Pointer to the input file:
   TFile *inputFile;
   

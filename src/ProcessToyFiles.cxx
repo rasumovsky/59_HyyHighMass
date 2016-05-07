@@ -13,10 +13,7 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "CommonFunc.h"
 #include "CommonHead.h"
-#include "CLScan.h"
-#include "Config.h"
 
 TString m_inputDir;
 TString m_outputDir;

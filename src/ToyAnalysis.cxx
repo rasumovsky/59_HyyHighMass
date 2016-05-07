@@ -452,14 +452,31 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     
     // Only plot successful fits:
     if (!(toyTree->convergedMu0 && toyTree->convergedMuFree)) continue;
-        
+
+    /*
+    bool skip = false;
+    for (int i_p = 0; i_p < (int)((*toyTree->namesPoIs).size()); i_p++) {
+      TString currPoIName = (*toyTree->namesPoIs)[i_p];
+      if (currPoIName.EqualTo("mX") && 
+	  (*toyTree->valuesPoIsMuFree)[i_p] < 500) skip = true;
+    }
+    //if (skip) continue;
+    */
+
     // Get the test statistic values:
     double valueQMu = m_ts->getQMuFromNLL(toyTree->nllMu1, toyTree->nllMuFree,
 					  toyTree->profiledPOIVal, 1);
     double valueQ0 = m_ts->getQ0FromNLL(toyTree->nllMu0, toyTree->nllMuFree,
 					toyTree->profiledPOIVal);
+    /*
+    if (skip) {
+      valueQ0 = m_ts->getQ0FromNLL(toyTree->nllMu0, 
+				   (*toyTree->nllPerRetry)[0],
+				   toyTree->profiledPOIVal);
+    }
+    */
     double valueZ0 = m_ts->getZ0FromQ0(valueQ0);
-    double valueCL = m_ts->getCLFromQMu(valueQMu, 0);
+    double valueCL = 0.0;//m_ts->getCLFromQMu(valueQMu, 0);
     
     double toyWeight = 1.0;
     if (m_options.Contains("ImportSamp")) toyWeight = toyTree->weight;
@@ -568,7 +585,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
       }
     }
     
-    // Loop over the non-systematic parameters:
+    // Loop over the parameters of interest:
     for (int i_p = 0; i_p < (int)((*toyTree->namesPoIs).size()); i_p++) {
       TString currPoIName = (*toyTree->namesPoIs)[i_p];
       if (doThisFit("0")) {
@@ -624,7 +641,6 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
 			      m_hRetries[muValue]->GetBinContent(i_b)));
     }
   }
-  
 }
 
 /**
@@ -859,7 +875,7 @@ void ToyAnalysis::plotHist(TString paramName, int toyMu) {
   TH1F *histMu1 = doThisFit("1") ? getHist(paramName,"1",toyMu) : NULL;
   TH1F *histMuFree = doThisFit("Free") ? getHist(paramName,"Free",toyMu) : NULL;
   
-  TCanvas *can = new TCanvas("can", "can",800, 800);
+  TCanvas *can = new TCanvas("can", "can", 800, 800);
   can->cd();
   gPad->SetLogy();
 

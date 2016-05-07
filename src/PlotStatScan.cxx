@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
   
   // Use the StatScan class to load toys and calculate 95% CL limits:
   StatScan *scan = new StatScan(configFile, 
-				config->getStr("PlotStatScanOptions"));
+				config->getStr("StatScanOptions"));
   if (options.Contains("New")) scan->setInputDirectory(inputDir);
   else scan->setInputDirectory(outputDir);
   scan->setOutputDirectory(outputDir);
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
   if (useAsymptotics) {
     scan->useTheseMasses(config->getIntV("AsympStatScanMasses"));
     scan->useTheseWidths(config->getIntV("AsympStatScanWidths"));
-    scan->useTheseXS(config->getIntV("AsympStatScanXS"));
+    //scan->useTheseXS(config->getIntV("AsympStatScanXS"));
   }
   
   // Loop over widths:

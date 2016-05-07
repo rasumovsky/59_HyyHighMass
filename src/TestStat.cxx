@@ -112,15 +112,18 @@ void TestStat::addGhostEvents(RooAbsData *dataset, RooRealVar* observable,
    @param datasetName - The name of the dataset in the workspace.
    @param snapshotName - The name of the ML snapshot for generating mu=0 Asimov.
    @param poiForNorm - The name of the normalization poi.
+   @param doTilde - True iff. using qMuTilde instead of qMu.
    @return - A vector with obs, exp+2s, exp+1s, exp, exp-1s, exp-2s CL values.
 */
 std::vector<double> TestStat::asymptoticCL(std::map<TString,double> mapPoI, 
 					   TString datasetName, 
 					   TString snapshotName,
-					   TString poiForNorm) {
+					   TString poiForNorm, bool doTilde) {
   printer(Form("TestStat::asymptoticCL(%s, %s)",
 	       datasetName.Data(), poiForNorm.Data()), false);
   
+  printer("REQUIRES REVISION, DEPRECATED!", true);
+
   // Create unique Asimov dataset name based on PoI:
   TString asimovDataMu0Name = "asimovDataMu0";
 
@@ -140,50 +143,96 @@ std::vector<double> TestStat::asymptoticCL(std::map<TString,double> mapPoI,
     createAsimovData(0.0, snapshotName, mapPoI, asimovDataMu0Name);
     mapPoI[poiForNorm] = originNorm;//restore the non-zero signal strength.
   }
-
-  // Calculate observed qmu: 
+  
+  // For  now, use mu = 1 (qmu for mu=1), since we are adjusting the cross-
+  // section parameter and not the mu parameter.
+  double muForQMu = 1.0;
+  
+  // Calculate observed qMu: 
   double nllMu1Obs = getFitNLL(datasetName, 1.0, true, mapPoI, false);
   double nllMuHatObs = getFitNLL(datasetName, 1.0, false, mapPoI, false);
   double profiledNormObs = (getPoIs())[(std::string)(poiForNorm)];
   double muHatObs = (profiledNormObs / mapPoI[poiForNorm]);
-  double obsQMu = getQMuFromNLL(nllMu1Obs, nllMuHatObs, muHatObs, 1);
+  double obsQMu = getQMuFromNLL(nllMu1Obs, nllMuHatObs, muHatObs, muForQMu);
     
-  // Calculate expected qmu:
+  // Calculate expected qMu:
   double nllMu1Exp = getFitNLL(asimovDataMu0Name, 1.0, true, mapPoI, false);
   double nllMuHatExp = getFitNLL(asimovDataMu0Name, 0.0, false, mapPoI, false);
   double profiledNormExp = (getPoIs())[(std::string)(poiForNorm)];
   double muHatExp = (profiledNormExp / mapPoI[poiForNorm]);
-  double expQMu = getQMuFromNLL(nllMu1Exp, nllMuHatExp, muHatExp, 1);
+  double expQMu = getQMuFromNLL(nllMu1Exp, nllMuHatExp, muHatExp, muForQMu);
+    
+  // Replace qMu -> qMuTilde if requested (nllMu0 requires mu=0 fit):
+  if (doTilde) {
+    // Temporarily set normalization parameter to zero:
+    double originNorm = mapPoI[poiForNorm];
+    mapPoI[poiForNorm] = 0.0;
+    
+    // Calculate observed qMuTilde:
+    double nllMu0Obs = getFitNLL(datasetName, 0.0, true, mapPoI, false);
+    obsQMu = getQMuTildeFromNLL(nllMu1Obs, nllMu0Obs, nllMuHatObs, muHatObs,
+				muForQMu);
+    
+    // Calculate expected qMuTilde:
+    double nllMu0Exp = getFitNLL(asimovDataMu0Name, 0.0, true, mapPoI, false);
+    expQMu = getQMuTildeFromNLL(nllMu1Exp, nllMu0Exp, nllMuHatExp, muHatExp,
+				muForQMu);
+    // Reset normalization parameter:
+    mapPoI[poiForNorm] = originNorm;
+  }
+
+  // Get Sigma:
+  //int direction = (N < 0) ? -1 : 1;
+  double sigmaExp = getSigma(expQMu, muForQMu, muHatExp, doTilde);
+  double sigmaObs = getSigma(obsQMu, muForQMu, muHatObs, doTilde);
+  
+  /*
+    
+  // Calculate nllMuHat only once:
+  double nllMuHat = getFitNLL(datasetName, 0.0, false, mapPoI, false);
+  double profiledNorm = (getPoIs())[(std::string)(poiForNorm)];
+      
+    // Set the signal strength:
+    mapPoI[poiForNorm] = muLimit;
+    
+    // Calculate qMu:
+    double nllMu1 = getFitNLL(datasetName, 1.0, true, mapPoI, false);
+    double muHat = (profiledNorm / mapPoI[poiForNorm]);
+    double qMu = getQMuFromNLL(nllMu1, nllMuHat, muHat, muForQMu);
+    
+    // Replace qMu with qMuTilde if requested (requires extra fit for nllMu0):
+    if (doTilde) {
+      mapPoI[poiForNorm] = 0.0;
+      double nllMu0 = getFitNLL(datasetName, 0.0, true, mapPoI, false);
+      mapPoI[poiForNorm] = muLimit;
+      qMu = getQMuTildeFromNLL(nllMu1, nllMu0, nllMuHat, muHat, muForQMu);
+    }
+    
+    // Get Sigma:
+    //int direction = (N < 0) ? -1 : 1;
+    double sigma = getSigma(qMu, muForQMu, muHat, doTilde);
+    
+    // Which Mu to use? Probably muHat, right?
+    CLs = getCLsFromQMu(qMu, sigma, muForQMu);
+  */
   
   // Calculate CL:
-  double expCLn2 = getCLFromQMu(expQMu, -2);
-  double expCLn1 = getCLFromQMu(expQMu, -1);
-  double expCLp1 = getCLFromQMu(expQMu, 1);
-  double expCLp2 = getCLFromQMu(expQMu, 2);
-  double expCL = getCLFromQMu(expQMu, 0);
-  double obsCL = getCLFromQMu(obsQMu, 0);
+  double expCL = getCLsFromQMu(expQMu, sigmaExp, muForQMu);
+  double obsCL = getCLsFromQMu(obsQMu, sigmaObs, muForQMu);
   
   // Print summary:
-  std::cout << "\n\t expected CL +2s = " << expCLp2 << std::endl;
-  std::cout << "\t expected CL +1s = " << expCLp1 << std::endl;
-  std::cout << "\t expected CL nom = " << expCL    << std::endl;
-  std::cout << "\t expected CL -1s = " << expCLn1 << std::endl;
-  std::cout << "\t expected CL -2s = " << expCLn2 << std::endl;
+  std::cout << "\t expected CL nom = " << expCL << std::endl;
   std::cout << "\t observed CL = " << obsCL << "\n" << std::endl;
   
   // Return observed and expected CL values:
   std::vector<double> resultsCL;
   resultsCL.clear();
   resultsCL.push_back(obsCL);
-  resultsCL.push_back(expCLn2);
-  resultsCL.push_back(expCLn1);
   resultsCL.push_back(expCL);
-  resultsCL.push_back(expCLp1);
-  resultsCL.push_back(expCLp2);
   return resultsCL;
 }
 
-/**
+/*
    -----------------------------------------------------------------------------
    Calculate the asymptotic limit values using fits.
    @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
@@ -191,7 +240,7 @@ std::vector<double> TestStat::asymptoticCL(std::map<TString,double> mapPoI,
    @param snapshotName - The name of the ML snapshot for generating mu=0 Asimov.
    @param poiForNorm - The name of the normalization poi.
    @return - A vector with obs, exp+2s, exp+1s, exp, exp-1s, exp-2s CL values.
-*/
+
 std::vector<double> TestStat::asymptoticLimit(std::map<TString,double> mapPoI, 
 					      TString datasetName, 
 					      TString snapshotName,
@@ -259,8 +308,109 @@ std::vector<double> TestStat::asymptoticLimit(std::map<TString,double> mapPoI,
   resultsLimit.push_back(expectedLimit_p2);
   return resultsLimit;
 }
+*/
 
 /**
+   -----------------------------------------------------------------------------
+   Calculate the asymptotic limit values using fits.
+   @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
+   @param datasetName - The name of the dataset in the workspace.
+   @param snapshotName - The name of the ML snapshot for generating mu=0 Asimov.
+   @param poiForNorm - The name of the normalization poi.
+   @param doTilde - True iff. using qMuTilde instead of qMu.
+   @return - A vector with obs, exp+2s, exp+1s, exp, exp-1s, exp-2s CL values.
+*/
+std::map<TString,double> TestStat::asymptoticLimit(
+   std::map<TString,double> mapPoI, TString datasetName, TString snapshotName,
+   TString poiForNorm, bool doTilde) {
+  
+  printer(Form("TestStat::asymptoticLimit(%s, %s)",
+	       datasetName.Data(), poiForNorm.Data()), false);
+  
+  // Map to store limit results:
+  std::map<TString,double> limitMap; limitMap.clear();
+  
+  // Create unique Asimov dataset name based on PoI:
+  TString asimovDataMu0Name = "asimovDataMu0";
+  
+  // Need to set the non-norm PoI constant...
+  for (std::map<TString,double>::iterator poiIter = mapPoI.begin(); 
+       poiIter != mapPoI.end(); poiIter++) {
+    TString poiName = poiIter->first;
+    double poiValue = poiIter->second;
+    if (!poiName.EqualTo(poiForNorm)) setParam(poiName, poiValue, true);
+    asimovDataMu0Name.Append(Form("_%s%2.2f", poiName.Data(), poiValue));
+  }
+  
+  // Generate mu0 asimov data:
+  if (!m_workspace->data(asimovDataMu0Name)) {
+    double originNorm = mapPoI[poiForNorm];
+    mapPoI[poiForNorm] = 0.0;//temporarily set the signal strength to zero.
+    createAsimovData(0.0, snapshotName, mapPoI, asimovDataMu0Name);
+    mapPoI[poiForNorm] = originNorm;//restore the non-zero signal strength.
+  }
+  
+  // Do NLL Scan to get N=-2,-1,0,+1,+2 values of mu:
+  TString nllScanName = "scan_";
+  for (std::map<TString,double>::iterator poiIter = mapPoI.begin();
+       poiIter != mapPoI.end(); poiIter++) {
+    nllScanName.Append(Form("%s_%f",(poiIter->first).Data(),poiIter->second));
+  }
+  std::map<int,double> mapNToNorm 
+    = scanNLL(nllScanName, asimovDataMu0Name, poiForNorm, false, mapPoI, 10);
+  
+  // Set normalization variable range:
+  double normMinOrigin = m_workspace->var(poiForNorm)->getMin();
+  double normMaxOrigin = m_workspace->var(poiForNorm)->getMax();
+  m_workspace->var(poiForNorm)
+    ->setMin(mapNToNorm[0] - (5.0 * fabs(mapNToNorm[-1] - mapNToNorm[0])));
+  m_workspace->var(poiForNorm)
+    ->setMax(mapNToNorm[0] + (5.0 * fabs(mapNToNorm[1] - mapNToNorm[0])));
+  
+  //----------------------------------------//
+  // Loop over values of N to define expected CLs exclusion limit and bands:
+  for (int N = -2; N <= 2; N++) {
+    
+    // Create Asimov data:
+    TString asimovCurr = asimovDataMu0Name;
+    if (N != 0) {
+      asimovCurr = Form("asimovDataBand%d",N);
+      double originNorm = mapPoI[poiForNorm];
+      mapPoI[poiForNorm] = mapNToNorm[N];
+      createAsimovData(0.0, snapshotName, mapPoI, asimovCurr);
+      mapPoI[poiForNorm] = originNorm;//restore the non-zero signal strength.
+    }
+    
+    // Find mu that gives CLs = 0.05 via iteration:
+    limitMap[Form("ExpN%d",N)]
+      = upperLimitFinder(mapPoI, asimovCurr, poiForNorm, doTilde);
+  }
+  
+  // Find the observed CLs exclusion limit:
+  m_workspace->var(poiForNorm)
+    ->setMin(mapNToNorm[0] - (10.0 * fabs(mapNToNorm[-1] - mapNToNorm[0])));
+  m_workspace->var(poiForNorm)
+    ->setMax(mapNToNorm[0] + (10.0 * fabs(mapNToNorm[1] - mapNToNorm[0])));
+  limitMap["Obs"] = upperLimitFinder(mapPoI, datasetName, poiForNorm, doTilde);
+  
+  // Print summary:
+  std::cout << "\n\t observed 95% CL limit = " << limitMap["Obs"] << "\n"
+	    << "\t expected 95% CL limit -2s = " << limitMap["ExpN-2"] << "\n"
+	    << "\t expected 95% CL limit -1s = " << limitMap["ExpN-1"] << "\n"
+	    << "\t expected 95% CL limit nom = " << limitMap["ExpN0"] << "\n"
+	    << "\t expected 95% CL limit +1s = " << limitMap["ExpN1"] << "\n"
+	    << "\t expected 95% CL limit +2s = " << limitMap["ExpN2"] << "\n"
+	    << std::endl;
+  
+  // Reset the normalization variable range:
+  m_workspace->var(poiForNorm)->setMin(normMinOrigin);
+  m_workspace->var(poiForNorm)->setMax(normMaxOrigin);
+  
+  // Return observed and expected CL values:
+  return limitMap;
+}
+
+/*
    -----------------------------------------------------------------------------
    Bisection method to search for 95% limit intercept. Basically adjust mu for 
    the numerator in qMu (lMu/lfree) until sqrt(qMu)=1.64. muLimit and qMuLimit
@@ -272,7 +422,7 @@ std::vector<double> TestStat::asymptoticLimit(std::map<TString,double> mapPoI,
    @param profiledNorm - The signal strength from the ML fit.
    @param muLimit - The variable to store the 95% CL limit on mu.
    @param qMuLimit - The variable to store the 95% CL limit on qMu.
-*/
+
 void TestStat::asymptoticLimitBisector(std::map<TString,double> mapPoI, 
 				       TString datasetName, TString poiForNorm,
 				       double nllMuHat, double profiledNorm,
@@ -317,6 +467,7 @@ void TestStat::asymptoticLimitBisector(std::map<TString,double> mapPoI,
   }
   
 }
+*/
 
 /**
    -----------------------------------------------------------------------------
@@ -361,6 +512,7 @@ std::vector<double> TestStat::asymptoticP0(std::map<TString,double> mapPoI,
   double profiledNormObs = (getPoIs())[(std::string)(poiForNorm)];
   double muHatObs = (profiledNormObs / originNorm);
   double obsQ0 = getQ0FromNLL(nllMu0Obs, nllMuHatObs, muHatObs);
+  double obsR0 = getR0FromNLL(nllMu0Obs, nllMuHatObs, muHatObs);
   
   // Calculate expected q0:
   double nllMu0Exp = getFitNLL(asimovDataMu1Name, 0.0, true, mapPoI, false);
@@ -368,10 +520,11 @@ std::vector<double> TestStat::asymptoticP0(std::map<TString,double> mapPoI,
   double profiledNormExp = (getPoIs())[(std::string)(poiForNorm)];
   double muHatExp = (profiledNormExp / originNorm);
   double expQ0 = getQ0FromNLL(nllMu0Exp, nllMuHatExp, muHatExp);
-  
+  double expR0 = getR0FromNLL(nllMu0Exp, nllMuHatExp, muHatExp);
+
   // Calculate p0 from q0:
-  double expP0 = getP0FromQ0(expQ0);
-  double obsP0 = getP0FromQ0(obsQ0);
+  double expP0 = m_useTwoSided ? getP0FromR0(expR0) : getP0FromQ0(expQ0);
+  double obsP0 = m_useTwoSided ? getP0FromR0(obsR0) : getP0FromQ0(obsQ0);
   
   // Print summary:
   std::cout << "\n\t Expected p0 = " << expP0 << std::endl;
@@ -431,12 +584,14 @@ void TestStat::clearData() {
   m_doSaveSnapshot = false;
   m_doPlot = false;
   m_plotDir = "";
-  clearFitParamSettings();
   m_graphNLL = NULL;
   m_fitOptions = ""; 
   m_nominalSnapshot = "paramsOrigin";
   m_AsimovScaleFactor = 1.0;
   m_AsimovVarsToScale.clear();
+  
+  clearFitParamSettings();
+  useTwoSidedTestStat(false);
 }
 
 /**
@@ -526,153 +681,6 @@ RooAbsData* TestStat::createAsimovData(int valPoI, TString snapshotName,
   m_workspace->import(*asimovData);
   return asimovData;
 }
-
-/*
-   -----------------------------------------------------------------------------
-   Create an Asimov dataset. WARNING! Method currently assumes inclusive
-   categorization scheme in order to get category normalization.
-   @param valPoI - The value of the parameter of interest.
-   @param snapshotName - The name of the parameter snapshot to load.
-   @param namesAndValsPoI - The names and values of the parameters of interest.
-   @param luminosity - The luminosity for asimov data.
-   @return - An Asimov dataset.
-
-RooDataSet* TestStat::createAsimovData(int valPoI, TString snapshotName,
-				       std::map<TString,double> namesAndValsPoI,
-				       double luminosity) {
-  printer(Form("TestStat::createAsimovData(PoI=%d, snapshot=%s)", 
-	       valPoI, snapshotName.Data()), false);
-  
-  // Load the parameters from profiling data:
-  if (m_workspace->getSnapshot(snapshotName)) {
-    m_workspace->loadSnapshot(snapshotName);
-    printer(Form("TestStat: Loaded snapshot %s", snapshotName.Data()), false);
-  }
-  else {
-    printer(Form("TestStat: ERROR! No snapshot %s", snapshotName.Data()), true);
-  }
-  
-  // First check that PDF is of simultaneous type:
-  if (!((TString)(m_mc->GetPdf()->ClassName())).Contains("Simultaneous")) {
-    printer("TestStat::createPseudoData() ERROR. PDF not RooSimultaneous",true);
-  }
-    
-  // Set the values of parameters of interest as specified in the input.
-  for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
-       iterPoI != namesAndValsPoI.end(); iterPoI++) {
-    if (m_workspace->var(iterPoI->first)) {
-      m_workspace->var(iterPoI->first)->setVal(iterPoI->second);
-      m_workspace->var(iterPoI->first)->setConstant(true);
-    }
-    else {
-      printer(Form("TestStat: ERROR! %s parameter missing",
-		   (iterPoI->first).Data()), true);
-    }
-  }
-  
-  // Check if other parameter settings have been specified for toys:
-  // WARNING! This overrides the randomization settings above!
-  for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
-       iterParam != m_paramValToSet.end(); iterParam++) {
-    if (m_workspace->var(iterParam->first)) {
-      m_workspace->var(iterParam->first)->setVal(iterParam->second);
-      m_workspace->var(iterParam->first)
-	->setConstant(m_paramConstToSet[iterParam->first]);
-    }
-    else {
-      m_workspace->Print("v");
-      printer(Form("TestStat: Error! Parameter %s not found in workspace! See printout above for clues...", (iterParam->first).Data()), true);
-    }
-  }
-  
-  // Iterate over the categories:
-  printer("TestStat: Iterate over categories to generate asimov data.", false);
-  map<string,RooDataSet*> asimovDataMap; asimovDataMap.clear();
-  RooRealVar *wt = new RooRealVar("wt", "wt", 1.0);
-  RooSimultaneous* combPdf = (RooSimultaneous*)m_mc->GetPdf();
-  RooArgSet* observables = (RooArgSet*)m_mc->GetObservables();
-  TIterator *cateIter = combPdf->indexCat().typeIterator();
-  RooCatType *cateType = NULL;
-  while ((cateType = (RooCatType*)cateIter->Next())) {
-    RooAbsPdf *currPdf = combPdf->getPdf(cateType->GetName());
-    RooArgSet *currObs = currPdf->getObservables(m_mc->GetObservables());
-    RooRealVar *firstObs = (RooRealVar*)currObs->first();
-    TString cateName = cateType->GetName();
-    
-    // Determine the number of events for the dataset:
-    // WARNING!!! THIS ASSUMES INCLUSIVE CATEGORIZATION.
-    double nAsimovEvents = (luminosity / m_config->getNum("AnalysisLuminosity"))
-      * m_workspace->data(m_config->getStr("WorkspaceObsData"))->sumEntries();
-    
-    // Create Asimov dataset:
-    asimovDataMap[(std::string)cateType->GetName()]
-      = new RooDataSet(Form("asimovData_%s",cateName.Data()),
-		       Form("asimovData_%s",cateName.Data()),
-		       RooArgSet(*firstObs, *wt), RooFit::WeightVar(*wt));
-    
-    double xMin = firstObs->getMin();
-    double xMax = firstObs->getMax();
-    firstObs->setRange("fullRange", xMin, xMax);
-    RooAbsReal* integralTotal
-      = (RooAbsReal*)currPdf->createIntegral(RooArgSet(*firstObs), 
-					     RooFit::NormSet(*firstObs), 
-					     RooFit::Range("fullRange"));
-    double valueTotal = integralTotal->getVal();
-    
-    // Loop over mass to get value in mass bins:
-    double increment = (xMax - xMin) / 1000.0;
-    for (double i_m = xMin; i_m < xMax; i_m += increment) {
-      firstObs->setRange(Form("range%2.2f",i_m), i_m, (i_m+increment));
-      RooAbsReal* integralWindow = (RooAbsReal*)currPdf
-	->createIntegral(RooArgSet(*firstObs), RooFit::NormSet(*firstObs),
-			 RooFit::Range(Form("range%2.2f",i_m)));
-      double valueWindow = integralWindow->getVal();
-      double currMass = i_m + (0.5*increment);
-      double currPdfWeight = nAsimovEvents * (valueWindow / valueTotal);
-      
-      firstObs->setVal(currMass);
-      wt->setVal(currPdfWeight);
-      asimovDataMap[(std::string)cateType->GetName()]
-	->add(RooArgSet(*firstObs, *wt), currPdfWeight);
-      delete integralWindow;
-    }
-    
-    delete integralTotal;
-    firstObs->setRange("fullRange", xMin, xMax);
-    
-    TCanvas *can = new TCanvas("can", "can", 800, 800);
-    can->cd();
-    RooPlot* frame = ((RooRealVar*)(firstObs))->frame(1000);
-    asimovDataMap[(std::string)cateType->GetName()]->plotOn(frame);
-    frame->SetXTitle(firstObs->GetName());
-    frame->SetYTitle("Events / GeV");
-    frame->Draw();
-    gPad->SetLogy(); 
-    frame->GetYaxis()->SetRangeUser(0.1, 10000);
-    can->Print(Form("data_%s.eps",cateName.Data()));
-  }
-  
-  // Get the RooCategory object:
-  RooCategory *categories = NULL;
-  TString nameRooCategory = m_config->getStr("WorkspaceRooCategory");
-  if (m_workspace->obj(nameRooCategory)) {
-    categories = (RooCategory*)m_workspace->obj(nameRooCategory);
-  }
-  else {
-    printer(Form("TestStat: RooCategory object %s not found",
-		 nameRooCategory.Data()), true);
-  }
-  
-  // Create and return the Asimov dataset:
-  RooDataSet* asimovData = new RooDataSet(Form("asimovDataMu%d",valPoI), 
-					  Form("asimovDataMu%d",valPoI),
-					  *observables,
-					  RooFit::Index(*categories),
-					  RooFit::Import(asimovDataMap));
-  m_workspace->import(*asimovData);
-  return asimovData;
-}
-*/
 
 /**
    -----------------------------------------------------------------------------
@@ -863,7 +871,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
   return pseudoData;
 }
 
-/**
+/*
    -----------------------------------------------------------------------------
    Get the expected limit for error band (CLs).
    @param muUpMed - The median 95% CLs mu value.
@@ -871,7 +879,6 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
    @param N - The Gaussian quintile.
    @param alpha = The probability (alpha=0.05 for 95% limits).
    @return - The 95% CLs limit.
-*/
 double TestStat::findMuUp(double muUpMed, double qMuAsimov, int N,
 			  double alpha) {
   double sigma = sqrt( (muUpMed * muUpMed) / qMuAsimov);
@@ -879,6 +886,7 @@ double TestStat::findMuUp(double muUpMed, double qMuAsimov, int N,
     (TMath::NormQuantile(1.0 - (alpha * ROOT::Math::gaussian_cdf(N))) + N);
   return muUpN;
 }
+*/
 
 /**
    -----------------------------------------------------------------------------
@@ -962,10 +970,23 @@ double TestStat::getCLsFromCL(double CL) {
    @param qMu - The value of the test statistic.
    @param N - The sigma value (-2,-1,0,1,2). Use 0 for median.
    @return - The CLs value.
-*/
+
 double TestStat::getCLFromQMu(double qMu, double N) {
   double CL = getCLFromCLs(getCLsFromQMu(qMu, N));
   return CL;
+}
+*/
+
+/**
+   -----------------------------------------------------------------------------
+   Get the CL value using qMu and the type.
+   @param qMu - The value of the test statistic.
+   @param sigma - The sigma value...
+   @param mu - The mu value... 
+   @return - The CL value.
+*/
+double TestStat::getCLFromQMu(double qMu, double sigma, double mu) {
+  return getCLFromCLs(getCLsFromQMu(qMu, sigma, mu));
 }
 
 /**
@@ -974,11 +995,28 @@ double TestStat::getCLFromQMu(double qMu, double N) {
    @param qMu - The value of the test statistic.
    @param N - The sigma value (-2,-1,0,1,2). Use 0 for median.
    @return - The CLs value.
-*/
+
 double TestStat::getCLsFromQMu(double qMu, double N) {
   // N = 0 for exp and obs
   double pMu = getPMuFromQMu(qMu);
   double pB = getPFromN(N);
+  double CLs = pMu / (1.0 - pB);
+  return CLs;
+}
+*/
+
+/**
+   -----------------------------------------------------------------------------
+   Get the CLs value using qMu and the type.
+   @param qMu - The value of the test statistic.
+   @param sigma - The sigma value...
+   @param mu - The mu value... 
+   @return - The CLs value.
+*/
+double TestStat::getCLsFromQMu(double qMu, double sigma, double mu) {
+  // N = 0 for exp and obs
+  double pMu = getPMuFromQMu(qMu);
+  double pB = getPbFromQMu(qMu, sigma, mu);
   double CLs = pMu / (1.0 - pB);
   return CLs;
 }
@@ -1145,6 +1183,17 @@ double TestStat::getP0FromQ0(double q0) {
 
 /**
    -----------------------------------------------------------------------------
+   Calculate the value of p0 based on the test statistic r0.
+   @param r0 - The test statistic r0.
+   @return - The value of p0.
+*/
+double TestStat::getP0FromR0(double r0) {
+  if (r0 > 0) return (1 - ROOT::Math::gaussian_cdf(sqrt(r0)));
+  else return (1 - ROOT::Math::gaussian_cdf(-1 * sqrt(fabs(r0))));
+}
+
+/**
+   -----------------------------------------------------------------------------
    Calculate p-value based on the standard deviation.
    @param N - The standard deviation.
    @return - The p-value.
@@ -1167,12 +1216,59 @@ double TestStat::getPbFromQMu(double qMu, double sigma, double mu) {
 
 /**
    -----------------------------------------------------------------------------
+   Calculate the pB value based on qMuTilde.
+   @param qMuTilde - The test statistic qMuTilde.
+   @param sigma - The sigma value...
+   @param mu - The mu value... 
+   @return - The value of pB.
+*/
+double TestStat::getPbFromQMuTilde(double qMuTilde, double sigma, double mu) {
+  if (qMuTilde > 0 && qMuTilde <= (mu*mu)/(sigma*sigma)) {
+    return (1.0 - ROOT::Math::gaussian_cdf(fabs(mu/sigma) - sqrt(qMuTilde)));
+  }
+  else {
+    return 1.0 - ROOT::Math::gaussian_cdf((mu*mu/(sigma*sigma) - qMuTilde) / 
+					  (2.0*fabs(mu/sigma)));
+  }
+}
+
+/**
+   -----------------------------------------------------------------------------
    Calculate the value of pMu.
    @param qMu - The test statistic qMu.
    @return - The value of pMu.
 */
 double TestStat::getPMuFromQMu(double qMu) {
   return (1 - ROOT::Math::gaussian_cdf(sqrt(fabs(qMu))));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the value of pMu.
+   @param qMuTilde - The test statistic qMuTilde.
+   @param sigma - The sigma value...
+   @param mu - The mu value...
+   @return - The value of pMu.
+*/
+double TestStat::getPMuFromQMuTilde(double qMuTilde, double sigma, double mu) {
+  if (qMuTilde <= (mu*mu)/(sigma*sigma)) {
+    return (1.0 - ROOT::Math::gaussian_cdf(sqrt(fabs(qMuTilde))));
+  }
+  else { //if (qMuTilde > (mu*mu)/(sigma*sigma))
+    return (1.0 - ROOT::Math::gaussian_cdf((qMuTilde + ((mu*mu)/(sigma*sigma)))/
+					   (2.0 * fabs(mu/sigma))));
+  }
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the value of rMu.
+   @param rMu - The test statistic rMu.
+   @return - The value of pMu.
+*/
+double TestStat::getPMuFromRMu(double rMu) {
+  if (rMu > 0) return (1 - ROOT::Math::gaussian_cdf(sqrt(fabs(rMu))));
+  else return (1 - ROOT::Math::gaussian_cdf(-1 * sqrt(fabs(rMu))));
 }
 
 /**
@@ -1200,9 +1296,8 @@ double TestStat::getQ0FromNLL(double nllMu0, double nllMuHat, double muHat) {
 */
 double TestStat::getQMuFromNLL(double nllMu, double nllMuHat, double muHat,
 			       double muTest) {
-  double qMu = 0.0;
-  if (muHat < muTest) qMu = 2 * (nllMu - nllMuHat);
-  return qMu;
+  if (muHat <= muTest) return (2.0 * (nllMu - nllMuHat));
+  else return 0.0;
 }
 
 /**
@@ -1216,13 +1311,95 @@ double TestStat::getQMuFromNLL(double nllMu, double nllMuHat, double muHat,
    @return - The value of qMuTilde.
 */
 double TestStat::getQMuTildeFromNLL(double nllMu, double nllMu0,
-				      double nllMuHat, double muHat,
-				      double muTest) {
-  double qMuTilde = 0;
-  if (muHat <= 0) qMuTilde = 2 * (nllMu - nllMu0);
-  else if (muHat > 0 && muHat <= muTest) qMuTilde = 2 * (nllMu - nllMuHat);
-  else if (muHat > muTest) qMuTilde = 0;
-  return qMuTilde;
+				    double nllMuHat, double muHat,
+				    double muTest) {
+  if (muHat < 0) return (2.0 * (nllMu - nllMu0));
+  else if (muHat >= 0 && muHat <= muTest) return (2.0 * (nllMu - nllMuHat));
+  else return 0.0; //(muHat > muTest)
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the test statistic r0 (two-sided q0) based on the nll.
+   @param nllMu0 - NLL of a fit with signal strength 0;
+   @param nllMuHat - NLL of a fit with profiled signal strength.
+   @param muHat - Profiled signal strength.
+   @return - The value of r0.
+*/
+double TestStat::getR0FromNLL(double nllMu0, double nllMuHat, double muHat) {
+  if (muHat <= 0.0) return (-2 * (nllMu0 - nllMuHat));
+  else return (2.0 * (nllMu0 - nllMuHat));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the test statistic rMu (two-sided qMu) based on the nll.
+   @param nllMu - NLL of a fit with signal strength mu.
+   @param nllMuHat - NLL of a fit with profiled signal strength.
+   @param muHat - Profiled signal strength.
+   @param muTest - Tested value of signal strength.
+   @return - The value of rMu.
+*/
+double TestStat::getRMuFromNLL(double nllMu, double nllMuHat, double muHat,
+			       double muTest) {
+  if (muHat <= muTest) return (2.0 * (nllMu - nllMuHat));
+  else return (-2.0 * (nllMu - nllMuHat));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the test statistic rMuTilde (two-sided qMu tilde) based on the nll.
+   @param nllMu - NLL of a fit with signal strength mu.
+   @param nllMu0 - NLL of a fit with signal strength 0.
+   @param nllMuHat - NLL of a fit with profiled signal strength.
+   @param muHat - Profiled signal strength.
+   @param muTest - Tested value of signal strength.
+   @return - The value of rMuTilde.
+*/
+double TestStat::getRMuTildeFromNLL(double nllMu, double nllMu0,
+				    double nllMuHat, double muHat,
+				    double muTest) {
+  if (muHat <= 0) return (2.0 * (nllMu - nllMu0));
+  else if (muHat > 0 && muHat <= muTest) return (2.0 * (nllMu - nllMuHat));
+  else return (-2.0 * (nllMu - nllMuHat)); //(muHat > muTest)
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the sigma parameter.
+   @param qMu - The test statistic qMu (or qMu tilde if doTilde=true).
+   @param mu - Tested value of signal strength.
+   @param muHat - Profiled signal strength.
+   @param doTilde - True iff using qMuTilde instead of qMu.
+   @param direction =  -1 if N < 0, else +1.
+   @return - The value of sigma.
+
+double TestStat::getSigma(double qMu, double mu, double muHat, bool doTilde,
+			  int direction) {
+  if (mu*direction < muHat) return (fabs(mu-muHat) / sqrt(qMu));
+  else if (muHat < 0 && doTilde) {
+    return sqrt(mu*mu-2*mu*muHat*direction) / sqrt(qMu);
+  }
+  else return (mu-muHat)*direction / sqrt(qMu);
+}
+*/
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate the sigma parameter. Note: it is always positive...
+   @param qMu - The test statistic qMu (or qMu tilde if doTilde=true).
+   @param mu - Tested value of signal strength.
+   @param muHat - Profiled signal strength.
+   @param doTilde - True iff using qMuTilde instead of qMu.
+   @param direction =  -1 if N < 0, else +1.
+   @return - The value of sigma.
+*/
+double TestStat::getSigma(double qMu, double mu, double muHat, bool doTilde) {
+  if (qMu == 0) printer("getSigma: ERROR! Divide by qMu=0!",true); 
+  
+  if (mu > muHat) return sqrt((mu-muHat)*(mu-muHat) / qMu);
+  else if (muHat < 0 && doTilde) return sqrt((mu*mu - 2*mu*muHat) / qMu);
+  else return sqrt((mu-muHat)*(mu-muHat) / qMu);
 }
 
 /**
@@ -1275,10 +1452,10 @@ double TestStat::graphIntercept(TGraph *graph, double valueToIntercept) {
     if (graph->GetN() < 2) return xCurr;
   }
   
-  // 
+  // Determine whether slope > 0 (increasing) or < 0 (decreasing):
   bool increasing = true;
   if (graph->Eval(rangeMin) > graph->Eval(rangeMax)) increasing = false;
-
+  
   // Bisection method to search for intercept:
   double precision = 0.0001;
   int nIterations = 0;
@@ -1705,12 +1882,15 @@ void TestStat::scaleAsimovData(double scaleFactor,
    @param scanName - The name of the scan (for saving plots...).
    @param datasetName - The name of the dataset in the workspace.
    @param varToScan - The variable that will be scanned.
-   @param varsToFix - The variables that will be fixed at max-likelihood values.
+   @param fixPoI - True if PoI should be fixed to the specified value.
+   @param namesAndValsPoI - Map of names and values of PoIs to set for fit.
+   @param nScanPoints - The number of points to use in the scan (more=better).
    @return - The -1 sigma, median, and +1 sigma variable values.
 */
 std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
-				       TString varToScan,
-				       std::vector<TString> varsToFix) {
+				       TString varToScan, bool fixPoI,
+				       std::map<TString,double> namesAndValsPoI,
+				       int nScanPoints) {
   printer(Form("TestStat::scanNLL(datasetName = %s, varToScan = %s)",
 	       datasetName.Data(), varToScan.Data()), false);
   
@@ -1736,16 +1916,23 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
 		 datasetName.Data()), true);
   }
 
-  // Reset bool to check for failed fits:
-  m_allGoodFits = true;
-
-  // Allow the PoI to float:
-  firstPoI->setConstant(false);
-  
   // Release nuisance parameters before fit and set to the default values
   statistics::constSet(nuisanceParameters, false, origValNP);
   // The global observables should be fixed to the nominal values...
   statistics::constSet(globalObservables, true);
+  
+  // Set the values of parameters of interest as specified in the input.
+  for (std::map<TString,double>::iterator iterPoI = namesAndValsPoI.begin();
+       iterPoI != namesAndValsPoI.end(); iterPoI++) {
+    if (m_workspace->var(iterPoI->first)) {
+      m_workspace->var(iterPoI->first)->setVal(iterPoI->second);
+      m_workspace->var(iterPoI->first)->setConstant(fixPoI);
+    }
+    else {
+      printer(Form("TestStat: ERROR! %s parameter missing",
+		   (iterPoI->first).Data()), true);
+    }
+  }
   
   // Check if other parameter settings have been specified for fit:
   for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
@@ -1762,7 +1949,10 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
 		   ((TString)iterParam->first).Data()), true);
     }
   }
-    
+  
+  // Make sure variable to scan is free in the fit:
+  m_workspace->var(varToScan)->setConstant(false);
+
   // First do a fit to get the unconditional maximum likelihood fit result:
   RooNLLVar* varMLNLL
     = (RooNLLVar*)combPdf->createNLL(*m_workspace->data(datasetName),
@@ -1770,30 +1960,36 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   RooFitResult *fitResultML
     = statistics::minimize(varMLNLL, m_fitOptions, NULL, true);
   if (!fitResultML || fitResultML->status() != 0) m_allGoodFits = false;
-  m_workspace->saveSnapshot("paramsProfileML", *poiAndNuis);
+  m_workspace->saveSnapshot(Form("paramsProfileML_%s",scanName.Data()),
+			    *poiAndNuis);
   double minNLLVal = varMLNLL->getVal();
   delete fitResultML;
   delete varMLNLL;
   
-  // Then retrieve the central value and error as "preliminary result":
+  // Then retrieve the central value and errors as preliminary result:
   double errorLo = m_workspace->var(varToScan)->getError();
   double errorHi = m_workspace->var(varToScan)->getError();
   result[0] = m_workspace->var(varToScan)->getVal();
+  result[-2] = result[0] - (2.0 * errorLo);
   result[-1] = result[0] - errorLo;
   result[1] = result[0] + errorHi;
-  double scanMin = result[0] - (2.0 * errorLo);
-  double scanMax = result[0] + (2.0 * errorHi);
+  result[2] = result[0] + (2.0 * errorHi);
+  
+  double scanMin = result[0] - (3.0 * errorLo);
+  double scanMax = result[0] + (3.0 * errorHi);
+  /*
   if (scanMin < m_workspace->var(varToScan)->getMin()) {
     scanMin = m_workspace->var(varToScan)->getMin();
   }
   if (scanMax > m_workspace->var(varToScan)->getMax()) {
     scanMax = m_workspace->var(varToScan)->getMax();
   }
+  */
   
   // Compile a list of points to scan:
   std::vector<double> scanValues; scanValues.clear();
   for (double currValue = scanMin; currValue <= scanMax; 
-       currValue += ((scanMax-scanMin)/m_config->getNum("NumberOfScanPoints"))){
+       currValue += ((scanMax-scanMin)/nScanPoints)){
     scanValues.push_back(currValue);
   }
   scanValues.push_back(result[0]);
@@ -1811,40 +2007,6 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   int indexHi = 0;
   
   for (int scanIndex = 0; scanIndex < (int)scanValues.size(); scanIndex++) {
-    // Load the snapshot from the ML fit:
-    m_workspace->loadSnapshot("paramsProfileML");
-    
-    // Release nuisance parameters before fit and set to the default values
-    statistics::constSet(nuisanceParameters, false);
-    // The global observables should be fixed to the nominal values...
-    statistics::constSet(globalObservables, true);
-    
-    // Check if other parameter settings have been specified for fit:
-    for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
-	 iterParam != m_paramValToSet.end(); iterParam++) {
-      // Check that workspace contains parameter:
-      if (m_workspace->var(iterParam->first)) {
-	m_workspace->var(iterParam->first)->setVal(iterParam->second);
-	m_workspace->var(iterParam->first)
-	  ->setConstant(m_paramConstToSet[iterParam->first]);
-      }
-      else {
-	m_workspace->Print("v");
-	printer(Form("TestStat: Error! Parameter %s not found in workspace!",
-		     ((TString)iterParam->first).Data()), true);
-      }
-    }
-        
-    // Also fix other variables to ML values:
-    for (int i_v = 0; i_v < (int)varsToFix.size(); i_v++) {
-      if (m_workspace->var(varsToFix[i_v])) {
-	m_workspace->var(varsToFix[i_v])->setConstant(true);
-      }
-      else {
-	printer(Form("TestStat: ERROR! Parameter %s not found in workspace!",
-		     varsToFix[i_v].Data()), true);
-      }
-    }
     
     // Set the value of the variable to scan:
     m_workspace->var(varToScan)->setVal(scanValues[scanIndex]);
@@ -1883,8 +2045,10 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   statistics::constSet(nuisanceParameters, false, origValNP);
   
   // Calculate the actual intercept values:
-  result[-1] = result[0] - graphIntercept(gNLLLo, 1.0);
-  result[1] = graphIntercept(gNLLHi, 1.0) - result[0];
+  result[-2] = graphIntercept(gNLLLo, 4.0);
+  result[-1] = graphIntercept(gNLLLo, 1.0);
+  result[1] = graphIntercept(gNLLHi, 1.0);
+  result[2] = graphIntercept(gNLLHi, 4.0);
 
   if (m_doPlot) {
     // Draw the graph:
@@ -1936,7 +2100,7 @@ std::map<int,double> TestStat::scanNLL(TString scanName, TString datasetName,
   delete gNLLLo;
   delete gNLLHi;
   
-  // Return the median and +/-1 sigma values:
+  // Return the median, +/-1, and +/-2 sigma values:
   return result;
 }
 
@@ -2040,4 +2204,95 @@ RooWorkspace *TestStat::theWorkspace() {
 
 ModelConfig *TestStat::theModelConfig() {
   return m_mc;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Bisection method to search for 95% CL limit intercept. Basically adjust mu 
+   for the numerator in qMu (lMu/lfree) until CLs=0.05. 
+   @param mapPoI - Map of names and values of mu=1 PoIs to set for CL.
+   @param datasetName - The name of the dataset to fit.
+   @param poiForNorm - The name of the normalization poi.
+   @param doTilde - True iff using qMuTilde instead of qMu.
+   @return - The upper-limit on the signal strength. 
+*/
+double TestStat::upperLimitFinder(std::map<TString,double> mapPoI, 
+				  TString datasetName, TString poiForNorm,
+				  bool doTilde) {
+  printer(Form("TestStat::upperLimitFinder(%s, %s)",
+	       datasetName.Data(), poiForNorm.Data()), false);
+  //
+  // Also add tilde option to everything (qMu -> qMuTilde, etc.)
+  //
+  
+  // Calculate nllMuHat only once:
+  double nllMuHat = getFitNLL(datasetName, 0.0, false, mapPoI, false);
+  double profiledNorm = (getPoIs())[(std::string)(poiForNorm)];
+  
+  double precision = 0.0001;
+  int nIterations = 0;
+  int maxIterations = 30;
+  double stepSize = (m_workspace->var(poiForNorm)->getMax() - 
+		     m_workspace->var(poiForNorm)->getMin()) / 2.0;
+  double muLimit = (m_workspace->var(poiForNorm)->getMax() + 
+		    m_workspace->var(poiForNorm)->getMin()) / 2.0;
+  double CLs = 0.0;
+  double intercept = 0.05;// For 95% exclusion
+  while ((((CLs - intercept) / intercept) > precision) && 
+	 (nIterations <= maxIterations)) {
+    std::cout << "TestStat:asymptoticLimitBisector: Iteration " << nIterations 
+	      << " starting, muLimit=" << muLimit << ", CLs=" << CLs
+	      << std::endl;
+    
+    // Set the signal strength:
+    mapPoI[poiForNorm] = muLimit;
+    
+    // For  now, use mu = 1 (qmu for mu=1), since we are adjusting the cross-
+    // section parameter and not the mu parameter.
+    double muForQMu = 1.0;
+    
+    // Calculate qMu:
+    double nllMu1 = getFitNLL(datasetName, 1.0, true, mapPoI, false);
+    double muHat = (profiledNorm / mapPoI[poiForNorm]);
+    double qMu = getQMuFromNLL(nllMu1, nllMuHat, muHat, muForQMu);
+    
+    // Replace qMu with qMuTilde if requested (requires extra fit for nllMu0):
+    if (doTilde) {
+      mapPoI[poiForNorm] = 0.0;
+      double nllMu0 = getFitNLL(datasetName, 0.0, true, mapPoI, false);
+      mapPoI[poiForNorm] = muLimit;
+      qMu = getQMuTildeFromNLL(nllMu1, nllMu0, nllMuHat, muHat, muForQMu);
+    }
+    
+    // Get Sigma:
+    //int direction = (N < 0) ? -1 : 1;
+    double sigma = getSigma(qMu, muForQMu, muHat, doTilde);
+    
+    // Which Mu to use? Probably muHat, right?
+    CLs = getCLsFromQMu(qMu, sigma, muForQMu);
+
+    // Increase the iteration count and reduce the step size:
+    nIterations++;
+    stepSize = 0.5 * stepSize;
+    
+    // Update the value of the mu limit:
+    if (CLs > intercept) muLimit -= stepSize;
+    else muLimit += stepSize;
+  } // At this point, muLimit should be the 95% CL limit on signal strength.
+  
+  if (nIterations == maxIterations) {
+    printer("TestStat::asymptoticLimitBisector: Maximum Iterations!", true);
+  }
+  
+  return muLimit;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Option to use single or two-sided test statistics for q0 and qMu.
+   @param useTwoSided - True if test statistics should be two-sided (e.g. r0 
+   instead of q0, rMu instead of qMu...).
+*/
+void TestStat::useTwoSidedTestStat(bool useTwoSided) {
+  m_useTwoSided = useTwoSided;
 }

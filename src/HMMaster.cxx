@@ -16,7 +16,7 @@
 //    - GlobalP0Toys                                                          //
 //    - GlobalP0Analysis                                                      //
 //    - LocalP0Analysis                                                       //
-//    - PlotScan                                                              //
+//    - StatScan                                                              //
 //    - ExtrapolateSig                                                        //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
@@ -147,11 +147,11 @@ int main (int argc, char **argv) {
   
   //--------------------------------------//
   // Step 3.1: Plot limits or p0 from asymptotics or pseudo-experiments:
-  if (masterOption.Contains("PlotScan")) {
+  if (masterOption.Contains("StatScan")) {
     std::cout << "HMMaster: Step 3.0 - Plot asymptotic or toy limits or p0."
 	      << std::endl;
     system(Form("./bin/PlotStatScan %s %s", fullConfigPath.Data(),
-		m_config->getStr("PlotStatScanOptions").Data()));
+		m_config->getStr("StatScanOptions").Data()));
   }
 
   //--------------------------------------//
