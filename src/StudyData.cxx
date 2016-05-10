@@ -23,6 +23,49 @@ std::map<TString,TH1F*> m_histograms;
 HGammaMxAOD *m_treeMxAOD;
 TString m_categoryName;
 
+int m_cutFlowCounter_Hist[100];
+int m_cutFlowCounter_Flag[100];
+std::vector<TString> m_cutNames;
+
+/**
+   -----------------------------------------------------------------------------
+   Get names and values of cuts from MxAOD directly. Also look at DMxAOD...
+   @param file - The current MxAOD file in the TChain.
+   @param maximumBin - The last bin for which cutflow data will be filled.
+*/
+void fillCutFlowFromMxAOD(TFile *file, int maximumBin) {
+  // Find the cutflow histograms from the file based on limited name info:
+  TH1F *cutFlowHist = NULL;
+  TIter next(file->GetListOfKeys());
+  TObject *currObj;
+  while ((currObj = (TObject*)next())) {
+    TString currName = currObj->GetName();
+    if (currName.Contains("CutFlow_Run") || 
+	(currName.Contains("CutFlow") && currName.Contains("noDalitz") && 
+	 !currName.Contains("weighted"))) {
+      cutFlowHist = (TH1F*)file->Get(currName);
+      break;
+    }
+  }
+  
+  bool cutsDefined = ((int)m_cutNames.size() > 0);
+  
+  // Loop over bins to fill cutflow table and also get names of cuts (1st pass):
+  for (int i_b = 1; i_b <= maximumBin; i_b++) {
+    m_cutFlowCounter_Hist[i_b-1] += (int)(cutFlowHist->GetBinContent(i_b));
+    // Get names of cuts:
+    if (!cutsDefined) {
+      m_cutNames.push_back(cutFlowHist->GetXaxis()->GetBinLabel(i_b));
+    }
+  }
+  if (!cutsDefined) {
+    m_cutNames.push_back("m_yy");
+    m_cutNames.push_back("isolation");
+    m_cutNames.push_back("pT_cuts");
+  }
+  
+}
+
 /**
    -----------------------------------------------------------------------------
    Select the proper category for the current event in the HGammaMxAOD. The 
@@ -324,15 +367,20 @@ int main(int argc, char *argv[])
   for (int i_f = 0; i_f < (int)fileNames.size(); i_f++) {
     chain->AddFile(fileNames[i_f]);
   }
-  m_treeMxAOD = new HGammaMxAOD(chain);
+  m_treeMxAOD = new HGammaMxAOD(chain, config->getStr("MxAODTag"));
   
   // Count events:
+  for (int i_c = 0; i_c < 50; i_c++) {
+    m_cutFlowCounter_Hist[i_c] = 0;
+    m_cutFlowCounter_Flag[i_c] = 0;
+  }
   int countPass = 0;
-  int countCate[100] = {0};
+  int countCate[50] = {0};
+  m_cutNames.clear();
+  TString currFileName = "";
 
   //--------------------------------------//
   // Loop over events to build dataset for signal parameterization:
-  
   int nEvents = m_treeMxAOD->fChain->GetEntries();
   std::cout << "There are " << nEvents << " events to process." << std::endl;
   for (int index = 0; index < nEvents; index++) {
@@ -341,45 +389,98 @@ int main(int argc, char *argv[])
     m_treeMxAOD->fChain->GetEntry(index);
     printProgressBar(index, nEvents);
     
+    // Add each new file to the cutflow:
+    if (!currFileName.EqualTo(chain->GetFile()->GetName())) {
+      currFileName = chain->GetFile()->GetName();
+      fillCutFlowFromMxAOD(chain->GetFile(), 
+			   config->getInt("MxAODCutFlowIndex"));
+    }
+    
+    // Add events to the cut-flow counter:
+    for (int i_c = 0; i_c < m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow; 
+    	 i_c++) {
+      if (i_c < config->getInt("MxAODCutFlowIndex")) {
+	m_cutFlowCounter_Flag[i_c]++;
+      }
+    }
+    // Also cut on events that don't make it to the desired cut:
+    if (m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow <
+	config->getInt("MxAODCutFlowIndex")) continue;
+    
+    //---------- Myy Cut ----------//
+    if (((config->getStr("AnalysisType")).EqualTo("Scalar") && 
+	 m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 150000) ||
+	((config->getStr("AnalysisType")).Contains("Graviton") && 
+	 m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 150000)) {
+	 //m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 200000)) {
+      continue;
+    }
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")]++;
+        
+    
+    
+
+    //---------- Isolation selection ----------//
+    //if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy) {
+    //continue;
+    //}
+
+    /// ISOLATION SELECTIONS ARE DIFFERENT!
+
+    double isoConstant = 2450.00;
+    if ((config->getStr("AnalysisType")).EqualTo("GravitonLoose")) {
+      isoConstant = 7000.00;
+    }
+    
+    double pT1 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0];
+    double pT2 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1];
+    bool isCaloIsoTight1 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[0] <
+			    ((0.022 * pT1) + isoConstant));
+    bool isCaloIsoTight2 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[1] <
+			    ((0.022 * pT2) + isoConstant));
+    bool isTrackIso1
+      = ((*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[0] < (0.05 * pT1));
+    bool isTrackIso2
+      = ((*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[1] < (0.05 * pT2));
+    if (((config->getStr("AnalysisType")).EqualTo("Scalar") &&
+	 !(isCaloIsoTight1 && isCaloIsoTight2 && isTrackIso1 && isTrackIso2)) ||
+	((config->getStr("AnalysisType")).EqualTo("Graviton") &&
+	 !(isCaloIsoTight1 && isCaloIsoTight2 && isTrackIso1 && isTrackIso2)) ||
+	((config->getStr("AnalysisType")).EqualTo("GravitonLoose") &&
+	 !(isCaloIsoTight1 && isCaloIsoTight2))) {
+      continue;
+    }
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+1]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+1]++;
+    
+    
+    //---------- pT cut ----------//
+    double pTRatio1 = (pT1 / m_treeMxAOD->HGamEventInfoAuxDyn_m_yy);
+    double pTRatio2 = (pT2 / m_treeMxAOD->HGamEventInfoAuxDyn_m_yy);
+    if (((config->getStr("AnalysisType")).EqualTo("Scalar") && 
+	 (pTRatio1 <= 0.4 || pTRatio2 <= 0.3)) ||
+	((config->getStr("AnalysisType")).Contains("Graviton") && 
+	 (pT1 <= 55000 || pT2 <= 55000))) {
+      continue;
+    }
     /*
-    if ((m_treeMxAOD->EventInfoAux_runNumber == 280464 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 187603384) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 280862 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 128240362) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 281317 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 144044837) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 282631 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 444615930) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 282712 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1400405523) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 283155 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 212630049) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 283429 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1931043956) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 283608 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 458220275) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 284213 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 151967530) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 284484 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1014170264)) {
-      
-      std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
-		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
-		<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
-		<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
-		<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
-		<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
-		<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
-		<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
-		<< ", pT1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0]
-		<< ", pT2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1]
-	//<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
-		<< std::endl;
+    if (((config->getStr("AnalysisType")).EqualTo("Scalar") && 
+	 !m_treeMxAOD->HGamEventInfoAuxDyn_isPassedRelPtCutsLowHighMyy) ||
+    	((config->getStr("AnalysisType")).Contains("Graviton") && 
+    	 !m_treeMxAOD->HGamEventInfoAuxDyn_isPassedlPtCutsExotic)) {
+      continue;
     }
     */
-
-    // Select the event:
-    if ((config->getStr("AnalysisType")).EqualTo("Graviton") &&
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+2]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+2]++;
+    
+    
+    
+        
+    
+    //---------- Select the event ----------//
+    if ((config->getStr("AnalysisType")).Contains("Graviton") &&
 	!(m_treeMxAOD->HGamEventInfoAuxDyn_isPassedExotic && 
 	  m_treeMxAOD->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy &&
 	  m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 200000)) {
@@ -397,30 +498,82 @@ int main(int argc, char *argv[])
     // Add to event counts:
     countPass++;
     countCate[category]++;
-
-    //std::cout << "run = " << m_treeMxAOD->EventInfoAux_runNumber
-    //	      << " event = " << m_treeMxAOD->EventInfoAux_eventNumber
-    //	      << std::endl;
-    // Print out information on specific events:    
-    if ((m_treeMxAOD->EventInfoAux_runNumber == 280319 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 844110200) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 280319 &&
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1844702370) || 
-	(m_treeMxAOD->EventInfoAux_runNumber == 280862 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 2428284929) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280231 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 434101590) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280319 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 844110200) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280319 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 1844702370) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280862 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 2428284929) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 280950 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 202310071) ||
-	(m_treeMxAOD->EventInfoAux_runNumber == 284213 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber == 3096852034)) {
     
+    // Fill the event variable histograms:
+    fillHistograms("z_{vertex} [mm]", category,
+		   m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ);
+    fillHistograms("m_{#gamma#gamma} [GeV]", category, 
+		   m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0);
+    fillHistograms("p_{T}^{#gamma#gamma} [GeV]", category, 
+		   m_treeMxAOD->HGamEventInfoAuxDyn_pT_yy / 1000.0);
+    fillHistograms("cos(#theta*)", category,
+		   m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy);
+    
+    // Fill the photon variable histograms in loop over photons:
+    for (int i_p = 0; i_p < 2; i_p++) {
+      fillHistograms(Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p] / 1000.0);
+      fillHistograms(Form("#eta(#gamma_{%d})",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]);
+      fillHistograms(Form("#phi(#gamma_{%d})",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p]);
+      fillHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1),
+		     category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p] / 1000.0);
+    }
+  }
+  
+  // Then plot and save all histograms:
+  TString histogramFileName = Form("%s/histogramFile_%s.root", 
+				   m_outputDir.Data(), m_categoryName.Data());
+  TFile *histogramFile = new TFile(histogramFileName, "RECREATE");
+  for (std::map<TString,TH1F*>::iterator histIter = m_histograms.begin(); 
+       histIter != m_histograms.end(); histIter++) {
+    plotHistogram(histIter->first);
+    histIter->second
+      ->Write(Form("hist_%s", (formatHistName(histIter->first)).Data()));
+  }
+  histogramFile->Close();
+  
+  // Remove files that were copied:
+  if (config->getBool("MakeLocalMxAODCopies")) removeLocalFileCopies(fileNames);
+  
+  // Detailed summary:
+  std::cout << "\nStudyData: Printing cut-flow from MxAOD and offline analysis."
+	    << std::endl;
+  for (int i_c = 0; i_c < (int)m_cutNames.size(); i_c++) {
+    std::cout << "\t" << i_c << "\t" << m_cutNames[i_c] << " \t" 
+	      << m_cutFlowCounter_Hist[i_c] << "\t" 
+	      << m_cutFlowCounter_Flag[i_c] << std::endl;
+  }
+  
+  // Category summary:
+  std::ofstream cateFile(Form("%s/categoryCount_%s.txt", m_outputDir.Data(),
+			      m_categoryName.Data()));
+  std::cout << "\nThere were " << countPass << " in the final sample."
+	    << std::endl;
+  cateFile << "\nInclusive " << countPass << std::endl;
+  for (int i_c = 0; i_c < nCategories; i_c++) {
+    std::cout << "\t" << nameCategory(i_c)<< "\t" << countCate[i_c] 
+	      << std::endl;
+    cateFile << nameCategory(i_c)<< "\t" << countCate[i_c] << std::endl;
+  }
+  cateFile.close();
+  
+  // Print location of output ROOT file:
+  std::cout << "\nCreated ROOT file with histograms: " << histogramFileName 
+	    << std::endl;
+  
+  delete m_treeMxAOD;
+  delete chain;
+  delete config;
+  delete histogramFile;
+  
+  return 0;
+}
+
+/*
+
       std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
 		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
 		<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
@@ -447,85 +600,5 @@ int main(int argc, char *argv[])
 	//<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
 		<< std::endl;
     }
-    
-    /*
-    if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0 > 1600) {
-      std::cout << "\nSPECIAL   "
-		<< "Run = " << m_treeMxAOD->EventInfoAux_runNumber
-		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
-		<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
-		<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
-		<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
-		<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
-		<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
-		<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
-		<< ", pT1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0]
-		<< ", pT2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1]
-		<< ", zvtx = " << m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ
-		<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
-		<< std::endl;
-    }
-    */
 
-    // Fill the event variable histograms:
-    fillHistograms("z_{vertex} [mm]", category,
-		   m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ);
-    fillHistograms("m_{#gamma#gamma} [GeV]", category, 
-		   m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0);
-    fillHistograms("p_{T}^{#gamma#gamma} [GeV]", category, 
-		   m_treeMxAOD->HGamEventInfoAuxDyn_pT_yy / 1000.0);
-    fillHistograms("cos(#theta*)", category,
-		   m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy);
-    
-    // Fill the photon variable histograms in loop over photons:
-    for (int i_p = 0; i_p < 2; i_p++) {
-      fillHistograms(Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p] / 1000.0);
-      fillHistograms(Form("#eta(#gamma_{%d})",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]);
-      fillHistograms(Form("#phi(#gamma_{%d})",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p]);
-      fillHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1),
-		     category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p] / 1000.0);
-    }
-  }
-  
-  // Then plot and save all histograms:
-  TString histogramFileName = Form("%s/histogramFile.root", m_outputDir.Data());
-  TFile *histogramFile = new TFile(histogramFileName, "RECREATE");
-  for (std::map<TString,TH1F*>::iterator histIter = m_histograms.begin(); 
-       histIter != m_histograms.end(); histIter++) {
-    plotHistogram(histIter->first);
-    histIter->second
-      ->Write(Form("hist_%s", (formatHistName(histIter->first)).Data()));
-  }
-  histogramFile->Close();
-  
-  // Remove files that were copied:
-  if (config->getBool("MakeLocalMxAODCopies")) removeLocalFileCopies(fileNames);
-  
-  std::ofstream textFile(Form("%s/eventCount.txt", m_outputDir.Data()));
-  
-  // Quick summary:
-  std::cout << "\nThere were " << countPass << " in the final sample."
-	    << std::endl;
-  textFile << "\nThere were " << countPass << " in the final sample." 
-	   << std::endl;
-  for (int i_c = 0; i_c < nCategories; i_c++) {
-    std::cout << "\t" << nameCategory(i_c)<< "\t" << countCate[i_c] 
-	      << std::endl;
-    textFile << "\t" << nameCategory(i_c)<< "\t" << countCate[i_c] << std::endl;
-  }
-  textFile.close();
-  
-  std::cout << "\nCreated ROOT file with histograms: " << histogramFileName 
-	    << std::endl;
-  
-  delete m_treeMxAOD;
-  delete chain;
-  delete config;
-  delete histogramFile;
-  
-  return 0;
-}
+*/

@@ -276,3 +276,12 @@ map<string,double> statistics::expFromToy(vector<double> teststat){
 
   return results;
 }
+
+void statistics::setVal(RooRealVar *x, double value, bool fix){
+  bool constFlag=x->isConstant();
+  if(constFlag) x->setConstant(false);
+  if(value<x->getMin()) x->setMin(value);
+  else if(value>x->getMax()) x->setMax(value);
+  x->setVal(value);
+  if(constFlag||fix) x->setConstant(true);
+}

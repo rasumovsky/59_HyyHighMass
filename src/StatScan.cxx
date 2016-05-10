@@ -330,20 +330,7 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
 	(!asymptotic && singleCLScan(m_massValues[i_m],width,makeNew,false))) {
       
       observableValues[nToyPoints] = m_massValues[i_m];
-      /*
-      limitObs[nToyPoints]
-	= getLimit(m_massValues[i_m], width, false, asymptotic, 0);
-      limitExp_p2[nToyPoints] 
-	= getLimit(m_massValues[i_m], width, true, asymptotic, -2);
-      limitExp_p1[nToyPoints]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, -1);
-      limitExp[nToyPoints]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, 0);
-      limitExp_n1[nToyPoints]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, 1);
-      limitExp_n2[nToyPoints]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, 2);
-      */      
+         
       limitObs[nToyPoints]
 	= getLimit(m_massValues[i_m], width, false, asymptotic, 0);
       limitExp_n2[nToyPoints] 
@@ -1162,8 +1149,8 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
 
 /**
    -----------------------------------------------------------------------------
-   This method finds the asymptotic 95% CLs exclusion by scanning various 
-   signal cross-sections.
+   This method uses Aaron Armbruster's macro to find the 95%CLs exclusion
+   with asymptotics.
    @param mass - The mass integer for the point of interest.
    @param width - The width integer for the point of interest.
    @param doTilde - True iff. using qMuTilde instead of qMu.
@@ -1173,74 +1160,41 @@ bool StatScan::singleLimitTest(int mass, int width, bool doTilde) {
   printer(Form("StatScan::singleLimitTest(mass=%d, width=%d)", mass, width),
 	  false);
   
-  // Set the dataset to fit:
-  TString datasetToFit = m_config->getStr("WorkspaceObsData");
+  // Options for AsymptoticsCLs.cxx macro:
+  TString asymptoticsOptions = "SetVal_NoTemplateStat";
+  if (doTilde) asymptoticsOptions.Append("_DoTilde");
   
-  // Open the workspace:
-  TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
-  RooWorkspace *workspace
-    = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
+  system(Form("./bin/AsymptoticsCLs %s %s %s=%d %s=%f", 
+	      m_configFileName.Data(), asymptoticsOptions.Data(),
+	      (m_config->getStr("PoIForMass")).Data(), mass,
+	      (m_config->getStr("PoIForWidth")).Data(), 
+	      ((double)width/100.0)));
   
-  // Instantiate the test statistic class for calculations and plots:
-  TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
-  testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
-  
-  // Set the PoI ranges for this study:
-  std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
-  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
-    std::vector<double> currRange
-      = m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
-    if (testStat->theWorkspace()->var(listPoI[i_p])) {
-      testStat->theWorkspace()->var(listPoI[i_p])
-	->setRange(currRange[0], currRange[1]);
-    }
-    else {
-      std::cout << "StatScan: Workspace has no variable " << listPoI[i_p]
-		<< std::endl;
-      exit(0);
-    }
-  }
-  
-  // Turn off MC stat errors if requested for Graviton jobs:
-  if (m_config->isDefined("TurnOffTemplateStat") && 
-      m_config->getBool("TurnOffTemplateStat")) {
-    testStat->theWorkspace()
-      ->loadSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
-    const RooArgSet *nuisanceParameters
-      = testStat->theModelConfig()->GetNuisanceParameters();
-    TIterator *nuisIter = nuisanceParameters->createIterator();
-    RooRealVar *nuisCurr = NULL;
-    while ((nuisCurr = (RooRealVar*)nuisIter->Next())) {
-      TString currName = nuisCurr->GetName();
-      if (currName.Contains("gamma_stat_channel_bin")) {
-	testStat->setParam(currName, nuisCurr->getVal(), true);
+  TString asymptoticsCLsDir = Form("%s/%s/AsymptoticsCls", 
+				   (m_config->getStr("MasterOutput")).Data(),
+				   (m_config->getStr("JobName")).Data());
+  std::ifstream limitInput(Form("%s/text_limits__%s_%2.2f_%s_%2.2f.txt", 
+				asymptoticsCLsDir.Data(),
+				(m_config->getStr("PoIForMass")).Data(), 
+				((double)mass),
+				(m_config->getStr("PoIForWidth")).Data(), 
+				((double)width/100.0)));
+  std::map<TString,double> asymptoticLimits; asymptoticLimits.clear();
+  if (limitInput.is_open()) {
+    while (limitInput >> asymptoticLimits["Obs"]
+	   >> asymptoticLimits["ExpN0"] >> asymptoticLimits["ExpN2"]
+	   >> asymptoticLimits["ExpN1"] >> asymptoticLimits["ExpN-1"]
+	   >> asymptoticLimits["ExpN-2"]) {
+      setLimit(mass, width, false, true, 0, asymptoticLimits["Obs"]);
+      for (int i_n = -2; i_n <= 2; i_n++) {
+	setLimit(mass, width, true, true, i_n, 
+		 asymptoticLimits[Form("ExpN%d",i_n)]);
       }
     }
+    limitInput.close();
+    return true;
   }
-  
-  // Map of names and values of PoIs to set for fit:
-  std::map<TString,double> mapPoI; mapPoI.clear();
-  mapPoI[m_config->getStr("PoIForNormalization")] = 1.0;
-  mapPoI[m_config->getStr("PoIForMass")] = (double)mass;
-  mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
-  
-  //----------------------------------------//
-  // Get the asymptotic limit results:
-  std::map<TString,double> asymptoticLimits
-    = testStat->asymptoticLimit(mapPoI, datasetToFit,
-				m_config->getStr("WorkspaceSnapshotMu1"),
-				m_config->getStr("PoIForNormalization"),
-				doTilde);
-  setLimit(mass, width, false, true, 0, asymptoticLimits["Obs"]);
-  setLimit(mass, width, true, true, -2, asymptoticLimits["ExpN-2"]);
-  setLimit(mass, width, true, true, -1, asymptoticLimits["ExpN-1"]);
-  setLimit(mass, width, true, true, 0, asymptoticLimits["ExpN0"]);
-  setLimit(mass, width, true, true, 1, asymptoticLimits["ExpN1"]);
-  setLimit(mass, width, true, true, 2, asymptoticLimits["ExpN2"]);
-  
-  delete testStat;
-  delete workspace;
-  return testStat->fitsAllConverged();
+  else return false;
 }
 
 /**

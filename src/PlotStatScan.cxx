@@ -75,7 +75,8 @@ int main(int argc, char **argv) {
 	      << std::endl;
     
     if (options.Contains("ScanLimit")) {
-      scan->scanMassLimit(widths[i_w], makeNew, useAsymptotics);
+      scan->scanMassLimit(widths[i_w], makeNew, useAsymptotics,
+			  config->getBool("UseQMuTilde"));
     }
     else if (options.Contains("ScanP0")) {
       scan->scanMassP0(widths[i_w], makeNew, useAsymptotics);

@@ -68,6 +68,7 @@ public:
   static double pvalueError(double pvalue, int ntoy);
   static double pvalueFromToy(vector<double> teststat, double thresold);
   static map<string,double> expFromToy(vector<double> teststat);
+  static void setVal(RooRealVar *x, double value, bool fix=false);
   ClassDef(statistics,1);
 };
 

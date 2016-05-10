@@ -444,12 +444,12 @@ public :
    TBranch        *b_HGamMuonsAuxDyn_phi;   //!
    TBranch        *b_HGamMuonsAuxDyn_topoetcone20;   //!
 
-   HGammaMxAOD(TTree *tree=0);
+   HGammaMxAOD(TTree *tree=0, TString tag="");
    virtual ~HGammaMxAOD();
    virtual Int_t    Cut(Long64_t entry);
    virtual Int_t    GetEntry(Long64_t entry);
    virtual Long64_t LoadTree(Long64_t entry);
-   virtual void     Init(TTree *tree);
+   virtual void     Init(TTree *tree, TString tag);
    virtual void     Loop();
    virtual Bool_t   Notify();
    virtual void     Show(Long64_t entry = -1);
@@ -458,7 +458,7 @@ public :
 #endif
 
 #ifdef HGammaMxAOD_cxx
-HGammaMxAOD::HGammaMxAOD(TTree *tree) : fChain(0) 
+HGammaMxAOD::HGammaMxAOD(TTree *tree, TString tag) : fChain(0) 
 {
 // if parameter tree is not specified (or zero), connect the file
 // used to generate this class and read the Tree.
@@ -470,7 +470,7 @@ HGammaMxAOD::HGammaMxAOD(TTree *tree) : fChain(0)
       f->GetObject("CollectionTree",tree);
 
    }
-   Init(tree);
+   Init(tree, tag);
 }
 
 HGammaMxAOD::~HGammaMxAOD()
@@ -498,7 +498,7 @@ Long64_t HGammaMxAOD::LoadTree(Long64_t entry)
    return centry;
 }
 
-void HGammaMxAOD::Init(TTree *tree)
+void HGammaMxAOD::Init(TTree *tree, TString tag)
 {
    // The Init() function is called when the selector needs to initialize
    // a new tree or chain. Typically here the branch addresses and branch
