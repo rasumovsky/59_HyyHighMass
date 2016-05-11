@@ -129,7 +129,10 @@ int maxRetries             = 3;             // number of minimize(fcn) retries b
 
 TString m_options = "";
 bool useRooStatsAsimov = 0;
-std::map<TString,double> m_paramNames;
+
+//std::map<TString,double> m_paramNames;
+std::vector<TString> m_paramNames;
+std::vector<double> m_paramValues;
 
 //don't touch!
 map<RooNLLVar*, double> map_nll_muhat;
@@ -285,6 +288,14 @@ void runAsymptoticsCLs(const char* infile,
   // ADDED: allows user to set parameters in model constant.
   TString saveName = "";
   if (m_options.Contains("SetVal")) {
+    for (int i_p = 0; i_p < (int)m_paramNames.size(); i_p++) {
+      std::cout << "\trunAsymptoticsCLs: setting " << m_paramNames[i_p] 
+		<< " constant and = " << m_paramValues[i_p] << std::endl;
+      statistics::setVal(w->var(m_paramNames[i_p]), m_paramValues[i_p], true);
+      saveName += Form("_%s_%2.2f", (m_paramNames[i_p]).Data(), 
+		       m_paramValues[i_p]);
+    }
+    /*
     for (std::map<TString,double>::iterator paramIter = m_paramNames.begin(); 
 	 paramIter != m_paramNames.end(); paramIter++) {
       
@@ -293,6 +304,7 @@ void runAsymptoticsCLs(const char* infile,
       statistics::setVal(w->var(paramIter->first), paramIter->second, true);
       saveName += Form("_%s_%2.2f",(paramIter->first).Data(),paramIter->second);
     }
+    */
   }
   
   if (m_options.Contains("NoTemplateStat")) {
@@ -1818,13 +1830,17 @@ int main(int argc, char* argv[]) {
   
   // Retrieve and store PoI settings (e.g. mass, width):
   m_paramNames.clear();
+  m_paramValues.clear();
+  
   if (argc > 3 && m_options.Contains("SetVal")) {
     for (int i_a = 3; i_a < argc; i_a++) {
       TString currArg = argv[i_a];
       TObjArray *tokens = currArg.Tokenize("=");
       TString currVariable = ((TObjString*)tokens->At(0))->GetString();
       double currValue = (((TObjString*)tokens->At(1))->GetString()).Atof();
-      m_paramNames[currVariable] = currValue;
+      //m_paramNames[currVariable] = currValue;
+      m_paramNames.push_back(currVariable);
+      m_paramValues.push_back(currValue);
     }
   }
   
