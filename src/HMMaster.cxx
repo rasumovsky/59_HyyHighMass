@@ -18,6 +18,7 @@
 //    - LocalP0Analysis                                                       //
 //    - StatScan                                                              //
 //    - ExtrapolateSig                                                        //
+//    - MassAnimation                                                         //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -163,5 +164,17 @@ int main (int argc, char **argv) {
     system(Form("./bin/ExtrapolateSig %s %s 1", fullConfigPath.Data(),
     		m_config->getStr("ExtrapSigOptions").Data()));
   }
+  
+  //--------------------------------------//
+  // Step 5.0: Create the mass animation:
+  if (masterOption.Contains("MassAnimation")) {
+    std::cout << "HMMaster: Step 5.0 - Plot mass GIF." << std::endl;
+    MassAnimation *animation = new MassAnimation(fullConfigPath, "none");
+    animation->setNFrames(m_config->getInt("AnimationFrames"));
+    animation->getDataForFrames();
+    animation->makeAllFrames();
+    animation->makeGIF();
+  }
+  
   return 0;
 }

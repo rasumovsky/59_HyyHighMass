@@ -29,6 +29,7 @@ class MassAnimation {
   
   void getDataForFrames();
   void makeGIF();
+  void makeAllFrames();
   void makeSingleFrame(int frame);
   void setNFrames(int nFrames);
   void setOutputDirectory(TString directory);
@@ -56,7 +57,10 @@ class MassAnimation {
   RooSimultaneous* m_combPdf;
   RooArgSet *m_observables;
   RooCategory *m_categories;
-
+  
+  TString m_obsName = "";
+  TString m_pdfName = "";
+  int m_geVPerBin;
   int m_nFrames;
   std::map<int,TString> m_times;// use EventInfoAux.timeStamp
   std::map<int,RooDataSet*> m_data;

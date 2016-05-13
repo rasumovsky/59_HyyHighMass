@@ -11,6 +11,7 @@
 #include "Config.h"
 #include "TestStat.h"
 #include "ToyAnalysis.h"
+#include "MassAnimation.h"
 
 bool m_isFirstJob;
 

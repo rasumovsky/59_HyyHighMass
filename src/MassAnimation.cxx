@@ -42,7 +42,7 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
   
   // Load the workspace:
   m_workspaceFile = new TFile(m_config->getStr("WorkspaceFile"), "read");
-  m_workspace = (RooWorkspace*)workspaceFile
+  m_workspace = (RooWorkspace*)m_workspaceFile
     ->Get(m_config->getStr("WorkspaceName"));
   m_model = (ModelConfig*)m_workspace
     ->obj(m_config->getStr("WorkspaceModelConfig"));
@@ -57,7 +57,28 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
 		 nameRooCategory.Data()), true);
   }
   
+  // Get observable and PDF names:  
+  m_obsName = "";
+  m_pdfName = "";
+  TIterator *cateIter = m_combPdf->indexCat().typeIterator();
+  RooCatType *cateType = NULL;
+  while ((cateType = (RooCatType*)cateIter->Next())) {
+    RooAbsPdf *currPdf = m_combPdf->getPdf(cateType->GetName());
+    m_obsName = currPdf->getObservables(m_observables)->first()->GetName();
+    m_pdfName = currPdf->GetName();
+    break;
+  }
+
+  // Set the range for the observable:
+  std::vector<double> massRangeVector = m_config->getNumV("PoIRange_mG");
+  m_workspace->var(m_obsName)->setMin(massRangeVector[0]);
+  m_workspace->var(m_obsName)->setMax(massRangeVector[1]);
+  m_workspace->var(m_obsName)->setRange("fullRange", massRangeVector[0], 
+					massRangeVector[1]);
+  
+
   // Settings for this class:
+  m_geVPerBin = m_config->getInt("AnimationGeVPerBin");
   m_nFrames = 0;
   m_times.clear();
   
@@ -87,8 +108,8 @@ void MassAnimation::getDataForFrames() {
       RooAbsPdf *currPdf = m_combPdf->getPdf(cateType->GetName());
       RooArgSet *currObs = currPdf->getObservables(m_observables);
       // Define the (inclusive) category name and observable variable:
-      if (cate1.EqualTo("")) cate1 = (std::string)(cateType->GetName());
-      if (obs1 == NULL) obs1 = currObs->first();
+      if (cate1 =="") cate1 = (std::string)(cateType->GetName());
+      if (obs1 == NULL) obs1 = (RooRealVar*)currObs->first();
       // Define a new dataset:
       mapOfDataMaps[i_f][(std::string)cateType->GetName()]
 	= new RooDataSet(Form("data_%d_%s", i_f,
@@ -115,7 +136,7 @@ void MassAnimation::getDataForFrames() {
   
   //--------------------------------------//
   // Loop over events to build dataset for signal parameterization:
-  int nEvents = treeMxAOD->fChain->GetEntries();
+  int nEvents = (int)(0.1 * treeMxAOD->fChain->GetEntries());
   std::cout << "There are " << nEvents << " events to process." << std::endl;
   for (int index = 0; index < nEvents; index++) {
 
@@ -124,11 +145,15 @@ void MassAnimation::getDataForFrames() {
     printProgressBar(index, nEvents);
 
     // Record the time stamp:
-    if (((((double)index+1)/((double)nEvents)) >= 
-	 (((double)frame+1)/((double)m_nFrames))) &&
-	((((double)index)/((double)nEvents)) < 
-	 (((double)frame+1)/((double)m_nFrames)))) {
-      m_times[frame] = timeToString(treeMxAOD->EventInfoAux_timeStamp);
+    for (int i_f = 0; i_f < m_nFrames; i_f++) {
+      if (((((double)index+1)/((double)nEvents)) >= 
+	   (((double)i_f+1)/((double)m_nFrames))) &&
+	  ((((double)index)/((double)nEvents)) <
+	   (((double)i_f+1)/((double)m_nFrames)))) {
+	m_times[i_f] = timeToString(treeMxAOD->EventInfoAux_timeStamp);
+	printer(Form("MassAnimation::getDataForFrames: Setting timestamp %d", 
+		     treeMxAOD->EventInfoAux_timeStamp), false);
+      }
     }
     
     //---------- Event selection ----------//
@@ -150,16 +175,15 @@ void MassAnimation::getDataForFrames() {
     // Fill the RooDataSets for each frame:
     for (int i_f = 0; i_f < m_nFrames; i_f++) {
       if ((((double)index+1)/((double)nEvents)) < 
-	  (((double)frame+1)/((double)m_nFrames))) {
-	std::map<int,std::map<string,RooDataSet*> > mapOfDataMaps[i_f][cate1]
-	  ->add(RooArgSet(*firstObervable));
+	  (((double)i_f+1)/((double)m_nFrames))) {
+	mapOfDataMaps[i_f][cate1]->add(RooArgSet(*obs1));
       }
     }
   }// End of event loop.
   
   // Remove files that were copied:
   if (m_config->getBool("MakeLocalMxAODCopies")) {
-    removeLocalFileCopies(fileNames);
+    removeLocalMxAODCopies(fileNames);
   }
   delete treeMxAOD;
   delete chain;
@@ -178,33 +202,50 @@ void MassAnimation::getDataForFrames() {
    Make a GIF of the data by loading a canvas saved for each frame.
 */
 void MassAnimation::makeGIF() {
+  printer("MassAnimation::makeGIF()", false);
   
+
   // Remove prior animations:
   system(Form("rm %s/mass_animation.gif", m_outputDir.Data()));
   
   // Loop over the frames:
   for (int i_f = 0; i_f < m_nFrames; i_f++) {
-    TFile currFile(Form("%s/file_frame%d.root",m_outputDir.Data(),frame));
+    TFile currFile(Form("%s/file_frame%d.root", m_outputDir.Data(), i_f));
     if (currFile.IsOpen()) {
-      TCanvas currCan = (TCanvas)currFile.Get("can");
+      TCanvas *currCan = (TCanvas*)currFile.Get("can");
       if (i_f == m_nFrames - 1) {
-	currCan.Print(Form("%s/mass_animation.gif+500", m_directory.Data()));
-	currCan.Print(Form("%s/mass_animation.gif++", m_directory.Data()));
+	currCan->Print(Form("%s/mass_animation.gif+500", m_outputDir.Data()));
+	currCan->Print(Form("%s/mass_animation.gif++", m_outputDir.Data()));
       }
       else {
-	currCan.Print(Form("%s/mass_animation.gif+10", m_directory.Data()));
+	currCan->Print(Form("%s/mass_animation.gif+10", m_outputDir.Data()));
       }
       currFile.Close();
+      delete currCan;
     }
   }
+  std::cout << "\tGIF printed to " << m_outputDir << "/mass_animation.gif"
+	    << std::endl;
 }
 
 /**
    -----------------------------------------------------------------------------
-   Make a single frame of the animation.
+   Loops over the total number of frames to create them all.
+*/
+void MassAnimation::makeAllFrames() {
+  printer("MassAnimation::makeAllFrames()", false);
+  
+  for (int i_f = 0; i_f < m_nFrames; i_f++) makeSingleFrame(i_f);
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Make a single frame of the animation (saves a canvas).
+   @param frame - The index of the current frame.
 */
 void MassAnimation::makeSingleFrame(int frame) {
-  
+  printer(Form("MassAnimation::makeSingleFrame(%d)",frame), false);
+
   // Create a canvas with two pads (one main plot, one subtraction plot)
   TCanvas *can = new TCanvas("can", "can", 800, 800);
   can->cd();
@@ -222,19 +263,24 @@ void MassAnimation::makeSingleFrame(int frame) {
   //---------- Pad 1: The mass points ----------//
   pad1->cd();
   
+  // Import the current dataset:
+  TString dataName = m_data[frame]->GetName();
+  m_workspace->import(*m_data[frame]);
+  
   // Load background-only fit snapshot if available, otherwise do fit:
   TString snapshotNameMu0 = m_config->getStr("WorkspaceSnapshotMu0");
   if (m_workspace->getSnapshot(snapshotNameMu0)) {
     m_workspace->loadSnapshot(snapshotNameMu0);
   }
   else {
+        
     // Background-only fit to the current dataset:
     std::vector<TString> namesPoI = m_config->getStrV("WorkspacePoIs");
     for (int i_p = 0; i_p < (int)namesPoI.size(); i_p++) {
       if ((namesPoI[i_p]).EqualTo(m_config->getStr("PoIForNormalization"))) {
 	m_workspace->var(namesPoI[i_p])->setVal(0.0);
       }
-      m_workspace->var(namesPoI[i_p])->setContant(true);
+      m_workspace->var(namesPoI[i_p])->setConstant(true);
     }
     
     // Turn off statistical errors of template:
@@ -247,69 +293,68 @@ void MassAnimation::makeSingleFrame(int frame) {
     }
     
     // The actual fit command:
-    RooNLLVar* varNLL = (RooNLLVar*)m_combPdf
-      ->createNLL(*m_workspace->data(currData->GetName()),
-		  Extended(m_combPdf->canBeExtended()));
-    RooFitResult *fitResult
-      = statistics::minimize(varNLL, m_fitOptions, NULL, true);
+    RooNLLVar* varNLL
+      = (RooNLLVar*)m_combPdf->createNLL(*m_workspace->data(dataName),
+					 Extended(m_combPdf->canBeExtended()));
+    RooFitResult *fitResult = statistics::minimize(varNLL, "", NULL, true);
   }
   
-  // Import the current dataset:
-  m_workspace->import(*m_data[frame]);
+  double rMin = m_workspace->var(m_obsName)->getMin();
+  double rMax = m_workspace->var(m_obsName)->getMax();
+  int rBins = (int)((rMax - rMin) / (double)m_geVPerBin);
   
-  //Contains 5866 entries
-  //Observables: 
-  //1)    channellist = inclusive_13TeV(idx = 0)
-  //"channellist"
-  //2)  obs_x_channel = 4997.5  L(200 - 5000) B(960)  "obs_x_channel"
-  //Dataset variable "wt" is interpreted as the event weight  
-  double rMin = m_workspace->var(obsName)->getMin();
-  double rMax = m_workspace->var(obsName)->getMax();
-  int rBins = (int)((rMax - rMin)/(double)m_geVPerBin);
-  
-
-
   // Plot the frame:
-  RooPlot *rooPlot = m_workspace->var(obsName)
+  RooPlot *rooPlot = m_workspace->var(m_obsName)
     ->frame(RooFit::Bins(rBins),RooFit::Range(rMin,rMax));
-  rooPlot->SetYTitle(Form("Events/%d GeV", m_geVPerBin));
-  rooPlot->SetXTitle(m_xAxisTitle);
+  rooPlot->SetYTitle(Form("Events / %d GeV", m_geVPerBin));
+  rooPlot->SetXTitle("m_{#gamma#gamma} [GeV]");
   
   // Then add the data and PDF to the RooPlot:
-  m_ws->data(dataName)->plotOn(rooPlot);
-  m_ws->pdf(pdfName)->plotOn(rooPlot, RooFit::LineColor(kBlue+1));
-    
+  if (m_workspace->data(dataName)) {
+    m_workspace->data(dataName)->plotOn(rooPlot);
+  }
+  else printer(Form("MassAnimation:makeSingleFrame: Missing dataset %s", 
+		    dataName.Data()), true);
+  
+  if (m_workspace->pdf(m_pdfName)) {
+    m_workspace->pdf(m_pdfName)->plotOn(rooPlot, RooFit::Range("fullRange"), 
+				      RooFit::NormRange("fullRange"), 
+				      RooFit::LineColor(kBlue+1));
+  }
+  else printer(Form("MassAnimation:makeSingleFrame: Missing PDF %s", 
+		    m_pdfName.Data()), true);
+  
   // Draw the RooPlot:
   rooPlot->Draw();
   // Special y-axis ranges for log-scale plots:
   gPad->SetLogy();
-    
+  
   // Plot text (ATLAS, sqrt(s), lumi, and time):
   TLatex l; l.SetNDC(); l.SetTextColor(kBlack);
   l.SetTextFont(72); l.SetTextSize(0.05); 
-  l.DrawLatex(0.70, 0.88, "ATLAS");
+  l.DrawLatex(0.60, 0.88, "ATLAS");
   l.SetTextFont(42); l.SetTextSize(0.05); 
-  l.DrawLatex(0.82, 0.88, m_config->getStr("ATLASLabel"));
+  l.DrawLatex(0.72, 0.88, m_config->getStr("ATLASLabel"));
   double frameLumi = (((double)(frame+1) / (double)m_nFrames) * 
 		      m_config->getNum("AnalysisLuminosity") / 1000.0);
-  l.DrawLatex(0.7, 0.82, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}", frameLumi));
-  l.DrawLatex(0.7, 0.76, m_times[frame]);
+  l.DrawLatex(0.6, 0.82, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}", frameLumi));
+  l.DrawLatex(0.6, 0.76, m_times[frame]);
   
   //---------- Pad 2: The subtraction plot ----------//
   pad2->cd();
   
-  TGraphErrors* subData = plotSubtraction(m_ws->data(dataName),
-					  m_ws->pdf(pdfName),
-					  m_ws->var(obsName), rBins);
+  TGraphErrors* subData = plotSubtraction(m_workspace->data(dataName),
+					  m_workspace->pdf(m_pdfName),
+					  m_workspace->var(m_obsName), rBins);
   
   TH1F *medianHist = new TH1F("median", "median", rBins, rMin, rMax);
   for (int i_b = 1; i_b <= rBins; i_b++) medianHist->SetBinContent(i_b,0.0);
   medianHist->GetYaxis()
     ->SetRangeUser(0.99 * subData->GetMinimum(), 1.01 * subData->GetMaximum());
-  medianHist->GetYaxis()->SetTitle("Data - Fit");
   medianHist->SetLineColor(kBlue+1);
   medianHist->SetLineWidth(2);
-  medianHist->GetXaxis()->SetTitle(m_xAxisTitle);
+  medianHist->GetYaxis()->SetTitle("Data - Fit");
+  medianHist->GetXaxis()->SetTitle("m_{#gamma#gamma} [GeV]");
   medianHist->GetYaxis()->SetNdivisions(5);
   medianHist->GetXaxis()->SetTitleOffset(0.95);
   medianHist->GetYaxis()->SetTitleOffset(0.7);
@@ -321,17 +366,17 @@ void MassAnimation::makeSingleFrame(int frame) {
   subData->Draw("EPSAME");
   
   // Print and also save to file:
-  can->Print(Form("%s/plot_mass_frame%d.eps", m_directory.Data(), frame));
+  can->Print(Form("%s/plot_mass_frame%d.eps", m_outputDir.Data(), frame));
   TFile *outputFile = new TFile(Form("%s/file_frame%d.root",
 				     m_outputDir.Data(), frame), "RECREATE");
   
   can->Write();
   outputFile->Close();
   
-  delete outputFile;
-  delete can;
-  delete pad1;
-  delete pad2; 
+  //delete outputFile;
+  //delete can;
+  //delete pad1;
+  //delete pad2; 
 }
 
 /**
@@ -365,9 +410,7 @@ TGraphErrors* MassAnimation::plotSubtraction(RooAbsData *data, RooAbsPdf *pdf,
   
   int pointIndex = 0;
   for (double i_m = minOrigin; i_m < maxOrigin; i_m += increment) {
-    if (!m_verbose) {
-      RooMsgService::instance().setGlobalKillBelow(RooFit::WARNING);
-    }
+    //RooMsgService::instance().setGlobalKillBelow(RooFit::WARNING);
     observable->setRange(Form("range%2.2f",i_m), i_m, (i_m+increment));
     RooAbsReal* intCurr
       = (RooAbsReal*)pdf->createIntegral(RooArgSet(*observable), 
@@ -391,19 +434,6 @@ TGraphErrors* MassAnimation::plotSubtraction(RooAbsData *data, RooAbsPdf *pdf,
   observable->setMax(maxOrigin);
   delete originHist;
   return result;
-}
-
-/**
-   -----------------------------------------------------------------------------
-   Prints a statement (if verbose) and exits (if fatal).
-   @param statement - The statement to print.
-   @param isFatal - True iff. this should trigger an exit command.
-*/
-void MassAnimation::printer(TString statement, bool isFatal) {
-  if (m_config->getBool("Verbose") || isFatal) {
-    std::cout << statement << std::endl;
-  }
-  if (isFatal) exit(0);
 }
 
 /**
@@ -432,6 +462,19 @@ std::vector<TString> MassAnimation::makeLocalMxAODCopies(std::vector<TString>
     result.push_back(newName);
   }
   return result;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Prints a statement (if verbose) and exits (if fatal).
+   @param statement - The statement to print.
+   @param isFatal - True iff. this should trigger an exit command.
+*/
+void MassAnimation::printer(TString statement, bool isFatal) {
+  if (m_config->getBool("Verbose") || isFatal) {
+    std::cout << statement << std::endl;
+  }
+  if (isFatal) exit(0);
 }
 
 /**
