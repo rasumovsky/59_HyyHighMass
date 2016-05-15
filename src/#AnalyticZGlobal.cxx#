@@ -49,6 +49,7 @@ double getZFromP(double p) {
 double getPFromZ(double zValue) {
   return (1.0 - (ROOT::Math::gaussian_cdf(zValue)));
 }
+
 /**
    -----------------------------------------------------------------------------
    Implements the functional form of q0 (same as qMu).

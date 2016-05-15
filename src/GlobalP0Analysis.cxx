@@ -9,8 +9,8 @@
 //  Calculates the global significance from a background-only toy MC ensemble.//
 //                                                                            //
 //  Macro options:                                                            //
-//  - PlotGauss                                                               //
-//  - PlotLine                                                                //
+//  - PlotAnalytic                                                            //
+//  - StudyRetries
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -20,6 +20,20 @@
 #include "ToyAnalysis.h"
 #include "TPolyLine.h"
 
+double analyticZGlobal(double zLocal, int N) {
+  return TMath::NormQuantile(TMath::Power(ROOT::Math::gaussian_cdf(zLocal), N));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Calculate p-value based on the Z (significance).
+   @param zValue - The Z (significance).
+   @return - The p-value (probability).
+*/
+double getPFromZ(double zValue) {
+  return (1.0 - (ROOT::Math::gaussian_cdf(zValue)));
+}
+
 /**
    -----------------------------------------------------------------------------
    Calculate Z (significance) based on the p-value.
@@ -28,6 +42,10 @@
 */
 double getZFromP(double p) {
   return TMath::NormQuantile(1.0 - p);
+}
+
+double getNFromMedian(double zValue, double pValue) {
+  return TMath::Log(1.0-pValue) / TMath::Log(ROOT::Math::gaussian_cdf(zValue));
 }
 
 /**
@@ -156,7 +174,6 @@ int main(int argc, char **argv) {
   hMaxZ0->GetYaxis()->SetTitleSize(0.07);
   hMaxZ0->GetYaxis()->SetTitleOffset(0.9);
   hMaxZ0->GetYaxis()->SetLabelSize(0.06);
-  //hMaxZ0->GetYaxis()->SetRangeUser(0.0001, 0.014);
   hMaxZ0->GetYaxis()->SetRangeUser(0.0001, 0.014);
   hMaxZ0->Draw("hist");
 
@@ -164,28 +181,32 @@ int main(int argc, char **argv) {
   std::vector<double> valsZ0 = toyAna->getStatValues("Z0", 0);
   std::sort(valsZ0.begin(), valsZ0.end());
   double medianZ0 = valsZ0[(int)(((double)valsZ0.size())/2.0)];
-
-  // Also fit the histogram with a Gaussian:
-  TF1 *fGauss = new TF1("fGauss", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
-  			hMaxZ0->GetXaxis()->GetXmax());
-  TF1 *fGaussP1 = new TF1("fGaussP1", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
-  			hMaxZ0->GetXaxis()->GetXmax());
-  TF1 *fGaussN1 = new TF1("fGaussN1", "gaus", hMaxZ0->GetXaxis()->GetXmin(), 
-  			hMaxZ0->GetXaxis()->GetXmax());
   
-  if (options.Contains("PlotGauss")) {
-    //fGauss->FixParameter(1, medianZ0);
-    hMaxZ0->Fit(fGauss, "0");
-    fGauss->SetLineWidth(2);
-    fGauss->SetLineStyle(1);
-    fGauss->SetLineColor(kBlue);
-    fGauss->Draw("LSAME");
-    
-    // Then set +/-1 sigma values from fit:
-    fGaussP1->SetParameter(1, fGauss->GetParameter(1));
-    fGaussP1->SetParameter(2, 0.9*fGauss->GetParameter(2));
-    fGaussN1->SetParameter(1, fGauss->GetParameter(1));
-    fGaussN1->SetParameter(2, 1.1*fGauss->GetParameter(2));
+  double pForMatching = getPFromZ(config->getNum("GlobalP0AnalysisZToMatch"));
+  double zForMatching
+    = valsZ0[(int)(((double)valsZ0.size())*(1.0-pForMatching))];
+  
+  // Also fit the histogram:
+  TF1 *fAnalytic = new TF1("dPdZ", "([0]*[1]*TMath::Power(ROOT::Math::gaussian_cdf(x), ([0]-1.0))*ROOT::Math::gaussian_pdf(x))", hMaxZ0->GetXaxis()->GetXmin(), hMaxZ0->GetXaxis()->GetXmax());
+
+  fAnalytic->SetParameter(0, getNFromMedian(medianZ0, 0.5));
+  fAnalytic->SetParameter(1, 0.0088467);
+  TString trialMethod = config->getStr("TrialMethod");
+  if (trialMethod.Contains("FixTrial")) {
+    fAnalytic->FixParameter(0, config->getNum("GlobalP0FixedN"));
+  }
+  else if (trialMethod.Contains("MatchTrial")) {
+    fAnalytic->FixParameter(0, getNFromMedian(zForMatching, pForMatching));
+  }
+  
+  // Then fit and plot:
+  if (options.Contains("PlotAnalytic")) {
+    //hMaxZ0->Fit(fAnalytic, "0");
+    hMaxZ0->Fit(fAnalytic, "R");
+    fAnalytic->SetLineWidth(2);
+    fAnalytic->SetLineStyle(1);
+    fAnalytic->SetLineColor(kBlue);
+    fAnalytic->Draw("LSAME");
   }
   
   // Draw a line at the median:
@@ -216,12 +237,16 @@ int main(int argc, char **argv) {
   // Legend:
   TLegend leg1(0.2, 0.49, 0.49, 0.71);
   leg1.SetTextFont(42); 
-  leg1.SetTextSize(0.07);
+  leg1.SetTextSize(0.06);
   leg1.SetBorderSize(0);
   leg1.SetFillColor(0);
   leg1.AddEntry(line1, Form("Med. Z_{0}^{Local}=%2.1f#sigma",medianZ0), "l");
   leg1.AddEntry(line2, Form("Obs. Z_{0}^{Local}=%2.1f#sigma",observedZ0), "l");
-  if (options.Contains("PlotGauss")) leg1.AddEntry(fGauss, "Gaussian", "l");
+  if (options.Contains("PlotAnalytic")) {
+    leg1.AddEntry(fAnalytic, Form("%d #Phi(z)^{%d-1}#Phi'(z)",
+				  (int)(fAnalytic->GetParameter(0)), 
+				  (int)(fAnalytic->GetParameter(0))), "l");
+  }
   leg1.Draw("SAME");
 
   //----------//
@@ -289,63 +314,21 @@ int main(int argc, char **argv) {
   line3->DrawLine(hForAxis->GetYaxis()->GetXmin(), 4,
 		  hForAxis->GetXaxis()->GetXmax(), 4);
     
-  // Also fit the graph:
-  TF1 *fZGlobal = new TF1("fZGlobal", "pol1", hForAxis->GetXaxis()->GetXmin(),
-  hForAxis->GetXaxis()->GetXmax());
-  
-  gZGlobal->Fit(fZGlobal, "0");
-  fZGlobal->SetLineWidth(2);
-  fZGlobal->SetLineStyle(2);
-  fZGlobal->SetLineColor(1);
-  
   gZGlobal->Draw("2SAME");
-  if (options.Contains("PlotLine")) fZGlobal->Draw("LSAME");
-  
-  // Now get a global significance just from the Gaussian fit:
-  TGraph *gFromGauss = new TGraph();
-  TGraph *gFromGaussP1 = new TGraph();
-  TGraph *gFromGaussN1 = new TGraph();
-  
-  double totalIntegral = fGauss->Integral(-5, hMaxZ0->GetXaxis()->GetXmax());
-  double totalIntegralP1 = fGaussP1->Integral(-5,hMaxZ0->GetXaxis()->GetXmax());
-  double totalIntegralN1 = fGaussN1->Integral(-5,hMaxZ0->GetXaxis()->GetXmax());
-  for (int i_p = 0; i_p < gZGlobal->GetN(); i_p++) {
-    double xCurr = 0.0; double yCurr = 0.0;
-    gZGlobal->GetPoint(i_p, xCurr, yCurr);
-    double gaussIntegral 
-      = fGauss->Integral(xCurr, hMaxZ0->GetXaxis()->GetXmax());
-    double gaussIntegralP1
-      = fGaussP1->Integral(xCurr, hMaxZ0->GetXaxis()->GetXmax());
-    double gaussIntegralN1
-      = fGaussN1->Integral(xCurr, hMaxZ0->GetXaxis()->GetXmax());
-    gFromGauss->SetPoint(i_p, xCurr, getZFromP(gaussIntegral/totalIntegral));
-    gFromGaussP1->SetPoint(i_p, xCurr,
-			   getZFromP(gaussIntegralP1/totalIntegralP1));
-    gFromGaussN1->SetPoint(i_p, xCurr,
-			   getZFromP(gaussIntegralN1/totalIntegralN1));
-  }
-  gFromGauss->SetLineWidth(2); gFromGauss->SetLineColor(kBlue);
-  gFromGaussP1->SetLineWidth(1); gFromGaussP1->SetLineColor(kBlue);
-  gFromGaussN1->SetLineWidth(1); gFromGaussN1->SetLineColor(kBlue);
-  if (options.Contains("PlotGauss")) {
-    gFromGauss->Draw("LSAME");
-    gFromGaussP1->Draw("LSAME");
-    gFromGaussN1->Draw("LSAME");
-  }
-  
-  if (options.Contains("PlotLine")) {
-    // Print functional form:
-    TString fText = Form("Z_{0}^{Global} = %2.2f Z_{0}^{Local} + %2.2f",
-			 fZGlobal->GetParameter(1), fZGlobal->GetParameter(0));
-    fText.ReplaceAll("+ -","- ");
-    t.DrawLatex(0.58, 0.34, fText);
     
-    // Print the chi^2 probability:
-    double chi2 = fZGlobal->GetChisquare();
-    double probChi2 = TMath::Prob(fZGlobal->GetChisquare(), gZGlobal->GetN());
-    t.DrawLatex(0.58, 0.24, Form("p(#chi^{2}) = %2.2f", probChi2));
+  // Now get a global significance just from the fit:
+  TGraph *gAnalytic = new TGraph();
+  for (int i_b = 1; i_b <= hMaxZ0->GetNbinsX(); i_b++) {
+    gAnalytic->SetPoint(i_b-1, hMaxZ0->GetBinCenter(i_b),
+			analyticZGlobal(hMaxZ0->GetBinCenter(i_b),
+					fAnalytic->GetParameter(0)));
   }
-    
+  
+  gAnalytic->SetLineWidth(2); gAnalytic->SetLineColor(kBlue);
+  if (options.Contains("PlotAnalytic")) {
+    gAnalytic->Draw("LSAME");
+  }
+      
   // Calculate the Z0 global value with errors:
   double xValue = 0.0; double yValue = 0.0;
   double xError = 0.0; double yError = 0.0;
@@ -389,19 +372,16 @@ int main(int argc, char **argv) {
   // Legend for Pad 2:
   TLegend leg2(0.18, 0.75, 0.59, 0.97);
   leg2.SetTextFont(42); 
-  leg2.SetTextSize(0.07);
+  leg2.SetTextSize(0.06);
   leg2.SetBorderSize(0);
   leg2.SetFillColor(0);
   leg2.AddEntry(gZGlobal, "Toy MC #pm stat. error", "F");
-  if (options.Contains("PlotLine")) {
-    leg2.AddEntry(fZGlobal, "Fit to Toy MC", "l");
-  }
-  if (options.Contains("PlotGauss")) {
-    leg2.AddEntry(gFromGauss, "Gaussian Fit", "l");
-  }
-  //leg2.AddEntry(lineExcl, "Upper bound on Z_{0}^{Global}", "F");
   leg2.AddEntry(lineZ0Global, Form("Z_{0}^{Global}=%2.2f#sigma #pm %2.2f#sigma",
 				   yValue, yError), "F");
+  if (options.Contains("PlotAnalytic")) {
+    leg2.AddEntry(gAnalytic, Form("#Phi^{-1}(#Phi(z)^{%d})", 
+				  (int)(fAnalytic->GetParameter(0))), "l");
+  }
   leg2.Draw("SAME");
   
   // Print the canvas:
@@ -412,12 +392,16 @@ int main(int argc, char **argv) {
   std::cout << "\nGlobalP0Analysis: Finished!" << std::endl;
   
   // Print the results:
-  std::cout << "\tFrom linear fit: Z0Global( " << observedZ0 << " ) = " 
-	    << fZGlobal->Eval(observedZ0) << std::endl;
+  //std::cout << "\tFrom linear fit: Z0Global( " << observedZ0 << " ) = " 
+  //	    << fZGlobal->Eval(observedZ0) << std::endl;
     
   std::cout << "\tFrom toy: Z0Global( " << observedZ0 << " ) = " 
 	    << yValue << " +/- " << yError << std::endl;
 
+  std::cout << "\t From analytic function: Z0Global( " << observedZ0 << " ) = " 
+	    << analyticZGlobal(observedZ0, fAnalytic->GetParameter(0))
+	    << std::endl;
+  
   // Finally, save the TGraph containing the local -> global Z mapping:
   TFile *outZFile = new TFile(Form("%s/graph_maxZ0_%s.root", outputDir.Data(), 
 				   anaType.Data()), "RECREATE");
