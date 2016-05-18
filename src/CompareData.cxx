@@ -20,8 +20,9 @@ TString m_outputDir;
 /**
    -----------------------------------------------------------------------------
 */
-void compareHistograms(TString name, TH1F *h1, TH1F *h2, bool doRatio) {
-    
+void compareHistograms(TString name, TH1F *h1, TH1F *h2, TString name1, 
+		       TString name2, bool doRatio) {
+  
   // Create a canvas with two pads (one main plot, one subtraction plot)
   TCanvas *can = new TCanvas("can", "can", 800, 800);
   can->cd();
@@ -51,6 +52,15 @@ void compareHistograms(TString name, TH1F *h1, TH1F *h2, bool doRatio) {
   h2->SetMarkerColor(kRed+1);
   h2->Draw("E1SAME");
   h1->Draw("E1SAME");
+  
+  TLegend leg(0.7, 0.8, 0.9, 0.9);
+  leg.SetTextFont(42); 
+  leg.SetTextSize(0.06);
+  leg.SetBorderSize(0);
+  leg.SetFillColor(0);
+  leg.AddEntry(h1, name1, "LEP");
+  leg.AddEntry(h2, name2, "LEP");
+  leg.Draw("SAME");
   
   // Then make ratio:
   pad2->cd();
@@ -84,7 +94,8 @@ void compareHistograms(TString name, TH1F *h1, TH1F *h2, bool doRatio) {
   hSubPlot->SetLineColor(kBlue+1);
   hSubPlot->SetMarkerColor(kBlue+1);
   hSubPlot->GetXaxis()->SetTitle(h1->GetXaxis()->GetTitle());
-  if (doRatio) hSubPlot->GetYaxis()->SetTitle("Ratio");
+  if (doRatio)
+    hSubPlot->GetYaxis()->SetTitle(Form("%s / %s", name1.Data(), name2.Data()));
   else hSubPlot->GetYaxis()->SetTitle("Difference");
   hSubPlot->GetXaxis()->SetTitleSize(0.07);
   hSubPlot->GetXaxis()->SetLabelSize(0.06);
@@ -125,7 +136,7 @@ void compareHistograms(TString name, TH1F *h1, TH1F *h2, bool doRatio) {
 int main(int argc, char **argv) {
   if (argc < 5) {
     std::cout << "Usage: " << argv[0]
-	      << " <configFile> <file1> <file2> <options>"
+	      << " <configFile> <file1> <file2> <name1> <name2> <options>"
 	      << std::endl;
     exit(0);
   }
@@ -134,7 +145,9 @@ int main(int argc, char **argv) {
   TString configFile = argv[1];
   TString fileName1 = argv[2];
   TString fileName2 = argv[3];
-  TString options = argv[4];
+  TString sample1 = argv[4];
+  TString sample2 = argv[5];
+  TString options = argv[6];
   
   // Load the analysis configurations from file:
   Config *config = new Config(configFile);
@@ -161,7 +174,8 @@ int main(int argc, char **argv) {
     if (currName.Contains("hist_")) {
       TH1F *h1 = (TH1F*)file1.Get(currName);
       TH1F *h2 = (TH1F*)file2.Get(currName);
-      compareHistograms(currName, h1, h2, config->getBool("MxAODRatioPlot"));
+      compareHistograms(currName, h1, h2, sample1, sample2,
+			config->getBool("MxAODRatioPlot"));
       delete h1;
       delete h2;
     }

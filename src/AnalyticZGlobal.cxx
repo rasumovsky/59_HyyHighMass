@@ -9,6 +9,10 @@
 //  Try a simple calculation of the global significance by assuming that the  //
 //  grid has independent asymptotic tests.                                    //
 //                                                                            //
+//  Options:                                                                  //
+//  - "TestAlpha" look at variations of alpha parameter instead of nTrials.   //
+//  - "PlotP0" plot the p-value distributions instead of Z-values.            //
+//                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "CommonFunc.h"
@@ -49,6 +53,7 @@ double getZFromP(double p) {
 double getPFromZ(double zValue) {
   return (1.0 - (ROOT::Math::gaussian_cdf(zValue)));
 }
+
 /**
    -----------------------------------------------------------------------------
    Implements the functional form of q0 (same as qMu).
@@ -70,17 +75,34 @@ double functionQ0(double x) {
    @param N - The number of trials.
    @return - The global p0 probabiltiy.
 */
-double analyticPGlobal(double pLocal, int N) {
+float analyticPGlobal(double pLocal, int N) {
   return (1.0 - TMath::Power((1.0 - pLocal), N));
 }
 
-double analyticDpDz(double zLocal, int N) {
-  return (-1.0 * N * TMath::Power(ROOT::Math::gaussian_cdf(zLocal), N-1) * 
-	  ROOT::Math::gaussian_pdf(zLocal));
+/**
+   -----------------------------------------------------------------------------
+   Analytic distribution of local significance. 
+   @param zLocal - The local significance [in sigma] to convert to global Z.
+   @param N - The trial factor for the analytic computation.
+   @param alpha - Additional modification parameter (alpha=0 is nominal shape).
+   @return - The parameterized local significance distribution.
+*/
+float analyticDpDz(double zLocal, int N, double alpha) {
+  return (-1.0 * N *
+	  TMath::Power(ROOT::Math::gaussian_cdf(zLocal*(1+alpha)), N-1) * 
+	  ROOT::Math::gaussian_pdf(zLocal*(1+alpha)) * (1+alpha));
 }
 
-double analyticZGlobal(double doublezLocal, int N) {
-  return TMath::NormQuantile(TMath::Power(ROOT::Math::gaussian_cdf(zLocal), N));
+/**
+   -----------------------------------------------------------------------------
+   Analytic function for the global significance Z global.
+   @param zLocal - The local significance [in sigma] to convert to global Z.
+   @param N - The trial factor for the analytic computation.
+   @param alpha - Additional modification parameter (alpha=0 is nominal shape).
+   @return - The global significance Z-global [in sigma].
+*/
+float analyticZGlobal(double zLocal, int N, double alpha) {
+  return TMath::NormQuantile(TMath::Power(ROOT::Math::gaussian_cdf(zLocal*(1+alpha)), N));
 }
 
 /**
@@ -110,7 +132,7 @@ void printProgressBar(int index, int total) {
    The main method randomly samples a chi^2 distribution and computes a dummy
    local and global significance. 
    @param configFile - The analysis configuration file.
-   @param options - Job options. Can be "toy" or "asymptotic" or "both"
+   @param options - Job options. Can be "TestAlpha" "PlotP0"
 */
 int main(int argc, char **argv) {
   
@@ -164,16 +186,19 @@ int main(int argc, char **argv) {
   double xAlign = (options.Contains("PlotP0")) ? 0.6 : 0.2;
 
   // Legend:
-  TLegend leg(xAlign, 0.56, xAlign+0.2, 0.8);
+  TLegend leg(xAlign, 0.55, xAlign+0.2, 0.81);
   leg.SetTextFont(42); 
   leg.SetTextSize(0.06);
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
   
-  // Loop over numbers of trials:
-  for (int i_e = 0; i_e < 5; i_e++) {
-    int nTrials = (int)(TMath::Power(10, i_e));
-        
+  // Loop over numbers of points:
+  for (int i_e = 0; i_e < testPoints; i_e++) {
+    int nTrials = options.Contains("TestAlpha") ? 
+      (int)(TMath::Power(10, testPoints-i_e)) : (int)(TMath::Power(10, i_e));
+      //100 : (int)(TMath::Power(10, i_e));
+    double alpha = options.Contains("TestAlpha") ? (0.6-((double)i_e*0.2)) : 0;
+    
     // Create a histogram to store max significance values from each experiment:
     hMaxZ0[i_e] = new TH1F(Form("hMaxZ0_%d",i_e), Form("hMaxZ0_%d", i_e),
 			   1000, 0.0, 5.0);
@@ -189,7 +214,7 @@ int main(int argc, char **argv) {
 
       hMaxZ0[i_e]->SetBinContent(i_b, 
 				 analyticDpDz(hMaxZ0[i_e]->GetBinCenter(i_b),
-					      nTrials));
+					      nTrials, alpha));
       
     }
     for (int i_b = 1; i_b <= hMaxp0[i_e]->GetNbinsX(); i_b++) {
@@ -215,7 +240,7 @@ int main(int argc, char **argv) {
 	hForAxis = new TH1F("hForAxis", "hForAxis", hMaxZ0[i_e]->GetNbinsX(),
 			    hMaxZ0[i_e]->GetXaxis()->GetXmin(),
 			    hMaxZ0[i_e]->GetXaxis()->GetXmax());
-	hForAxis->GetYaxis()->SetRangeUser(0.0, 5.2);
+	hForAxis->GetYaxis()->SetRangeUser(0.01, 5.2);
 	hForAxis->GetYaxis()->SetTitle("Z_{0}^{Global} [#sigma]");
 	hForAxis->GetXaxis()->SetTitle("Z_{0}^{Local} [#sigma]");
       }
@@ -243,7 +268,12 @@ int main(int argc, char **argv) {
     hMaxZ0[i_e]->GetYaxis()->SetTitleSize(0.07);
     hMaxZ0[i_e]->GetYaxis()->SetTitleOffset(0.9);
     hMaxZ0[i_e]->GetYaxis()->SetLabelSize(0.06);
-    hMaxZ0[i_e]->GetYaxis()->SetRangeUser(0.0001, 0.01);
+    if (options.Contains("TestAlpha")) {
+      hMaxZ0[i_e]->GetYaxis()->SetRangeUser(0.0001, 0.015);
+    }
+    else {
+      hMaxZ0[i_e]->GetYaxis()->SetRangeUser(0.0001, 0.01);
+    }
 
     hMaxp0[i_e]->Scale(1.0 / hMaxp0[i_e]->Integral());
     hMaxp0[i_e]->SetLineWidth(2);
@@ -270,21 +300,34 @@ int main(int argc, char **argv) {
       if (options.Contains("PlotP0")) hMaxp0[i_e]->Draw("histSAME");
       else hMaxZ0[i_e]->Draw("histSAME");
     }
-    leg.AddEntry(hMaxZ0[i_e], Form("N = %d", nTrials), "F");
+
+    if (options.Contains("TestAlpha")) {
+      leg.AddEntry(hMaxZ0[i_e], Form("#alpha=%2.2f, N=%d",alpha,nTrials), "F");
+    }
+    else leg.AddEntry(hMaxZ0[i_e], Form("N = %d", nTrials), "F");
     
     // Pad 2:
     pad2->cd();
     
     // Analytic Z 
     gZAnalytic[i_e] = new TGraph();
-    gZAnalytic[i_e]->SetNameTitle(Form("zAnalytic_%dtrials", nTrials),
-				  Form("zAnalytic_%dtrials", nTrials));
+    if (options.Contains("TestAlpha")) {
+      gZAnalytic[i_e]->SetNameTitle(Form("zAnalytic_%2.2falpha", alpha),
+				    Form("zAnalytic_%2.2falpha", alpha));
+    }
+    else {
+      gZAnalytic[i_e]->SetNameTitle(Form("zAnalytic_%dtrials", nTrials),
+				    Form("zAnalytic_%dtrials", nTrials));
+    }
+
     bool foundMedian = false;
     int pointIndex = 0;
     for (int i_b = 1; i_b <= hMaxZ0[i_e]->GetNbinsX(); i_b++) {
-      double pValue 
-	= analyticPGlobal(getPFromZ(hMaxZ0[i_e]->GetBinCenter(i_b)), nTrials);
-      double zValue = getZFromP(pValue);
+      //double pValue 
+      //= analyticPGlobal(getPFromZ(hMaxZ0[i_e]->GetBinCenter(i_b)), nTrials);
+      //double zValue = getZFromP(pValue);
+      float zValue = analyticZGlobal(hMaxZ0[i_e]->GetBinCenter(i_b), nTrials,
+				     alpha);
       gZAnalytic[i_e]->SetPoint(pointIndex, hMaxZ0[i_e]->GetBinCenter(i_b),
 				zValue);
       pointIndex++;
@@ -303,11 +346,18 @@ int main(int argc, char **argv) {
     
     // Analytic P
     gPAnalytic[i_e] = new TGraph();
-    gZAnalytic[i_e]->SetNameTitle(Form("pAnalytic_%dtrials", nTrials),
-				  Form("pAnalytic_%dtrials", nTrials));
+    if (options.Contains("TestAlpha")) {
+      gZAnalytic[i_e]->SetNameTitle(Form("pAnalytic_%2.2falpha", alpha),
+				    Form("pAnalytic_%2.2falpha", alpha));
+    }
+    else {
+      gZAnalytic[i_e]->SetNameTitle(Form("pAnalytic_%dtrials", nTrials),
+				    Form("pAnalytic_%dtrials", nTrials));
+    }
+    
     pointIndex = 0;
     for (int i_b = 1; i_b <= hMaxp0[i_e]->GetNbinsX(); i_b++) {
-      double pValue = analyticPGlobal(hMaxp0[i_e]->GetBinCenter(i_b), nTrials);
+      float pValue = analyticPGlobal(hMaxp0[i_e]->GetBinCenter(i_b), nTrials);
       gPAnalytic[i_e]->SetPoint(pointIndex, hMaxp0[i_e]->GetBinCenter(i_b), 
 				pValue);
       pointIndex++;

@@ -9,9 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "Config.h"
+#include "MassAnimation.h"
 #include "TestStat.h"
 #include "ToyAnalysis.h"
-#include "MassAnimation.h"
+#include "Workspace.h"
 
 bool m_isFirstJob;
 

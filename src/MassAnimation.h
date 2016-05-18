@@ -28,6 +28,7 @@ class MassAnimation {
   virtual ~MassAnimation() {};
   
   void getDataForFrames();
+  int getNFrames();
   void makeGIF();
   void makeAllFrames();
   void makeSingleFrame(int frame);
@@ -37,12 +38,13 @@ class MassAnimation {
  private:
   
   std::vector<TString> makeLocalMxAODCopies(std::vector<TString> fileNames);
-  TGraphErrors* plotSubtraction(RooAbsData *data, RooAbsPdf *pdf, 
-				RooRealVar *observable, double xBins);
+  TGraphErrors* plotComparison(RooAbsData *data, RooAbsPdf *pdf, 
+			       RooRealVar *observable, double xBins,
+			       bool doRatio=true);
   void printer(TString statement, bool isFatal);
   void printProgressBar(int index, int total);
   void removeLocalMxAODCopies(std::vector<TString> fileNames);
-  TString timeToString(UInt_t timeInt);
+  TString timeToString(time_t dateValue);
   
   // Private member variables:
   TString m_options;

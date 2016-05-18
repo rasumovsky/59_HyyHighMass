@@ -803,6 +803,9 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
     else {
       toyDataMap[(std::string)cateType->GetName()]
 	= (RooDataSet*)currPdf->generate(*currObs,Extended(true));
+      std::cout << "TOYNEVENTS " << cateType->GetName() << " = " 
+		<< toyDataMap[(std::string)cateType->GetName()]->numEntries()
+		<< std::endl;
     }
     
     double currEvt = toyDataMap[(std::string)cateType->GetName()]->sumEntries();
@@ -816,7 +819,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
       currObs->add(*wt);
     }
     
-    /*
+    
     TCanvas *can = new TCanvas("can", "can", 800, 800);
     can->cd();
     RooPlot* frame = ((RooRealVar*)(currObs->first()))->frame(115);
@@ -827,7 +830,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
     gPad->SetLogy(); 
     frame->GetYaxis()->SetRangeUser(0.1, 10000);
     can->Print("data.eps");
-    */    
+    
   }
   
   // Create the combined toy RooDataSet:

@@ -14,4 +14,7 @@ do
     done
 done
 
-hadd -f combinedMxAOD.root $directoryOut/*.root
+xAODMerge combinedMxAOD.root $directoryOut/*.root
+
+rm $directoryOut/*
+mv combinedMxAOD.root $directoryOut/

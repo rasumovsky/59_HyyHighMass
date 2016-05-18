@@ -41,7 +41,26 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
 			  (m_config->getStr("JobName")).Data()));
   
   // Load the workspace:
-  m_workspaceFile = new TFile(m_config->getStr("WorkspaceFile"), "read");
+  // See if a local copy of the workspace has been made:
+  TString workspaceFileName = m_config->getStr("WorkspaceFile");
+  TObjArray *array = workspaceFileName.Tokenize("/");
+
+  workspaceFileName
+    = ((TObjString*)array->At(array->GetEntries()-1))->GetString();
+  m_workspaceFile = new TFile(workspaceFileName);
+  //if (m_workspaceFile->IsOpen()) {
+  if (!m_workspaceFile->IsZombie()) {
+    printer(Form("MassAnimation: Loaded ws from %s", workspaceFileName.Data()),
+	    false);
+  }
+  else {
+    workspaceFileName = m_config->getStr("WorkspaceFile");
+    printer(Form("MassAnimation: Load ws from %s", workspaceFileName.Data()),
+	    false);
+    m_workspaceFile = new TFile(workspaceFileName, "read");
+  }
+  
+  //m_workspaceFile = new TFile(m_config->getStr("WorkspaceFile"), "read");
   m_workspace = (RooWorkspace*)m_workspaceFile
     ->Get(m_config->getStr("WorkspaceName"));
   m_model = (ModelConfig*)m_workspace
@@ -70,7 +89,9 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
   }
 
   // Set the range for the observable:
-  std::vector<double> massRangeVector = m_config->getNumV("PoIRange_mG");
+  std::vector<double> massRangeVector
+    = m_config->getNumV(Form("PoIRange_%s",
+			     (m_config->getStr("PoIForMass")).Data()));
   m_workspace->var(m_obsName)->setMin(massRangeVector[0]);
   m_workspace->var(m_obsName)->setMax(massRangeVector[1]);
   m_workspace->var(m_obsName)->setRange("fullRange", massRangeVector[0], 
@@ -136,7 +157,8 @@ void MassAnimation::getDataForFrames() {
   
   //--------------------------------------//
   // Loop over events to build dataset for signal parameterization:
-  int nEvents = (int)(0.1 * treeMxAOD->fChain->GetEntries());
+  //int nEvents = (int)(0.1 * treeMxAOD->fChain->GetEntries());
+  int nEvents = (int)(treeMxAOD->fChain->GetEntries());
   std::cout << "There are " << nEvents << " events to process." << std::endl;
   for (int index = 0; index < nEvents; index++) {
 
@@ -150,7 +172,7 @@ void MassAnimation::getDataForFrames() {
 	   (((double)i_f+1)/((double)m_nFrames))) &&
 	  ((((double)index)/((double)nEvents)) <
 	   (((double)i_f+1)/((double)m_nFrames)))) {
-	m_times[i_f] = timeToString(treeMxAOD->EventInfoAux_timeStamp);
+	m_times[i_f]=timeToString((time_t)(treeMxAOD->EventInfoAux_timeStamp));
 	printer(Form("MassAnimation::getDataForFrames: Setting timestamp %d", 
 		     treeMxAOD->EventInfoAux_timeStamp), false);
       }
@@ -195,6 +217,15 @@ void MassAnimation::getDataForFrames() {
 				 RooFit::Index(*m_categories),
 				 RooFit::Import(mapOfDataMaps[i_f]));
   }
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Get the number of frames that are used in the GIF.
+   @return - number of GIF frames.
+*/
+int MassAnimation::getNFrames() {
+  return m_nFrames;
 }
 
 /**
@@ -343,17 +374,16 @@ void MassAnimation::makeSingleFrame(int frame) {
   //---------- Pad 2: The subtraction plot ----------//
   pad2->cd();
   
-  TGraphErrors* subData = plotSubtraction(m_workspace->data(dataName),
-					  m_workspace->pdf(m_pdfName),
-					  m_workspace->var(m_obsName), rBins);
+  TGraphErrors* subData = plotComparison(m_workspace->data(dataName),
+					 m_workspace->pdf(m_pdfName),
+					 m_workspace->var(m_obsName), rBins);
   
   TH1F *medianHist = new TH1F("median", "median", rBins, rMin, rMax);
-  for (int i_b = 1; i_b <= rBins; i_b++) medianHist->SetBinContent(i_b,0.0);
-  medianHist->GetYaxis()
-    ->SetRangeUser(0.99 * subData->GetMinimum(), 1.01 * subData->GetMaximum());
+  for (int i_b = 1; i_b <= rBins; i_b++) medianHist->SetBinContent(i_b, 1.0);
+  medianHist->GetYaxis()->SetRangeUser(0.0, 2.0);
   medianHist->SetLineColor(kBlue+1);
   medianHist->SetLineWidth(2);
-  medianHist->GetYaxis()->SetTitle("Data - Fit");
+  medianHist->GetYaxis()->SetTitle("Data / Fit");
   medianHist->GetXaxis()->SetTitle("m_{#gamma#gamma} [GeV]");
   medianHist->GetYaxis()->SetNdivisions(5);
   medianHist->GetXaxis()->SetTitleOffset(0.95);
@@ -381,16 +411,16 @@ void MassAnimation::makeSingleFrame(int frame) {
 
 /**
    -----------------------------------------------------------------------------
-   Create a subtraction plot.
+   Create a subtraction or ratio plot.
    @param data - The RooAbsData set for comparison.
    @param pdf - The PDF for comparison.
    @param observable - The mass observable for data and pdf. 
    @param xBins - The number of bins for the observable.
    @return - A TGraphErrors to plot.
 */
-TGraphErrors* MassAnimation::plotSubtraction(RooAbsData *data, RooAbsPdf *pdf, 
-					     RooRealVar *observable, 
-					     double xBins) {
+TGraphErrors* MassAnimation::plotComparison(RooAbsData *data, RooAbsPdf *pdf, 
+					    RooRealVar *observable, 
+					    double xBins, bool doRatio) {
   double minOrigin = observable->getMin();
   double maxOrigin = observable->getMax();
   double nEvents = data->sumEntries(Form("%s>%f&&%s<%f",
@@ -423,10 +453,16 @@ TGraphErrors* MassAnimation::plotSubtraction(RooAbsData *data, RooAbsPdf *pdf,
     double currDataWeight = data->sumEntries(Form("%s>%f&&%s<%f",varName.Data(),
 						  i_m,varName.Data(),
 						  (i_m+increment)));
-    double currWeight = currDataWeight - currPdfWeight;
+    double currWeight = doRatio ? 
+      (currDataWeight / currPdfWeight) : (currDataWeight - currPdfWeight);
+    double currError = doRatio ? 
+      (originHist->GetBinError(pointIndex+1) / currPdfWeight) :
+      originHist->GetBinError(pointIndex+1);
+    if (doRatio && currPdfWeight == 0.0) {
+      currWeight = 0.0;
+      currError = 0.0;
+    }
     result->SetPoint(pointIndex, currMass, currWeight);
-    
-    double currError = originHist->GetBinError(pointIndex+1);
     result->SetPointError(pointIndex, 0.0, currError);
     pointIndex++;
   }
@@ -538,8 +574,14 @@ void MassAnimation::setOutputDirectory(TString directory) {
    @param timeInt a long integer corresponding to the UNIX time.
    @return - An ASC time string.
 */
-TString MassAnimation::timeToString(UInt_t timeInt) {
-  time_t dateValue = (time_t)timeInt;
-  TString dateText = TString(asctime(gmtime(&dateValue)));
-  return dateText;
+TString MassAnimation::timeToString(time_t dateValue) {
+  TString dateName = TString(asctime(gmtime(&dateValue)));
+  TString days[7] = {"Fri ","Sat ","Sun ","Mon ","Tue ","Wed ","Thu "};
+  for (int i_d = 0; i_d < 7; i_d++) dateName.ReplaceAll(days[i_d], "");
+  TString year = dateName.Contains("2015") ? " 2015" : " 2016";
+  dateName.Resize(6);
+  dateName += year;
+  dateName.ReplaceAll( "  ", " " );
+  dateName.ReplaceAll( " 201", ", 201" );
+  return dateName;
 }

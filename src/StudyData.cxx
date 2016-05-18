@@ -27,6 +27,8 @@ int m_cutFlowCounter_Hist[100];
 int m_cutFlowCounter_Flag[100];
 std::vector<TString> m_cutNames;
 
+std::vector<int> m_runList;
+
 /**
    -----------------------------------------------------------------------------
    Get names and values of cuts from MxAOD directly. Also look at DMxAOD...
@@ -59,6 +61,8 @@ void fillCutFlowFromMxAOD(TFile *file, int maximumBin) {
     }
   }
   if (!cutsDefined) {
+    m_cutNames.push_back("Preselection");
+    m_cutNames.push_back("PID");
     m_cutNames.push_back("m_yy");
     m_cutNames.push_back("isolation");
     m_cutNames.push_back("pT_cuts");
@@ -308,6 +312,17 @@ void printProgressBar(int index, int total) {
 
 /**
    -----------------------------------------------------------------------------
+   Check if a vector contains a value, and add the value if it doesn't.
+*/
+void vectorAdd(int value) {
+  for (int i_v = 0; i_v < (int)m_runList.size(); i_v++) {
+    if (m_runList[i_v] == value) return;
+  }
+  m_runList.push_back(value);
+}
+
+/**
+   -----------------------------------------------------------------------------
    The main method for this utility. Provide 1 argument - the location of the 
    config (.cfg) file, which should be stored in the data/ directory. The main()
    method runs over the samples provided, performs the fits requests, and gives
@@ -374,11 +389,12 @@ int main(int argc, char *argv[])
     m_cutFlowCounter_Hist[i_c] = 0;
     m_cutFlowCounter_Flag[i_c] = 0;
   }
+  m_cutNames.clear();
+  m_runList.clear();
+  TString currFileName = "";
   int countPass = 0;
   int countCate[50] = {0};
-  m_cutNames.clear();
-  TString currFileName = "";
-
+  
   //--------------------------------------//
   // Loop over events to build dataset for signal parameterization:
   int nEvents = m_treeMxAOD->fChain->GetEntries();
@@ -395,6 +411,21 @@ int main(int argc, char *argv[])
       fillCutFlowFromMxAOD(chain->GetFile(), 
 			   config->getInt("MxAODCutFlowIndex"));
     }
+
+    /*
+      // FOR CHECKING INDIVIDUAL EVENTS:
+    if (m_treeMxAOD->EventInfoAux_runNumber == 297730 && 
+	m_treeMxAOD->EventInfoAux_eventNumber == 80543259) {
+      std::cout << "HERES THE EVENT" << std::endl;
+      std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
+		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
+		<< ", cutFlow = " << m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow
+		<< std::endl;
+    }
+    */
+
+    // Store a list of runs:
+    vectorAdd(m_treeMxAOD->EventInfoAux_runNumber);
     
     // Add events to the cut-flow counter:
     for (int i_c = 0; i_c < m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow; 
@@ -407,6 +438,14 @@ int main(int argc, char *argv[])
     if (m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow <
 	config->getInt("MxAODCutFlowIndex")) continue;
     
+    if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedPreselection) continue;
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")]++;
+    
+    if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedPID) continue;
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+1]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+1]++;
+    
     //---------- Myy Cut ----------//
     if (((config->getStr("AnalysisType")).EqualTo("Scalar") && 
 	 m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 150000) ||
@@ -415,19 +454,14 @@ int main(int argc, char *argv[])
 	 //m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 200000)) {
       continue;
     }
-    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")]++;
-    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")]++;
-        
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+2]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+2]++;
     
-    
-
     //---------- Isolation selection ----------//
     //if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy) {
     //continue;
     //}
-
-    /// ISOLATION SELECTIONS ARE DIFFERENT!
-
+    
     double isoConstant = 2450.00;
     if ((config->getStr("AnalysisType")).EqualTo("GravitonLoose")) {
       isoConstant = 7000.00;
@@ -443,6 +477,7 @@ int main(int argc, char *argv[])
       = ((*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[0] < (0.05 * pT1));
     bool isTrackIso2
       = ((*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[1] < (0.05 * pT2));
+    
     if (((config->getStr("AnalysisType")).EqualTo("Scalar") &&
 	 !(isCaloIsoTight1 && isCaloIsoTight2 && isTrackIso1 && isTrackIso2)) ||
 	((config->getStr("AnalysisType")).EqualTo("Graviton") &&
@@ -451,9 +486,9 @@ int main(int argc, char *argv[])
 	 !(isCaloIsoTight1 && isCaloIsoTight2))) {
       continue;
     }
-    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+1]++;
-    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+1]++;
     
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+3]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+3]++;
     
     //---------- pT cut ----------//
     double pTRatio1 = (pT1 / m_treeMxAOD->HGamEventInfoAuxDyn_m_yy);
@@ -472,12 +507,8 @@ int main(int argc, char *argv[])
       continue;
     }
     */
-    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+2]++;
-    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+2]++;
-    
-    
-    
-        
+    m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+4]++;
+    m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+4]++;
     
     //---------- Select the event ----------//
     if ((config->getStr("AnalysisType")).Contains("Graviton") &&
@@ -491,6 +522,13 @@ int main(int argc, char *argv[])
 	       m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 150000)) {
       continue;
     }
+    
+    /*
+      // CHECK FOR PASSING EVENT COMPARISON
+      std::cout << "PASSING EVENT: Run = " 
+	      << m_treeMxAOD->EventInfoAux_runNumber << ", Event = " 
+	      << m_treeMxAOD->EventInfoAux_eventNumber << std::endl;
+    */
     
     // Choose the category:
     int category = chooseCategory();
@@ -538,6 +576,12 @@ int main(int argc, char *argv[])
   // Remove files that were copied:
   if (config->getBool("MakeLocalMxAODCopies")) removeLocalFileCopies(fileNames);
   
+  // Print a list of runs used:
+  std::cout << "List of runs in the MxAOD:" << std::endl;
+  for (int i_r = 0; i_r < (int)m_runList.size(); i_r++) {
+    std::cout << "\t" << m_runList[i_r] << std::endl;
+  }
+  
   // Detailed summary:
   std::cout << "\nStudyData: Printing cut-flow from MxAOD and offline analysis."
 	    << std::endl;
@@ -573,32 +617,30 @@ int main(int argc, char *argv[])
 }
 
 /*
+// DETAILED EVENT CHECKLIST:
+std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
+<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
+<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
+<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
+<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
+<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
+<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
+<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
+<< ", pT1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0]
+<< ", pT2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1]
+<< ", zvtx = " << m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ
+<< ", E0,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[0]
+<< ", E0,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[1]
 
-      std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
-		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
-		<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
-		<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
-		<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
-		<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
-		<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
-		<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
-		<< ", pT1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0]
-		<< ", pT2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1]
-		<< ", zvtx = " << m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ
-		<< ", E0,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[0]
-		<< ", E0,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[1]
-	
-		<< ", E1,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[0]
-		<< ", E1,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[1]
-	
-		<< ", E2,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[0]
-		<< ", E2,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[1]
+<< ", E1,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[0]
+<< ", E1,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[1]
 
-		<< ", E3,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[0]
-		<< ", E3,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[1]
+<< ", E2,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[0]
+<< ", E2,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[1]
 
-	//<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
-		<< std::endl;
-    }
-
+<< ", E3,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[0]
+<< ", E3,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[1]
+/<< ", myy = " << m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0
+<< std::endl;
+}
 */

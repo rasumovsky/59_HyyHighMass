@@ -20,8 +20,16 @@
 #include "ToyAnalysis.h"
 #include "TPolyLine.h"
 
-double analyticZGlobal(double zLocal, int N) {
-  return TMath::NormQuantile(TMath::Power(ROOT::Math::gaussian_cdf(zLocal), N));
+/**
+   -----------------------------------------------------------------------------
+   Analytic function for the global significance Z global.
+   @param zLocal - The local significance [in sigma] to convert to global Z.
+   @param N - The trial factor for the analytic computation.
+   @param alpha - Additional modification parameter (alpha=0 is nominal shape).
+   @return - The global significance Z-global [in sigma].
+*/
+double analyticZGlobal(double zLocal, int N, double alpha) {
+  return TMath::NormQuantile(TMath::Power(ROOT::Math::gaussian_cdf(zLocal*(1+alpha)), N));
 }
 
 /**
@@ -44,15 +52,23 @@ double getZFromP(double p) {
   return TMath::NormQuantile(1.0 - p);
 }
 
-double getNFromMedian(double zValue, double pValue) {
+/**
+   Figure out a trial factor N from the zValue of the quantile corresponding to
+   probability p.
+   @param zValue - The local z value with global probability pValue.
+   @param pValue - Global p-value corresponding to local significance zValue.
+   @return - N, the trial factor.
+*/
+double getNfromQuantile(double zValue, double pValue) {
   return TMath::Log(1.0-pValue) / TMath::Log(ROOT::Math::gaussian_cdf(zValue));
 }
 
 /**
    -----------------------------------------------------------------------------
-   Compute the local significance to the global significance.
+   Convert local significance to global significance using toy MC result.
    @param mappingGraph - The graph of z0_local -> z0_global.
-   @param zLocal - The local significance of interest.
+   @param zLocal - The local significance of interest Z-local [sigma].
+   @return - The global significance Z-global [sigma]
 */
 double convertZLocalToGlobal(TGraphErrors *mappingGraph, double zLocal) {
   // Calculate the Z0 global value with errors:
@@ -187,16 +203,20 @@ int main(int argc, char **argv) {
     = valsZ0[(int)(((double)valsZ0.size())*(1.0-pForMatching))];
   
   // Also fit the histogram:
-  TF1 *fAnalytic = new TF1("dPdZ", "([0]*[1]*TMath::Power(ROOT::Math::gaussian_cdf(x), ([0]-1.0))*ROOT::Math::gaussian_pdf(x))", hMaxZ0->GetXaxis()->GetXmin(), hMaxZ0->GetXaxis()->GetXmax());
+  //TF1 *fAnalytic = new TF1("dPdZ", "([0]*[1]*TMath::Power(ROOT::Math::gaussian_cdf(x), ([0]-1.0))*ROOT::Math::gaussian_pdf(x))", 
+  TF1 *fAnalytic = new TF1("dPdZ", "([0]*[1]*TMath::Power(ROOT::Math::gaussian_cdf(x*(1+[2])), ([0]-1.0))*ROOT::Math::gaussian_pdf(x*(1+[2]))*(1+[2]))", 
+			   hMaxZ0->GetXaxis()->GetXmin(),
+			   hMaxZ0->GetXaxis()->GetXmax());
 
-  fAnalytic->SetParameter(0, getNFromMedian(medianZ0, 0.5));
+  fAnalytic->SetParameter(0, getNfromQuantile(medianZ0, 0.5));
   fAnalytic->SetParameter(1, 0.0088467);
+  fAnalytic->SetParameter(2, 0.0);// NEW
   TString trialMethod = config->getStr("TrialMethod");
   if (trialMethod.Contains("FixTrial")) {
     fAnalytic->FixParameter(0, config->getNum("GlobalP0FixedN"));
   }
   else if (trialMethod.Contains("MatchTrial")) {
-    fAnalytic->FixParameter(0, getNFromMedian(zForMatching, pForMatching));
+    fAnalytic->FixParameter(0, getNfromQuantile(zForMatching, pForMatching));
   }
   
   // Then fit and plot:
@@ -321,7 +341,8 @@ int main(int argc, char **argv) {
   for (int i_b = 1; i_b <= hMaxZ0->GetNbinsX(); i_b++) {
     gAnalytic->SetPoint(i_b-1, hMaxZ0->GetBinCenter(i_b),
 			analyticZGlobal(hMaxZ0->GetBinCenter(i_b),
-					fAnalytic->GetParameter(0)));
+					fAnalytic->GetParameter(0),
+					fAnalytic->GetParameter(2)));
   }
   
   gAnalytic->SetLineWidth(2); gAnalytic->SetLineColor(kBlue);
@@ -399,7 +420,8 @@ int main(int argc, char **argv) {
 	    << yValue << " +/- " << yError << std::endl;
 
   std::cout << "\t From analytic function: Z0Global( " << observedZ0 << " ) = " 
-	    << analyticZGlobal(observedZ0, fAnalytic->GetParameter(0))
+	    << analyticZGlobal(observedZ0, fAnalytic->GetParameter(0), 
+			       fAnalytic->GetParameter(2))
 	    << std::endl;
   
   // Finally, save the TGraph containing the local -> global Z mapping:

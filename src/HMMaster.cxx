@@ -13,12 +13,13 @@
 //  system commands to submit jobs to various clusters.                       //
 //                                                                            //
 //  MasterOption:                                                             //
+//    - Workspace                                                             //
 //    - GlobalP0Toys                                                          //
 //    - GlobalP0Analysis                                                      //
 //    - LocalP0Analysis                                                       //
 //    - StatScan                                                              //
 //    - ExtrapolateSig                                                        //
-//    - MassAnimation                                                         //
+//    - MassAnimation + BSUB, GIF                                             //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -26,7 +27,89 @@
 
 /**
    -----------------------------------------------------------------------------
-   Submits the mu limit jobs to the lxbatch server. 
+   Submits the animated mass GIF jobs to the lxbatch server. 
+   @param exeConfigFile - The config file.
+   @param exeOption - The job options for the executable.
+   @param exeMinFrame - The first frame to print.
+   @param exeMaxFrame - The upper limit on the frame number for this job.
+*/
+void submitGIFViaBsub(TString exeConfigFile, TString exeOption, int exeMinFrame,
+		      int exeMaxFrame) {
+  // Make directories for job info:
+  TString dir = Form("%s/%s_MassAnimation",
+		     (m_config->getStr("ClusterFileLocation")).Data(),
+		     (m_config->getStr("JobName")).Data());
+  TString out = Form("%s/out", dir.Data());
+  TString err = Form("%s/err", dir.Data());
+  TString exe = Form("%s/exe", dir.Data());
+  system(Form("mkdir -vp %s", out.Data()));
+  system(Form("mkdir -vp %s", err.Data()));
+  system(Form("mkdir -vp %s", exe.Data()));
+    
+  // create .tar file with everything:
+  if (m_isFirstJob) {
+    system("mkdir ForJob");
+    system(Form("cp %s/*.pcm ForJob/", 
+		(m_config->getStr("PackageLocation")).Data()));
+    system(Form("cp %s/bin/%s ForJob/",
+		(m_config->getStr("PackageLocation")).Data(),
+		(m_config->getStr("exeMassAnimation")).Data()));
+    //system(Form("cp %s ForJob/",
+    //		(m_config->getStr("jobScriptMassAnimation")).Data()));
+    system(Form("cp %s ForJob/",(m_config->getStr("WorkspaceFile")).Data()));
+    system(Form("cp -f %s/%s %s/jobFileMassAnimation.sh", 
+		(m_config->getStr("PackageLocation")).Data(), 
+		(m_config->getStr("jobScriptMassAnimation")).Data(),
+		exe.Data()));
+    system("tar zcf Cocoon.tar ForJob/*");
+    system(Form("mv Cocoon.tar %s", exe.Data()));
+    system("rm -rf ForJob");
+    m_isFirstJob = false;
+  }
+  /*
+  if (m_isFirstJob) {
+    system(Form("tar zcf Cocoon.tar bin/%s", 
+		(m_config->getStr("exeMassAnimation")).Data()));
+    system(Form("chmod +x %s",
+		(m_config->getStr("jobScriptMassAnimation")).Data()));
+    system(Form("chmod +x %s",(m_config->getStr("WorkspaceFile")).Data()));
+    system(Form("cp -f %s/%s %s/jobFileMassAnimation.sh", 
+		(m_config->getStr("PackageLocation")).Data(), 
+		(m_config->getStr("jobScriptMassAnimation")).Data(),
+		exe.Data()));
+    system(Form("chmod +x %s/jobFileMassAnimation.sh", exe.Data()));
+    system(Form("mv Cocoon.tar %s", exe.Data()));
+    m_isFirstJob = false;
+  }
+  */
+  TString inputFile = Form("%s/Cocoon.tar", exe.Data());
+  TString nameOutFile = Form("%s/%s_%d.out", out.Data(),
+			     (m_config->getStr("JobName")).Data(), exeMinFrame);
+  TString nameErrFile = Form("%s/%s_%d.err", err.Data(),
+			     (m_config->getStr("JobName")).Data(), exeMinFrame);
+  
+  // Here you define the arguments for the job script:
+  
+  TString nameJScript = Form("%s/jobFileMassAnimation.sh %s %s %s %s %s %d %d", 
+			     exe.Data(), (m_config->getStr("JobName")).Data(),
+			     exeConfigFile.Data(), inputFile.Data(),
+			     (m_config->getStr("exeMassAnimation")).Data(),
+			     exeOption.Data(), exeMinFrame, exeMaxFrame);
+  /*
+  TString nameJScript = Form("jobFileMassAnimation.sh %s %s %s %s %s %d %d", 
+			     (m_config->getStr("JobName")).Data(),
+			     exeConfigFile.Data(), inputFile.Data(),
+			     (m_config->getStr("exeMassAnimation")).Data(),
+			     exeOption.Data(), exeMinFrame, exeMaxFrame);
+  */  
+  // submit the job:
+  system(Form("bsub -q wisc -o %s -e %s %s", nameOutFile.Data(), 
+	      nameErrFile.Data(), nameJScript.Data()));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Submits the pseudo-experiment jobs to the lxbatch server. 
    @param exeConfigFile - the config file.
    @param exeOption - the job options for the executable.
    @param exeSeed - the seed for the randomized dataset generation.
@@ -46,9 +129,7 @@ void submitPEViaBsub(TString exeConfigFile, TString exeOption, int exeSeed,
   system(Form("mkdir -vp %s", out.Data()));
   system(Form("mkdir -vp %s", err.Data()));
   system(Form("mkdir -vp %s", exe.Data()));
-  
-  TString exeAna = m_config->getStr("AnalysisType");
-  
+    
   // create .tar file with everything:
   if (m_isFirstJob) {
     system(Form("tar zcf Cocoon.tar bin/%s", 
@@ -60,6 +141,7 @@ void submitPEViaBsub(TString exeConfigFile, TString exeOption, int exeSeed,
 		(m_config->getStr("jobScriptPseudoExp")).Data(), exe.Data()));
     system(Form("chmod +x %s/jobFilePseudoExp.sh", exe.Data()));
     system(Form("mv Cocoon.tar %s", exe.Data()));
+    m_isFirstJob = false;
   }
   
   TString inputFile = Form("%s/Cocoon.tar", exe.Data());
@@ -107,6 +189,18 @@ int main (int argc, char **argv) {
   TString fullConfigPath = Form("%s/%s",
 				(m_config->getStr("PackageLocation")).Data(),
 				configFileName.Data());
+  //--------------------------------------//
+  // Step 0.0: Create a workspace for fitting:
+  if (masterOption.Contains("Workspace")) {
+    std::cout << "HMMaster: Step 0.0 - Making a workspace." << std::endl;
+    Workspace *ws = new Workspace(configFileName, 
+				  m_config->getStr("WorkspaceOptions"));
+    if (!ws->fitsAllConverged()) {
+      std::cout << "HMMaster: Problem with workspace fit!" << std::endl;
+      exit(0);
+    }
+    std::cout << "HMMaster: Successfully built workspace!" << std::endl;
+  }
   
   //--------------------------------------//
   // Step 1.0: Create pseudoexperiment ensemble for global p0 study:
@@ -122,7 +216,6 @@ int main (int argc, char **argv) {
     for (int i_s = toySeed; i_s < highestSeed; i_s += increment) {
       submitPEViaBsub(fullConfigPath, m_config->getStr("PseudoExpOptions"),
 		      i_s, nToysPerJob);
-      m_isFirstJob = false;
     }
     std::cout << "HMMaster: Submitted " << (int)(nToysTotal/nToysPerJob) 
 	      << " total pseudo-experiments." << std::endl;
@@ -168,12 +261,30 @@ int main (int argc, char **argv) {
   //--------------------------------------//
   // Step 5.0: Create the mass animation:
   if (masterOption.Contains("MassAnimation")) {
-    std::cout << "HMMaster: Step 5.0 - Plot mass GIF." << std::endl;
-    MassAnimation *animation = new MassAnimation(fullConfigPath, "none");
-    animation->setNFrames(m_config->getInt("AnimationFrames"));
-    animation->getDataForFrames();
-    animation->makeAllFrames();
-    animation->makeGIF();
+    TString animationOptions = m_config->getStr("AnimationOptions");
+    if (masterOption.Contains("MassAnimationBSUB")) {
+      int framesPerJob = m_config->getInt("AnimationFramesPerJob");
+      for (int i_f = 0; i_f < m_config->getInt("AnimationFrames");
+	   i_f += framesPerJob) {
+	submitGIFViaBsub(fullConfigPath, animationOptions, i_f, 
+			 (i_f+framesPerJob));
+      }
+    }
+    else if (masterOption.Contains("MassAnimationGIF")) {
+      MassAnimation *animation = new MassAnimation(fullConfigPath, 
+						   animationOptions);
+      animation->setNFrames(m_config->getInt("AnimationFrames"));
+      animation->makeGIF();
+    }
+    else {
+      std::cout << "HMMaster: Step 5.0 - Plot mass GIF." << std::endl;
+      MassAnimation *animation = new MassAnimation(fullConfigPath, 
+						   animationOptions);
+      animation->setNFrames(m_config->getInt("AnimationFrames"));
+      animation->getDataForFrames();
+      animation->makeAllFrames();
+      animation->makeGIF();
+    }
   }
   
   return 0;
