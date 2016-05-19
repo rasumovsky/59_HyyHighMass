@@ -331,7 +331,7 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
   m_hQ0[muValue] = new TH1F(Form("hQ0%d",muValue),Form("hQ0%d",muValue),
 			    m_nBins, m_binMin, m_binMax);
   m_hZ0[muValue] = new TH1F(Form("hZ0%d",muValue),Form("hZ0%d",muValue),
-			    m_nBins, 0, 5);
+			    m_nBins, 0, 7);//5
   m_hCL[muValue] = new TH1F(Form("hCL%d",muValue),Form("hCL%d",muValue),
 			    m_nBins, 0, 1);
   
@@ -452,7 +452,13 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
     
     // Only plot successful fits:
     if (!(toyTree->convergedMu0 && toyTree->convergedMuFree)) continue;
-
+    
+    // To analyze a limited toy sample:
+    if (m_config->getBool("ToyAnalysisCutToys") && 
+	i_e > m_config->getInt("ToyAnalysisMaxToy")) {
+      break;
+    }
+    
     /*
     bool skip = false;
     for (int i_p = 0; i_p < (int)((*toyTree->namesPoIs).size()); i_p++) {

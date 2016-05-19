@@ -157,7 +157,7 @@ void MassAnimation::getDataForFrames() {
   
   //--------------------------------------//
   // Loop over events to build dataset for signal parameterization:
-  //int nEvents = (int)(0.1 * treeMxAOD->fChain->GetEntries());
+  int eventCounter = 0;
   int nEvents = (int)(treeMxAOD->fChain->GetEntries());
   std::cout << "There are " << nEvents << " events to process." << std::endl;
   for (int index = 0; index < nEvents; index++) {
@@ -190,7 +190,8 @@ void MassAnimation::getDataForFrames() {
 	       treeMxAOD->HGamEventInfoAuxDyn_m_yy > 150000)) {
       continue;
     }
-    
+    eventCounter++;
+
     // Set the mass observable:
     obs1->setVal(treeMxAOD->HGamEventInfoAuxDyn_m_yy/1000.0);
     
@@ -202,6 +203,7 @@ void MassAnimation::getDataForFrames() {
       }
     }
   }// End of event loop.
+  printer(Form("MassAnimation: Selected %d data events.", eventCounter),false);
   
   // Remove files that were copied:
   if (m_config->getBool("MakeLocalMxAODCopies")) {
@@ -217,6 +219,7 @@ void MassAnimation::getDataForFrames() {
 				 RooFit::Index(*m_categories),
 				 RooFit::Import(mapOfDataMaps[i_f]));
   }
+  printer("MassAnimation::getDataForFrames() completed.", false);
 }
 
 /**
@@ -235,21 +238,26 @@ int MassAnimation::getNFrames() {
 void MassAnimation::makeGIF() {
   printer("MassAnimation::makeGIF()", false);
   
-
   // Remove prior animations:
   system(Form("rm %s/mass_animation.gif", m_outputDir.Data()));
-  
+  std::cout << "CHECK0" << std::endl;
+
   // Loop over the frames:
   for (int i_f = 0; i_f < m_nFrames; i_f++) {
-    TFile currFile(Form("%s/file_frame%d.root", m_outputDir.Data(), i_f));
-    if (currFile.IsOpen()) {
+    std::cout << "CHECK1 " << i_f << std::endl;
+    TFile currFile(Form("%s/file_frame%d.root", m_outputDir.Data(), i_f),
+		   "READ");
+    //if (currFile.IsOpen()) {
+    if (!currFile.IsZombie()) {
       TCanvas *currCan = (TCanvas*)currFile.Get("can");
       if (i_f == m_nFrames - 1) {
 	currCan->Print(Form("%s/mass_animation.gif+500", m_outputDir.Data()));
 	currCan->Print(Form("%s/mass_animation.gif++", m_outputDir.Data()));
+	std::cout << "CHECK2.1" << std::endl;
       }
       else {
 	currCan->Print(Form("%s/mass_animation.gif+10", m_outputDir.Data()));
+	std::cout << "CHECK2.2" << std::endl;
       }
       currFile.Close();
       delete currCan;

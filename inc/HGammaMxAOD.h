@@ -597,6 +597,28 @@ void HGammaMxAOD::Init(TTree *tree, TString tag)
    fCurrent = -1;
    fChain->SetMakeClass(1);
 
+
+
+
+   // Some of the branches change address between tag h011 and h012b
+   if (tag.EqualTo("h011")) {
+     fChain->SetBranchAddress("EventInfoAuxDyn.runNumber", &EventInfoAux_runNumber, &b_EventInfoAux_runNumber);
+     fChain->SetBranchAddress("EventInfoAuxDyn.eventNumber", &EventInfoAux_eventNumber, &b_EventInfoAux_eventNumber);
+     fChain->SetBranchAddress("EventInfoAuxDyn.lumiBlock", &EventInfoAux_lumiBlock, &b_EventInfoAux_lumiBlock);
+     fChain->SetBranchAddress("EventInfoAuxDyn.timeStamp", &EventInfoAux_timeStamp, &b_EventInfoAux_timeStamp);
+     fChain->SetBranchAddress("EventInfoAuxDyn.timeStampNSOffset", &EventInfoAux_timeStampNSOffset, &b_EventInfoAux_timeStampNSOffset);
+     fChain->SetBranchAddress("EventInfoAuxDyn.bcid", &EventInfoAux_bcid, &b_EventInfoAux_bcid);
+   }
+   else {
+     fChain->SetBranchAddress("EventInfoAux.runNumber", &EventInfoAux_runNumber, &b_EventInfoAux_runNumber);
+     fChain->SetBranchAddress("EventInfoAux.eventNumber", &EventInfoAux_eventNumber, &b_EventInfoAux_eventNumber);
+     fChain->SetBranchAddress("EventInfoAux.lumiBlock", &EventInfoAux_lumiBlock, &b_EventInfoAux_lumiBlock);
+     fChain->SetBranchAddress("EventInfoAux.timeStamp", &EventInfoAux_timeStamp, &b_EventInfoAux_timeStamp);
+     fChain->SetBranchAddress("EventInfoAux.timeStampNSOffset", &EventInfoAux_timeStampNSOffset, &b_EventInfoAux_timeStampNSOffset);
+     fChain->SetBranchAddress("EventInfoAux.bcid", &EventInfoAux_bcid, &b_EventInfoAux_bcid);
+   }
+
+
    //fChain->SetBranchAddress("HGamPhotons", &HGamPhotons, &b_HGamPhotons);
    //fChain->SetBranchAddress("HGamPhotonsAux.", &HGamPhotonsAux_, &b_HGamPhotonsAux_);
    fChain->SetBranchAddress("HGamPhotonsAuxDyn.topoetcone20", &HGamPhotonsAuxDyn_topoetcone20, &b_HGamPhotonsAuxDyn_topoetcone20);
@@ -730,12 +752,7 @@ void HGammaMxAOD::Init(TTree *tree, TString tag)
    fChain->SetBranchAddress("HGamEventInfoAuxDyn.eventShapeDensity", &HGamEventInfoAuxDyn_eventShapeDensity, &b_HGamEventInfoAuxDyn_eventShapeDensity);
    fChain->SetBranchAddress("HGamEventInfoAuxDyn.mu", &HGamEventInfoAuxDyn_mu, &b_HGamEventInfoAuxDyn_mu);
    //fChain->SetBranchAddress("EventInfo", &EventInfo, &b_EventInfo);
-   fChain->SetBranchAddress("EventInfoAux.runNumber", &EventInfoAux_runNumber, &b_EventInfoAux_runNumber);
-   fChain->SetBranchAddress("EventInfoAux.eventNumber", &EventInfoAux_eventNumber, &b_EventInfoAux_eventNumber);
-   fChain->SetBranchAddress("EventInfoAux.lumiBlock", &EventInfoAux_lumiBlock, &b_EventInfoAux_lumiBlock);
-   fChain->SetBranchAddress("EventInfoAux.timeStamp", &EventInfoAux_timeStamp, &b_EventInfoAux_timeStamp);
-   fChain->SetBranchAddress("EventInfoAux.timeStampNSOffset", &EventInfoAux_timeStampNSOffset, &b_EventInfoAux_timeStampNSOffset);
-   fChain->SetBranchAddress("EventInfoAux.bcid", &EventInfoAux_bcid, &b_EventInfoAux_bcid);
+   
    fChain->SetBranchAddress("EventInfoAux.detectorMask0", &EventInfoAux_detectorMask0, &b_EventInfoAux_detectorMask0);
    fChain->SetBranchAddress("EventInfoAux.detectorMask1", &EventInfoAux_detectorMask1, &b_EventInfoAux_detectorMask1);
    fChain->SetBranchAddress("EventInfoAux.detectorMask2", &EventInfoAux_detectorMask2, &b_EventInfoAux_detectorMask2);

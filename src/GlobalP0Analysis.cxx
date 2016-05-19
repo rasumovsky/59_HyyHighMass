@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
 			   (config->getStr("MasterOutput")).Data(),
 			   (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s", outputDir.Data()));
-  
+
   // Load the toy analysis class, which does the analysis of toy MC jobs:
   TString toyAnaOptions = "";
   if (options.Contains("StudyRetries")) toyAnaOptions += "StudyRetries";
@@ -190,9 +190,10 @@ int main(int argc, char **argv) {
   hMaxZ0->GetYaxis()->SetTitleSize(0.07);
   hMaxZ0->GetYaxis()->SetTitleOffset(0.9);
   hMaxZ0->GetYaxis()->SetLabelSize(0.06);
-  hMaxZ0->GetYaxis()->SetRangeUser(0.0001, 0.014);
+  hMaxZ0->GetYaxis()->SetRangeUser(0.00001, 0.015);
   hMaxZ0->Draw("hist");
-
+  //gPad->SetLogy();
+  
   // Find median Z0:
   std::vector<double> valsZ0 = toyAna->getStatValues("Z0", 0);
   std::sort(valsZ0.begin(), valsZ0.end());
@@ -203,7 +204,11 @@ int main(int argc, char **argv) {
     = valsZ0[(int)(((double)valsZ0.size())*(1.0-pForMatching))];
   
   // Also fit the histogram:
+  
+  // Single-parameter fit:
   //TF1 *fAnalytic = new TF1("dPdZ", "([0]*[1]*TMath::Power(ROOT::Math::gaussian_cdf(x), ([0]-1.0))*ROOT::Math::gaussian_pdf(x))", 
+
+  // 2-parameter fit:
   TF1 *fAnalytic = new TF1("dPdZ", "([0]*[1]*TMath::Power(ROOT::Math::gaussian_cdf(x*(1+[2])), ([0]-1.0))*ROOT::Math::gaussian_pdf(x*(1+[2]))*(1+[2]))", 
 			   hMaxZ0->GetXaxis()->GetXmin(),
 			   hMaxZ0->GetXaxis()->GetXmax());
@@ -255,18 +260,22 @@ int main(int argc, char **argv) {
 			       (config->getNum("AnalysisLuminosity")/1000.0)));
   
   // Legend:
-  TLegend leg1(0.2, 0.49, 0.49, 0.71);
+  //TLegend leg1(0.2, 0.49, 0.49, 0.71);
+  TLegend leg1(0.524, 0.60, 0.89, 0.91);
   leg1.SetTextFont(42); 
   leg1.SetTextSize(0.06);
   leg1.SetBorderSize(0);
   leg1.SetFillColor(0);
+  if (options.Contains("PlotAnalytic")) {
+    //leg1.AddEntry(fAnalytic, Form("%d #Phi(z)^{%d-1}#Phi'(z)",
+    //				  (int)(fAnalytic->GetParameter(0)), 
+    //				  (int)(fAnalytic->GetParameter(0))), "l");
+    leg1.AddEntry(fAnalytic, 
+		  "#Phi(z(1+#alpha))^{N-1}#Phi'(z(1+#alpha))", "l");
+  }
+  leg1.AddEntry(hMaxZ0, "Toy Monte Carlo", "F");
   leg1.AddEntry(line1, Form("Med. Z_{0}^{Local}=%2.1f#sigma",medianZ0), "l");
   leg1.AddEntry(line2, Form("Obs. Z_{0}^{Local}=%2.1f#sigma",observedZ0), "l");
-  if (options.Contains("PlotAnalytic")) {
-    leg1.AddEntry(fAnalytic, Form("%d #Phi(z)^{%d-1}#Phi'(z)",
-				  (int)(fAnalytic->GetParameter(0)), 
-				  (int)(fAnalytic->GetParameter(0))), "l");
-  }
   leg1.Draw("SAME");
 
   //----------//
@@ -345,7 +354,9 @@ int main(int argc, char **argv) {
 					fAnalytic->GetParameter(2)));
   }
   
-  gAnalytic->SetLineWidth(2); gAnalytic->SetLineColor(kBlue);
+  gAnalytic->SetLineWidth(2); 
+  gAnalytic->SetLineColor(kBlue);
+  gAnalytic->SetLineStyle(7);
   if (options.Contains("PlotAnalytic")) {
     gAnalytic->Draw("LSAME");
   }
@@ -400,8 +411,9 @@ int main(int argc, char **argv) {
   leg2.AddEntry(lineZ0Global, Form("Z_{0}^{Global}=%2.2f#sigma #pm %2.2f#sigma",
 				   yValue, yError), "F");
   if (options.Contains("PlotAnalytic")) {
-    leg2.AddEntry(gAnalytic, Form("#Phi^{-1}(#Phi(z)^{%d})", 
-				  (int)(fAnalytic->GetParameter(0))), "l");
+    //leg2.AddEntry(gAnalytic, Form("#Phi^{-1}(#Phi(z)^{%d})", 
+    //				  (int)(fAnalytic->GetParameter(0))), "l");
+    leg2.AddEntry(gAnalytic, "#Phi^{-1}(#Phi(z(1+#alpha)^{N})", "l");
   }
   leg2.Draw("SAME");
   
