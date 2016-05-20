@@ -226,7 +226,6 @@ int main(int argc, char **argv) {
   
   // Then fit and plot:
   if (options.Contains("PlotAnalytic")) {
-    //hMaxZ0->Fit(fAnalytic, "0");
     hMaxZ0->Fit(fAnalytic, "R");
     fAnalytic->SetLineWidth(2);
     fAnalytic->SetLineStyle(1);
@@ -267,9 +266,6 @@ int main(int argc, char **argv) {
   leg1.SetBorderSize(0);
   leg1.SetFillColor(0);
   if (options.Contains("PlotAnalytic")) {
-    //leg1.AddEntry(fAnalytic, Form("%d #Phi(z)^{%d-1}#Phi'(z)",
-    //				  (int)(fAnalytic->GetParameter(0)), 
-    //				  (int)(fAnalytic->GetParameter(0))), "l");
     leg1.AddEntry(fAnalytic, 
 		  "#Phi(z(1+#alpha))^{N-1}#Phi'(z(1+#alpha))", "l");
   }
@@ -411,8 +407,6 @@ int main(int argc, char **argv) {
   leg2.AddEntry(lineZ0Global, Form("Z_{0}^{Global}=%2.2f#sigma #pm %2.2f#sigma",
 				   yValue, yError), "F");
   if (options.Contains("PlotAnalytic")) {
-    //leg2.AddEntry(gAnalytic, Form("#Phi^{-1}(#Phi(z)^{%d})", 
-    //				  (int)(fAnalytic->GetParameter(0))), "l");
     leg2.AddEntry(gAnalytic, "#Phi^{-1}(#Phi(z(1+#alpha)^{N})", "l");
   }
   leg2.Draw("SAME");
@@ -425,9 +419,6 @@ int main(int argc, char **argv) {
   std::cout << "\nGlobalP0Analysis: Finished!" << std::endl;
   
   // Print the results:
-  //std::cout << "\tFrom linear fit: Z0Global( " << observedZ0 << " ) = " 
-  //	    << fZGlobal->Eval(observedZ0) << std::endl;
-    
   std::cout << "\tFrom toy: Z0Global( " << observedZ0 << " ) = " 
 	    << yValue << " +/- " << yError << std::endl;
 
@@ -439,7 +430,10 @@ int main(int argc, char **argv) {
   // Finally, save the TGraph containing the local -> global Z mapping:
   TFile *outZFile = new TFile(Form("%s/graph_maxZ0_%s.root", outputDir.Data(), 
 				   anaType.Data()), "RECREATE");
-  gZGlobal->Write();
+  hMaxZ0->Write("hMaxZ0");
+  gZGlobal->Write("gZGlobal");
+  fAnalytic->Write("fAnalytic");
+  gAnalytic->Write("gAnalytic");
   outZFile->Close();
   
   delete config;
