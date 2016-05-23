@@ -54,6 +54,7 @@ make bin/HMMaster
 make bin/GlobalP0Toys_Faster  
 make bin/GlobalP0Analysis  
 make bin/GenericToys  
+make bin/MassAnimation
 make bin/LocalP0Analysis  
 make bin/TossToys_NoFit
 ```
@@ -72,6 +73,7 @@ The analysis steps are listed and explained below.
  - LocalP0Analysis: analyze pseudo-experiments to cross-check asymptotic qmu,q0.
  - StatScan: Plot the limits or p0 vs mass (toys or asymptotics)
  - ExtrapolateSig: Extrapolate the 2015 signal into 2016 data with Asimov data
+ - MassAnimation: Animated GIF of the diphoton mass spectrum.
 
 ### Preparation for remote processing
 
