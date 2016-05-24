@@ -476,8 +476,16 @@ void ToyAnalysis::fillToyHistograms(int muValue, ToyTree *toyTree) {
       (*toyTree->valuesPoIsMuFree)[i_p] < 500) skip = true;
     }
     if (skip) continue;
-    */
     
+
+    bool skip = false;
+    for (int i_p = 0; i_p < (int)((*toyTree->namesPoIs).size()); i_p++) {
+      TString currPoIName = (*toyTree->namesPoIs)[i_p];
+      if (currPoIName.EqualTo("mu") && 
+      (*toyTree->valuesPoIsMuFree)[i_p] < 10) skip = true;
+    }
+    if (skip) continue;
+    */
 
     // Get the test statistic values:
     double valueQMu = m_ts->getQMuFromNLL(toyTree->nllMu1, toyTree->nllMuFree,

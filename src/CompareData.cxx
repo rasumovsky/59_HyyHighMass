@@ -19,9 +19,17 @@ TString m_outputDir;
 
 /**
    -----------------------------------------------------------------------------
+   Compare two histograms.
+   @param name - Name of the histograms.
+   @param h1 - THe first histogram.
+   @param h2 - The second histogram.
+   @param name1 - The name of the first histogram.
+   @param name2 - The name of the second histogram.
+   @param doRatio - Option to plot ratio or subtraction.
+   @param normalize - Option to normalize the two datasets.
 */
 void compareHistograms(TString name, TH1F *h1, TH1F *h2, TString name1, 
-		       TString name2, bool doRatio) {
+		       TString name2, bool doRatio, bool normalize) {
   
   // Create a canvas with two pads (one main plot, one subtraction plot)
   TCanvas *can = new TCanvas("can", "can", 800, 800);
@@ -38,6 +46,13 @@ void compareHistograms(TString name, TH1F *h1, TH1F *h2, TString name1,
   
   pad1->cd();
   pad1->SetLogy();
+  
+  if (normalize) {
+    h1->Sumw2();
+    h2->Sumw2();
+    h1->Scale(1.0 / h1->Integral());
+    h2->Scale(1.0 / h2->Integral());
+  }
   
   h1->SetLineColor(kBlue+1);
   h1->SetMarkerColor(kBlue+1);
@@ -175,7 +190,7 @@ int main(int argc, char **argv) {
       TH1F *h1 = (TH1F*)file1.Get(currName);
       TH1F *h2 = (TH1F*)file2.Get(currName);
       compareHistograms(currName, h1, h2, sample1, sample2,
-			config->getBool("MxAODRatioPlot"));
+        config->getBool("MxAODRatioPlot"), options.Contains("NORM"));
       delete h1;
       delete h2;
     }

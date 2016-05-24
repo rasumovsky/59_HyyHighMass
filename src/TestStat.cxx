@@ -819,7 +819,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
       currObs->add(*wt);
     }
     
-    
+    /*
     TCanvas *can = new TCanvas("can", "can", 800, 800);
     can->cd();
     RooPlot* frame = ((RooRealVar*)(currObs->first()))->frame(115);
@@ -830,7 +830,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
     gPad->SetLogy(); 
     frame->GetYaxis()->SetRangeUser(0.1, 10000);
     can->Print("data.eps");
-    
+    */    
   }
   
   // Create the combined toy RooDataSet:
@@ -1634,31 +1634,6 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
     }
     else frame->GetYaxis()->SetRangeUser(m_yMin, m_yMax);
     
-    TH1F *histDH = new TH1F("histDH", "histDH", 1, 0, 1);
-    TH1F *histSH = new TH1F("histSH", "histSH", 1, 0, 1);
-    TH1F *histBkg = new TH1F("histBkg", "histBkg", 1, 0, 1);
-    TH1F *histSig = new TH1F("histSig", "histSig", 1, 0, 1);
-    histDH->SetLineColor(6);
-    histSH->SetLineColor(3);
-    histBkg->SetLineColor(4);
-    histSig->SetLineColor(2);
-    
-    histDH->SetLineStyle(3);
-    histSH->SetLineStyle(4);
-    histBkg->SetLineStyle(2);
-    histSig->SetLineStyle(1);
-    
-    TLegend leg(0.63, 0.69, 0.92, 0.92);
-    leg.SetFillColor(0);
-    leg.SetTextSize(0.05);
-    leg.SetBorderSize(0);
-    leg.SetTextFont(42);
-    leg.AddEntry(histDH, "DiHiggs", "l");
-    leg.AddEntry(histSH, "Single Higgs", "l");
-    leg.AddEntry(histBkg, "Continuum Bkg.", "l");
-    leg.AddEntry(histSig, "Sum", "l");
-    leg.Draw("SAME");
-    
     // Print ATLAS text on the plot:    
     TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
     t.SetTextFont(72); t.SetTextSize(0.05);
@@ -1743,10 +1718,7 @@ void TestStat::plotFits(TString fitType, TString datasetName) {
 		    m_anaType.Data(), fitType.Data(), cateType->GetName()));
     can->Print(Form("%s/fitPlot_%s_%s_%s.C", m_plotDir.Data(),
 		    m_anaType.Data(), fitType.Data(), cateType->GetName()));
-    delete histDH;
-    delete histSH;
-    delete histBkg;
-    delete histSig;
+    
     delete frame;
   }
   delete can;

@@ -48,7 +48,6 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
   workspaceFileName
     = ((TObjString*)array->At(array->GetEntries()-1))->GetString();
   m_workspaceFile = new TFile(workspaceFileName);
-  //if (m_workspaceFile->IsOpen()) {
   if (!m_workspaceFile->IsZombie()) {
     printer(Form("MassAnimation: Loaded ws from %s", workspaceFileName.Data()),
 	    false);
@@ -60,7 +59,6 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
     m_workspaceFile = new TFile(workspaceFileName, "read");
   }
   
-  //m_workspaceFile = new TFile(m_config->getStr("WorkspaceFile"), "read");
   m_workspace = (RooWorkspace*)m_workspaceFile
     ->Get(m_config->getStr("WorkspaceName"));
   m_model = (ModelConfig*)m_workspace
@@ -156,7 +154,7 @@ void MassAnimation::getDataForFrames() {
   HGammaMxAOD *treeMxAOD = new HGammaMxAOD(chain, m_config->getStr("MxAODTag"));
   
   //--------------------------------------//
-  // Loop over events to build dataset for signal parameterization:
+  // Loop over events to build dataset:
   int eventCounter = 0;
   int nEvents = (int)(treeMxAOD->fChain->GetEntries());
   std::cout << "There are " << nEvents << " events to process." << std::endl;
@@ -234,7 +232,7 @@ int MassAnimation::getNFrames() {
 /**
    -----------------------------------------------------------------------------
    Make a GIF of the data by loading a canvas saved for each frame.
-*/
+
 void MassAnimation::makeGIF() {
   printer("MassAnimation::makeGIF()", false);
   
@@ -262,6 +260,47 @@ void MassAnimation::makeGIF() {
       currFile.Close();
       delete currCan;
     }
+  }
+  std::cout << "\tGIF printed to " << m_outputDir << "/mass_animation.gif"
+	    << std::endl;
+}
+*/
+
+
+/**
+   -----------------------------------------------------------------------------
+   Make a GIF of the data by loading a canvas saved for each frame.
+*/
+void MassAnimation::makeGIF() {
+  printer("MassAnimation::makeGIF()", false);
+
+  // Remove prior animations:
+  system(Form("rm %s/mass_animation.gif", m_outputDir.Data()));
+  
+  TCanvas *can = new TCanvas("can", "can", 800, 800);
+  
+  // Loop over the frames:
+  for (int i_f = 0; i_f < m_nFrames; i_f++) {
+
+    TImage *img = TImage::Open(Form("%s/plot_mass_frame%d.png",
+				    m_outputDir.Data(), i_f));
+    if (!img) printer(Form("MassAnimation: Could not load frame %d",i_f), true);
+    
+    img->SetConstRatio(0);
+    img->SetImageQuality(TAttImage::kImgBest);
+    can->cd(); 
+    img->Draw("");
+
+    
+    if (i_f == m_nFrames - 1) {
+      can->Print(Form("%s/mass_animation.gif+500", m_outputDir.Data()));
+      can->Print(Form("%s/mass_animation.gif++", m_outputDir.Data()));
+    }
+    else {
+      can->Print(Form("%s/mass_animation.gif+10", m_outputDir.Data()));
+    }
+    can->Clear();
+    delete img;
   }
   std::cout << "\tGIF printed to " << m_outputDir << "/mass_animation.gif"
 	    << std::endl;
@@ -344,13 +383,14 @@ void MassAnimation::makeSingleFrame(int frame) {
   
   // Plot the frame:
   RooPlot *rooPlot = m_workspace->var(m_obsName)
-    ->frame(RooFit::Bins(rBins),RooFit::Range(rMin,rMax));
+    ->frame(RooFit::Range(rMin,rMax));
+    //->frame(RooFit::Bins(rBins),RooFit::Range(rMin,rMax));
   rooPlot->SetYTitle(Form("Events / %d GeV", m_geVPerBin));
   rooPlot->SetXTitle("m_{#gamma#gamma} [GeV]");
   
   // Then add the data and PDF to the RooPlot:
   if (m_workspace->data(dataName)) {
-    m_workspace->data(dataName)->plotOn(rooPlot);
+    m_workspace->data(dataName)->plotOn(rooPlot, RooFit::Binning(rBins));
   }
   else printer(Form("MassAnimation:makeSingleFrame: Missing dataset %s", 
 		    dataName.Data()), true);
@@ -404,7 +444,7 @@ void MassAnimation::makeSingleFrame(int frame) {
   subData->Draw("EPSAME");
   
   // Print and also save to file:
-  can->Print(Form("%s/plot_mass_frame%d.eps", m_outputDir.Data(), frame));
+  can->Print(Form("%s/plot_mass_frame%d.png", m_outputDir.Data(), frame));
   TFile *outputFile = new TFile(Form("%s/file_frame%d.root",
 				     m_outputDir.Data(), frame), "RECREATE");
   

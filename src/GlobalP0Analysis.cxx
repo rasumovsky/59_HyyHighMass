@@ -134,6 +134,7 @@ int main(int argc, char **argv) {
   }
     
   // Plot the toy MC nuisance parameter, global observables, and PoI:
+  std::cout << "GlobalP0Analysis: Plotting parameters from toy MC" << std::endl;
   std::vector<TString> namesGlobs = toyAna->getNamesGlobalObservables();
   std::vector<TString> namesNuis = toyAna->getNamesNuisanceParameters();
   std::vector<TString> namesPars = toyAna->getNamesPoI();

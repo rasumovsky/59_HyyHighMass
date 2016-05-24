@@ -203,6 +203,15 @@ int main (int argc, char **argv) {
   }
   
   //--------------------------------------//
+  // Step 0.1: Add data from MxAOD path to pre-existing workspace. The path for
+  // MxAODs in the config file "" is used to obtain the new data.
+  if (masterOption.Contains("AddDataToWS")) {
+    std::cout << "HMMaster: Adding data from MxAODs to the workspace"
+	      << std::endl;
+    system(Form("./bin/AddDataToWorkspace %s none", fullConfigPath.Data())); 
+  }
+
+  //--------------------------------------//
   // Step 1.0: Create pseudoexperiment ensemble for global p0 study:
   if (masterOption.Contains("GlobalP0Toys")) {
     std::cout << "HMMaster: Step 1.0 - Create pseudoexperiments." << std::endl;

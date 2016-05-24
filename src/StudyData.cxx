@@ -28,6 +28,7 @@ int m_cutFlowCounter_Flag[100];
 std::vector<TString> m_cutNames;
 
 std::vector<int> m_runList;
+std::map<int,int> m_eventsPerRun;
 
 /**
    -----------------------------------------------------------------------------
@@ -319,6 +320,7 @@ void vectorAdd(int value) {
     if (m_runList[i_v] == value) return;
   }
   m_runList.push_back(value);
+  m_eventsPerRun[value] = 0;
 }
 
 /**
@@ -348,18 +350,23 @@ int main(int argc, char *argv[])
   // Set the plot Style to ATLAS defaults:
   CommonFunc::SetAtlasStyle();
   
-  // Define histograms:
+  // Define per-event histograms:
   m_histograms.clear();
   int nBins = 50;
   int nCategories = config->getInt("MxAODNCategories");
   m_categoryName = config->getStr("MxAODCategorization");
   
   defineHistograms("z_{vertex} [mm]", nCategories, nBins, -150, 150);
-  defineHistograms("m_{#gamma#gamma} [GeV]", nCategories, nBins, 0, 2000);
+  if ((config->getStr("AnalysisType")).Contains("Scalar")) {
+    defineHistograms("m_{#gamma#gamma} [GeV]", nCategories, 37, 150, 2000);
+  }
+  else {
+    defineHistograms("m_{#gamma#gamma} [GeV]", nCategories, 36, 200, 2000);
+  }
   defineHistograms("p_{T}^{#gamma#gamma} [GeV]", nCategories, nBins, 0, 1000);
   defineHistograms("cos(#theta*)", nCategories, nBins, 0, 1);
   
-  // Loop over photons:
+  // Define histograms of per-photon variables:
   for (int i_p = 0; i_p < 2; i_p++) {
     defineHistograms(Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1),
 		     nCategories, nBins, 0.0, 1000.0);
@@ -369,6 +376,8 @@ int main(int argc, char *argv[])
 		     nCategories, nBins, -3.141, 3.141);
     defineHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1), 
 		     nCategories, nBins, 0.0, 50.0);
+    defineHistograms(Form("E_{T}^{cone40}(#gamma_{%d}) [GeV]",i_p+1), 
+		     nCategories, nBins, -5.0, 95.0);
   }
   
   // Prepare for loop over input MxAOD/TTree:
@@ -394,6 +403,12 @@ int main(int argc, char *argv[])
   TString currFileName = "";
   int countPass = 0;
   int countCate[50] = {0};
+  m_eventsPerRun.clear();
+  
+  int prevRun = 0;
+  
+  // Also create a text file of all passing events:
+  std::ofstream eventList(Form("%s/eventList.txt", m_outputDir.Data()));
   
   //--------------------------------------//
   // Loop over events to build dataset for signal parameterization:
@@ -411,7 +426,7 @@ int main(int argc, char *argv[])
       fillCutFlowFromMxAOD(chain->GetFile(), 
 			   config->getInt("MxAODCutFlowIndex"));
     }
-
+    
     /*
       // FOR CHECKING INDIVIDUAL EVENTS:
     if (m_treeMxAOD->EventInfoAux_runNumber == 297730 && 
@@ -424,6 +439,12 @@ int main(int argc, char *argv[])
     }
     */
 
+    if (prevRun != (int)(m_treeMxAOD->EventInfoAux_runNumber)) {
+      std::cout << "NEW RUN! " << m_treeMxAOD->EventInfoAux_runNumber 
+		<< std::endl;
+      prevRun = m_treeMxAOD->EventInfoAux_runNumber;
+    }
+    
     // Store a list of runs:
     vectorAdd(m_treeMxAOD->EventInfoAux_runNumber);
     
@@ -536,6 +557,16 @@ int main(int argc, char *argv[])
     // Add to event counts:
     countPass++;
     countCate[category]++;
+    m_eventsPerRun[m_treeMxAOD->EventInfoAux_runNumber]++;
+    eventList << m_treeMxAOD->EventInfoAux_runNumber << " " 
+	      << m_treeMxAOD->EventInfoAux_eventNumber << std::endl;
+
+    //
+    //
+    // ADDITIONAL MYY CUT!!!
+    //
+    //
+    //if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 700000) continue;
     
     // Fill the event variable histograms:
     fillHistograms("z_{vertex} [mm]", category,
@@ -558,8 +589,13 @@ int main(int argc, char *argv[])
       fillHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1),
 		     category, 
 		     (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p] / 1000.0);
+      fillHistograms(Form("E_{T}^{cone40}(#gamma_{%d}) [GeV]",i_p+1), 
+		     category,
+		     ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[i_p]
+		      / 1000.0));
     }
-  }
+  }// End of loop over events
+  eventList.close();
   
   // Then plot and save all histograms:
   TString histogramFileName = Form("%s/histogramFile_%s.root", 
@@ -579,7 +615,8 @@ int main(int argc, char *argv[])
   // Print a list of runs used:
   std::cout << "List of runs in the MxAOD:" << std::endl;
   for (int i_r = 0; i_r < (int)m_runList.size(); i_r++) {
-    std::cout << "\t" << m_runList[i_r] << std::endl;
+    std::cout << "\t" << m_runList[i_r] << "\t" 
+	      << m_eventsPerRun[m_runList[i_r]] << std::endl;
   }
   
   // Detailed summary:

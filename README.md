@@ -50,14 +50,19 @@ source scripts/package_setup.sh
 
 To compile the executables:
 ```
-make bin/HMMaster  
-make bin/GlobalP0Toys_Faster  
-make bin/GlobalP0Analysis  
-make bin/GenericToys  
-make bin/MassAnimation
-make bin/LocalP0Analysis  
-make bin/TossToys_NoFit
+source scripts/makeAll.sh
 ```
+
+This command compiles the following macros:
+ - HMMaster  
+ - GlobalP0Toys_Faster  
+ - GlobalP0Analysis  
+ - GenericToys  
+ - MassAnimation
+ - LocalP0Analysis  
+ - TossToys_NoFit
+ - AddDataToWorkspace
+
 
 Every program in this package can be run via the `HMMaster` main method. The 
 user only needs to specify the step of the analysis to run and the config file
@@ -68,12 +73,14 @@ analysis of the global p0 for the scalar analysis, simply run the command below:
 ```
 
 The analysis steps are listed and explained below.
+ - Workspace: create a workspace using the model specified in the config file.
+ - AddDataToWS: add a dataset in MxAODs to the workspace. 
  - GlobalP0Toys: create a pseudo-experiment ensemble to get the global Z value.
  - GlobalP0Analysis: analyze the global toy ensemble to get the global z value.
  - LocalP0Analysis: analyze pseudo-experiments to cross-check asymptotic qmu,q0.
- - StatScan: Plot the limits or p0 vs mass (toys or asymptotics)
- - ExtrapolateSig: Extrapolate the 2015 signal into 2016 data with Asimov data
- - MassAnimation: Animated GIF of the diphoton mass spectrum.
+ - StatScan: plot the limits or p0 vs mass (toys or asymptotics)
+ - ExtrapolateSig: extrapolate the 2015 signal into 2016 data with Asimov data
+ - MassAnimation: animated GIF of the diphoton mass spectrum.
 
 ### Preparation for remote processing
 
