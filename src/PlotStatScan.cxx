@@ -61,11 +61,37 @@ int main(int argc, char **argv) {
   else scan->setInputDirectory(outputDir);
   scan->setOutputDirectory(outputDir);
   
-  // Get scan points from config file for asymptotics:
+  // For asymptotic scans, retrieve width value and mass range and step:
   if (useAsymptotics) {
-    scan->useTheseMasses(config->getIntV("AsympStatScanMasses"));
-    scan->useTheseWidths(config->getIntV("AsympStatScanWidths"));
-    //scan->useTheseXS(config->getIntV("AsympStatScanXS"));
+    std::vector<int> widthList; widthList.clear();
+    std::vector<int> massList; massList.clear();
+    int width = 0; int massMin = 0; int massMax = 0; int massStep = 0;
+    if (argc > 3 && options.Contains("BatchJob")) {
+      for (int i_a = 3; i_a < argc; i_a++) {
+	width = atoi(argv[3]);
+	massMin = atoi(argv[4]);
+	massMax = atoi(argv[5]);
+	massStep = atoi(argv[6]);
+      }
+    }
+    // For local asymptotic jobs, retrieve width and mass from config file:
+    else {
+      massMin = config->getInt("StatScanMassMin");
+      massMax = config->getInt("StatScanMassMax");
+      massStep = config->getInt("StatScanMassStep");
+    }
+    
+    // Get scan points from config file for asymptotics:
+    
+    if (options.Contains("BatchJob")) widthList.push_back(width);
+    else widthList = config->getIntV("StatScanWidths");
+    
+    for (int mass = massMin; mass <= massMax; mass += massStep) {
+      massList.push_back(mass);
+    }
+    scan->useTheseMasses(massList);
+    scan->useTheseWidths(widthList);
+    //scan->useTheseXS(config->getIntV("StatScanXS"));
   }
   
   // Loop over widths:

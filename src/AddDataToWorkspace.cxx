@@ -307,15 +307,11 @@ int main(int argc, char *argv[])
   workspace->writeToFile(outputFileName);
   std::cout << "AddDataToWorkspace: Workspace saved to " << outputFileName
 	    << "\n\t New dataset named " << dataName << std::endl;
-  
-  delete categories;
-  delete observables;
-  delete combPdf;
-  delete model;
+
+ 
   delete workspace;
   workspaceFile->Close();
   delete workspaceFile;
-
   delete newData;
   delete m_treeMxAOD;
   delete chain;

@@ -524,19 +524,20 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   gP0Obs->SetLineWidth(2);
   
   // Legend:
-  TLegend leg(0.61, 0.30, 0.89, 0.45);
+  TLegend leg(0.65, 0.30, 0.89, 0.45);
   leg.SetBorderSize(0);
   leg.SetFillColor(0);
-  leg.SetTextSize(0.04);
-  leg.AddEntry(gP0Obs,"Observed p_{0}","LP");
-  leg.AddEntry(gP0Exp,"Expected p_{0}","LP");
+  leg.SetTextFont(42);
+  leg.SetTextSize(0.05);
+  leg.AddEntry(gP0Obs,"Observed p_{0}","L");
+  //leg.AddEntry(gP0Exp,"Expected p_{0}","L");
   
   // Plotting options:
   gP0Obs->GetYaxis()->SetRangeUser(0.0000001, 1.0);
     
   gPad->SetLogy();
-  gP0Obs->Draw("ALP");
-  gP0Exp->Draw("LPSAME");
+  gP0Obs->Draw("AL");
+  //  gP0Exp->Draw("LPSAME");
   leg.Draw("SAME");
   
   // Significance lines and text:
@@ -546,22 +547,22 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   line->SetLineStyle(2);
   line->SetLineWidth(1);
   line->SetLineColor(kRed+1);
-  double sigmaVals[5] = {0.158655, 0.02275, 0.001349, 0.000032, 0.0000002867};
-  for (int i_s = 0; i_s < 4; i_s++) {
+  double sigmaVals[6] = {0.5,0.15865,0.02275,0.001349,0.000032,0.0000002867};
+  for (int i_s = 0; i_s < 5; i_s++) {
     double sigmaXPos = gP0Obs->GetXaxis()->GetXmax()
       - (0.07*(gP0Obs->GetXaxis()->GetXmax() - gP0Obs->GetXaxis()->GetXmin()));
     line->DrawLine(gP0Obs->GetXaxis()->GetXmin(), sigmaVals[i_s],
 		   gP0Obs->GetXaxis()->GetXmax(), sigmaVals[i_s]);
-    sigma.DrawLatex(sigmaXPos, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s+1));
+    sigma.DrawLatex(sigmaXPos, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s));
   }
   
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.05);
-  t.DrawLatex(0.25, 0.27, "ATLAS");
+  t.DrawLatex(0.2, 0.27, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.05);
-  t.DrawLatex(0.37, 0.27, m_config->getStr("ATLASLabel"));
-  t.DrawLatex(0.25,0.21, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+  t.DrawLatex(0.32, 0.27, m_config->getStr("ATLASLabel"));
+  t.DrawLatex(0.2, 0.21, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
   
   t.DrawLatex(0.65, 0.27, "Spin-2 Selection");
@@ -569,7 +570,7 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
 	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
 		   ((double)width)/100.0));
 
-  gP0Obs->Draw("LPSAME");
+  gP0Obs->Draw("LSAME");
 
   // Print the canvas:
   can->Print(Form("%s/p0_width%d.eps", m_outputDir.Data(), width));
@@ -934,11 +935,27 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
     TString datasetToFit = m_config->getStr("WorkspaceObsData");
     
     double xSectionDouble = ((double)crossSection)/1000.0;
-
-    // Open the workspace:
-    TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
+    
+    // Load the workspace:
+    // First check for local copy, then go to central copy.
+    TString workspaceFileName = m_config->getStr("WorkspaceFile");
+    TObjArray *array = workspaceFileName.Tokenize("/");
+    
+    workspaceFileName
+      = ((TObjString*)array->At(array->GetEntries()-1))->GetString();
+    TFile *wsFile = new TFile(workspaceFileName);
+    if (!wsFile->IsZombie()) {
+      printer(Form("StatScan: Loaded ws from %s", workspaceFileName.Data()),
+	      false);
+    }
+    else {
+      workspaceFileName = m_config->getStr("WorkspaceFile");
+      printer(Form("StatScan: Load ws from %s", workspaceFileName.Data()),
+	      false);
+      wsFile = new TFile(workspaceFileName, "read");
+    }
     RooWorkspace *workspace
-      = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
+      = (RooWorkspace*)wsFile->Get(m_config->getStr("WorkspaceName"));
     
     // Instantiate the test statistic class for calculations and plots:
     TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
@@ -1043,7 +1060,7 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
       
       delete testStat;
       delete workspace;
-      wsFile.Close();
+      wsFile->Close();
       
       //----------------------------------------//
       // Process the toy MC files to obtain the CL values:
@@ -1253,11 +1270,27 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     
     // Set the dataset to fit:
     TString datasetToFit = m_config->getStr("WorkspaceObsData");
+            
+    // Load the workspace:
+    // First check for local copy, then go to central copy.
+    TString workspaceFileName = m_config->getStr("WorkspaceFile");
+    TObjArray *array = workspaceFileName.Tokenize("/");
     
-    // Open the workspace:
-    TFile wsFile(m_config->getStr("WorkspaceFile"), "read");
+    workspaceFileName
+      = ((TObjString*)array->At(array->GetEntries()-1))->GetString();
+    TFile *wsFile = new TFile(workspaceFileName);
+    if (!wsFile->IsZombie()) {
+      printer(Form("StatScan: Loaded ws from %s", workspaceFileName.Data()),
+	      false);
+    }
+    else {
+      workspaceFileName = m_config->getStr("WorkspaceFile");
+      printer(Form("StatScan: Load ws from %s", workspaceFileName.Data()),
+	      false);
+      wsFile = new TFile(workspaceFileName, "read");
+    }
     RooWorkspace *workspace
-      = (RooWorkspace*)wsFile.Get(m_config->getStr("WorkspaceName"));
+      = (RooWorkspace*)wsFile->Get(m_config->getStr("WorkspaceName"));
     
     // Instantiate the test statistic class for calculations and plots:
     TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
@@ -1346,7 +1379,7 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
       // Delete pointers and close files:  
       delete testStat;
       delete workspace;
-      wsFile.Close();
+      wsFile->Close();
       
       //----------------------------------------//
       // Process the toy MC files to obtain the CL values:

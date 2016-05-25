@@ -14,12 +14,13 @@
 //                                                                            //
 //  MasterOption:                                                             //
 //    - Workspace                                                             //
+//    - AddDataToWS                                                           //
 //    - GlobalP0Toys                                                          //
 //    - GlobalP0Analysis                                                      //
 //    - LocalP0Analysis                                                       //
-//    - StatScan                                                              //
+//    - StatScan (+ BSUB)                                                     //
 //    - ExtrapolateSig                                                        //
-//    - MassAnimation + BSUB, GIF                                             //
+//    - MassAnimation (+ BSUB, GIF)                                           //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -54,8 +55,6 @@ void submitGIFViaBsub(TString exeConfigFile, TString exeOption, int exeMinFrame,
     system(Form("cp %s/bin/%s ForJob/",
 		(m_config->getStr("PackageLocation")).Data(),
 		(m_config->getStr("exeMassAnimation")).Data()));
-    //system(Form("cp %s ForJob/",
-    //		(m_config->getStr("jobScriptMassAnimation")).Data()));
     system(Form("cp %s ForJob/",(m_config->getStr("WorkspaceFile")).Data()));
     system(Form("cp -f %s/%s %s/jobFileMassAnimation.sh", 
 		(m_config->getStr("PackageLocation")).Data(), 
@@ -66,22 +65,7 @@ void submitGIFViaBsub(TString exeConfigFile, TString exeOption, int exeMinFrame,
     system("rm -rf ForJob");
     m_isFirstJob = false;
   }
-  /*
-  if (m_isFirstJob) {
-    system(Form("tar zcf Cocoon.tar bin/%s", 
-		(m_config->getStr("exeMassAnimation")).Data()));
-    system(Form("chmod +x %s",
-		(m_config->getStr("jobScriptMassAnimation")).Data()));
-    system(Form("chmod +x %s",(m_config->getStr("WorkspaceFile")).Data()));
-    system(Form("cp -f %s/%s %s/jobFileMassAnimation.sh", 
-		(m_config->getStr("PackageLocation")).Data(), 
-		(m_config->getStr("jobScriptMassAnimation")).Data(),
-		exe.Data()));
-    system(Form("chmod +x %s/jobFileMassAnimation.sh", exe.Data()));
-    system(Form("mv Cocoon.tar %s", exe.Data()));
-    m_isFirstJob = false;
-  }
-  */
+  
   TString inputFile = Form("%s/Cocoon.tar", exe.Data());
   TString nameOutFile = Form("%s/%s_%d.out", out.Data(),
 			     (m_config->getStr("JobName")).Data(), exeMinFrame);
@@ -89,19 +73,11 @@ void submitGIFViaBsub(TString exeConfigFile, TString exeOption, int exeMinFrame,
 			     (m_config->getStr("JobName")).Data(), exeMinFrame);
   
   // Here you define the arguments for the job script:
-  
   TString nameJScript = Form("%s/jobFileMassAnimation.sh %s %s %s %s %s %d %d", 
 			     exe.Data(), (m_config->getStr("JobName")).Data(),
 			     exeConfigFile.Data(), inputFile.Data(),
 			     (m_config->getStr("exeMassAnimation")).Data(),
 			     exeOption.Data(), exeMinFrame, exeMaxFrame);
-  /*
-  TString nameJScript = Form("jobFileMassAnimation.sh %s %s %s %s %s %d %d", 
-			     (m_config->getStr("JobName")).Data(),
-			     exeConfigFile.Data(), inputFile.Data(),
-			     (m_config->getStr("exeMassAnimation")).Data(),
-			     exeOption.Data(), exeMinFrame, exeMaxFrame);
-  */  
   // submit the job:
   system(Form("bsub -q wisc -o %s -e %s %s", nameOutFile.Data(), 
 	      nameErrFile.Data(), nameJScript.Data()));
@@ -157,6 +133,68 @@ void submitPEViaBsub(TString exeConfigFile, TString exeOption, int exeSeed,
 			     (m_config->getStr("exePseudoExp")).Data(),
 			     exeOption.Data(), exeSeed, exeToysPerJob);
   
+  // submit the job:
+  system(Form("bsub -q wisc -o %s -e %s %s", nameOutFile.Data(), 
+	      nameErrFile.Data(), nameJScript.Data()));
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Submits statistics jobs to the lxbatch cluster. 
+   @param exeConfigFile - The config file.
+   @param exeOption - The job options for the executable.
+   @param exeWidth - The width for this job.
+   @param exeMassMin - The minimum mass value for this job.
+   @param exeMassMax - The maximum mass value for this job.
+   @param exeMassStep - The step size in mass for statistical tests.
+*/
+void submitStatViaBsub(TString exeConfigFile, TString exeOption, int exeWidth,
+		       int exeMassMin, int exeMassMax, int exeMassStep) {
+  // Make directories for job info:
+  TString dir = Form("%s/%s_StatScan",
+		     (m_config->getStr("ClusterFileLocation")).Data(),
+		     (m_config->getStr("JobName")).Data());
+  TString out = Form("%s/out", dir.Data());
+  TString err = Form("%s/err", dir.Data());
+  TString exe = Form("%s/exe", dir.Data());
+  system(Form("mkdir -vp %s", out.Data()));
+  system(Form("mkdir -vp %s", err.Data()));
+  system(Form("mkdir -vp %s", exe.Data()));
+    
+  // create .tar file with everything:
+  if (m_isFirstJob) {
+    system("mkdir ForJob");
+    system(Form("cp %s/*.pcm ForJob/", 
+		(m_config->getStr("PackageLocation")).Data()));
+    system(Form("cp %s/bin/%s ForJob/",
+		(m_config->getStr("PackageLocation")).Data(),
+		(m_config->getStr("exeStatScan")).Data()));
+    system(Form("cp %s ForJob/",(m_config->getStr("WorkspaceFile")).Data()));
+    system(Form("cp -f %s/%s %s/jobFileStatScan.sh", 
+		(m_config->getStr("PackageLocation")).Data(), 
+		(m_config->getStr("jobScriptStatScan")).Data(),
+		exe.Data()));
+    system("tar zcf Cocoon.tar ForJob/*");
+    system(Form("mv Cocoon.tar %s", exe.Data()));
+    system("rm -rf ForJob");
+    m_isFirstJob = false;
+  }
+  
+  TString inputFile = Form("%s/Cocoon.tar", exe.Data());
+  TString nameOutFile = Form("%s/%s_%d_%d.out", out.Data(),
+			     (m_config->getStr("JobName")).Data(), exeWidth,
+			     exeMassMin);
+  TString nameErrFile = Form("%s/%s_%d_%d.err", err.Data(),
+			     (m_config->getStr("JobName")).Data(), exeWidth,
+			     exeMassMin);
+  
+  // Here you define the arguments for the job script:
+  TString nameJScript = Form("%s/jobFileStatScan.sh %s %s %s %s %s %d %d %d %d",
+			     exe.Data(), (m_config->getStr("JobName")).Data(),
+			     exeConfigFile.Data(), inputFile.Data(),
+			     (m_config->getStr("exeStatScan")).Data(),
+			     exeOption.Data(), exeWidth, exeMassMin, exeMassMax,
+			     exeMassStep);
   // submit the job:
   system(Form("bsub -q wisc -o %s -e %s %s", nameOutFile.Data(), 
 	      nameErrFile.Data(), nameJScript.Data()));
@@ -253,8 +291,24 @@ int main (int argc, char **argv) {
   if (masterOption.Contains("StatScan")) {
     std::cout << "HMMaster: Step 3.0 - Plot asymptotic or toy limits or p0."
 	      << std::endl;
-    system(Form("./bin/PlotStatScan %s %s", fullConfigPath.Data(),
-		m_config->getStr("StatScanOptions").Data()));
+    if (masterOption.Contains("StatScanBSUB")) {
+      std::vector<int> statWidths = m_config->getIntV("StatScanWidths");
+      for (int currWidth = 0; currWidth < (int)statWidths.size(); currWidth++) {
+	int statMassMin = m_config->getInt("StatScanMassMin");
+	int statMassStep = m_config->getInt("StatScanMassStep");
+	while (statMassMin < m_config->getInt("StatScanMassMax")) {
+	  int currMassMax = statMassMin
+	    + (statMassStep * m_config->getInt("StatScanPointsPerJob"));
+	  submitStatViaBsub(fullConfigPath, m_config->getStr("StatScanOptions"),
+			    currWidth, statMassMin, currMassMax, statMassStep);
+	  statMassMin = currMassMax + statMassStep;
+	}
+      }
+    }
+    else {
+      system(Form("./bin/PlotStatScan %s %s", fullConfigPath.Data(),
+		  m_config->getStr("StatScanOptions").Data()));
+    }
   }
 
   //--------------------------------------//
