@@ -26,6 +26,8 @@ class StatScan {
   StatScan(TString configFileName, TString options);
   virtual ~StatScan() {};
   void clearData();
+  void defineDataForFitting(TString dataNameForFits, 
+			    RooAbsData *dataForFits=NULL);
   double getCL(int mass, int width, int crossSection, bool expected,
 	       bool asymptotic, int N);
   double getLimit(int mass, int width, bool expected, bool asymptotic, int N);
@@ -78,6 +80,10 @@ class StatScan {
   std::map<TString,double> m_valuesCL;
   std::map<TString,double> m_valuesLimit;
   std::map<TString,double> m_valuesP0;
+  
+  // Dataset info:
+  TString m_dataNameForFits;
+  RooAbsData *m_dataToFit;
   
 };
 

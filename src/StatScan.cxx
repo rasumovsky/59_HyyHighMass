@@ -43,6 +43,9 @@ StatScan::StatScan(TString configFileName, TString options) {
   // Clear data:
   clearData();
   
+  // Use observed dataset nominally:
+  defineDataForFitting(m_config->getStr("WorkspaceObsData"), NULL);
+      
   // Set ATLAS style template:
   CommonFunc::SetAtlasStyle();
 }
@@ -58,6 +61,17 @@ void StatScan::clearData() {
   m_valuesCL.clear();
   m_valuesLimit.clear();
   m_valuesP0.clear();
+}
+
+/**
+   -----------------------------------------------------------------------------
+   @param dataNameForFits - The name of the dataset to use for fits.
+   @param dataForFits - A pointer to the datset to use for fits.
+*/
+void StatScan::defineDataForFitting(TString dataNameForFits,
+				    RooAbsData *dataForFits) {
+  m_dataNameForFits = dataNameForFits;
+  m_dataToFit = dataForFits;
 }
 
 /**
@@ -938,7 +952,7 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
     std::ofstream outFile(textFileNameCL);
 
     // Set the dataset to fit:
-    TString datasetToFit = m_config->getStr("WorkspaceObsData");
+    //TString datasetToFit = m_config->getStr("WorkspaceObsData");
     
     double xSectionDouble = ((double)crossSection)/1000.0;
     
@@ -966,6 +980,9 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
     // Instantiate the test statistic class for calculations and plots:
     TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
     testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+    if (!testStat->theWorkspace()->data(m_dataNameForFits) && m_dataToFit) {
+      testStat->theWorkspace()->import(*m_dataToFit);
+    }
     
     // Set the PoI ranges for this study:
     std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
@@ -1011,7 +1028,7 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
     // Get the asymptotic CL results:
     if (asymptotic) {
       std::vector<double> asymptoticCLValues
-	= testStat->asymptoticCL(mapPoI, datasetToFit,
+	= testStat->asymptoticCL(mapPoI, m_dataNameForFits,
 				 m_config->getStr("WorkspaceSnapshotMu1"),
 				 m_config->getStr("PoIForNormalization"),
 				 doTilde);
@@ -1041,9 +1058,9 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
       
       // Perform the mu=1 fit and mu-free fit (necessary for qmu calculation):
       double nllObsMu1 
-	= testStat->getFitNLL(datasetToFit, 1, true, mapPoI, false);
+	= testStat->getFitNLL(m_dataNameForFits, 1, true, mapPoI, false);
       double nllObsMuFree
-	= testStat->getFitNLL(datasetToFit, 1, false, mapPoI, false);
+	= testStat->getFitNLL(m_dataNameForFits, 1, false, mapPoI, false);
       
       // Get profiled signal strength from the mu-free fit:
       std::map<std::string,double> poiFromFit = testStat->getPoIs();
@@ -1058,7 +1075,7 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
 	double originNorm = mapPoI[m_config->getStr("PoIForNormalization")];
 	mapPoI[m_config->getStr("PoIForNormalization")] = 0.0;
 	double nllObsMu0
-	  = testStat->getFitNLL(datasetToFit, 0.0, true, mapPoI, false);
+	  = testStat->getFitNLL(m_dataNameForFits, 0.0, true, mapPoI, false);
 	mapPoI[m_config->getStr("PoIForNormalization")] = originNorm;
 	qMuObs = testStat->getQMuTildeFromNLL(nllObsMu1, nllObsMu0, 
 					      nllObsMuFree, muHat, muForQMu);
@@ -1275,8 +1292,8 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     std::ofstream outputFile(textFileNameP0);    
     
     // Set the dataset to fit:
-    TString datasetToFit = m_config->getStr("WorkspaceObsData");
-            
+    //TString datasetToFit = m_config->getStr("WorkspaceObsData");
+    
     // Load the workspace:
     // First check for local copy, then go to central copy.
     TString workspaceFileName = m_config->getStr("WorkspaceFile");
@@ -1301,6 +1318,9 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     // Instantiate the test statistic class for calculations and plots:
     TestStat *testStat = new TestStat(m_configFileName, "new", workspace);
     testStat->setNominalSnapshot(m_config->getStr("WorkspaceSnapshotMu1"));
+    if (!testStat->theWorkspace()->data(m_dataNameForFits) && m_dataToFit) {
+      testStat->theWorkspace()->import(*m_dataToFit);
+    }
     
     // Set the PoI ranges for this study:
     std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
@@ -1346,7 +1366,7 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     if (asymptotic) {
       testStat->useTwoSidedTestStat(m_config->getBool("UseTwoSided"));
       std::vector<double> asymptoticP0Values
- 	= testStat->asymptoticP0(mapPoI, datasetToFit,
+ 	= testStat->asymptoticP0(mapPoI, m_dataNameForFits,
 				 m_config->getStr("WorkspaceSnapshotMu1"),
 				 m_config->getStr("PoIForNormalization"));
       observedP0 = asymptoticP0Values[0];
@@ -1369,11 +1389,12 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
       
       // Perform the mu=0 fit, make sure normalization PoI is set to zero:
       mapPoI[m_config->getStr("PoIForNormalization")] = 0.0;
-      double nllObsMu0 = testStat->getFitNLL(datasetToFit,0,true,mapPoI,true);
+      double nllObsMu0 = testStat->getFitNLL(m_dataNameForFits, 0, true, 
+					     mapPoI, true);
       
       // Perform mu-free fit (necessary for q0 calculation) and get signal:
-      double nllObsMuFree = testStat->getFitNLL(datasetToFit, 1, false, mapPoI,
-						true);
+      double nllObsMuFree = testStat->getFitNLL(m_dataNameForFits, 1, false,
+						mapPoI, true);
       std::map<std::string,double> poiFromFit = testStat->getPoIs();
       double obsXSValue
 	= poiFromFit[(std::string)m_config->getStr("PoIForNormalization")];

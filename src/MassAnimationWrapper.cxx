@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
   animation->setNFrames(config->getInt("AnimationFrames"));
   animation->getDataForFrames();
   for (int i_f = minFrame; i_f < maxFrame; i_f++) {
+    animation->getP0ForFrame(i_f, config->getInt("AnimationWidthForP0"));
     animation->makeSingleFrame(i_f);
   }
   

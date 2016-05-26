@@ -16,9 +16,10 @@
 #include "CommonHead.h"
 #include "CommonFunc.h"
 #include "Config.h"
+#include "HGammaMxAOD.h"
 #include "TestStat.h"
 #include "time.h"
-#include "HGammaMxAOD.h"
+#include "StatScan.h"
 
 class MassAnimation {
 
@@ -29,6 +30,7 @@ class MassAnimation {
   
   void getDataForFrames();
   int getNFrames();
+  void getP0ForFrame(int frame, int width);
   void makeGIF();
   void makeAllFrames();
   void makeSingleFrame(int frame);
@@ -66,7 +68,8 @@ class MassAnimation {
   int m_nFrames;
   std::map<int,TString> m_times;// use EventInfoAux.timeStamp
   std::map<int,RooDataSet*> m_data;
-    
+  std::map<int,TGraph*> m_p0;
+  
 };
 
 #endif
