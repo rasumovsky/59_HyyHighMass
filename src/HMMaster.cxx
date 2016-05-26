@@ -293,14 +293,16 @@ int main (int argc, char **argv) {
 	      << std::endl;
     if (masterOption.Contains("StatScanBSUB")) {
       std::vector<int> statWidths = m_config->getIntV("StatScanWidths");
-      for (int currWidth = 0; currWidth < (int)statWidths.size(); currWidth++) {
+      for (int i_w = 0; i_w < (int)statWidths.size(); i_w++) {
+	int currWidth = statWidths[i_w];
 	int statMassMin = m_config->getInt("StatScanMassMin");
 	int statMassStep = m_config->getInt("StatScanMassStep");
-	while (statMassMin < m_config->getInt("StatScanMassMax")) {
+	while (statMassMin <= m_config->getInt("StatScanMassMax")) {
 	  int currMassMax = statMassMin
 	    + (statMassStep * m_config->getInt("StatScanPointsPerJob"));
-	  submitStatViaBsub(fullConfigPath, m_config->getStr("StatScanOptions"),
-			    currWidth, statMassMin, currMassMax, statMassStep);
+	  TString jobOption = m_config->getStr("StatScanOptions") + "BatchJob";
+	  submitStatViaBsub(fullConfigPath, jobOption, currWidth, statMassMin,
+			    currMassMax, statMassStep);
 	  statMassMin = currMassMax + statMassStep;
 	}
       }

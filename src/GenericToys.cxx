@@ -60,9 +60,17 @@ void runToysSinglePoint(bool doImportanceSampling) {
     m_config->getStr("WorkspaceSnapshotMu1");
   
   // Load model, data, etc. from workspace:
-  TFile inputFile(m_copiedFile, "read");
-  RooWorkspace *workspace 
-    = (RooWorkspace*)inputFile.Get(m_config->getStr("WorkspaceName"));
+  TString workspaceFileName = m_config->getStr("WorkspaceFile");
+  TObjArray *array = workspaceFileName.Tokenize("/");
+  workspaceFileName
+    = ((TObjString*)array->At(array->GetEntries()-1))->GetString();
+  TFile *inputFile = new TFile(workspaceFileName);
+  if (inputFile->IsZombie()) {
+    workspaceFileName = m_config->getStr("WorkspaceFile");
+    inputFile = new TFile(workspaceFileName, "read");
+  }
+  RooWorkspace *workspace
+    = (RooWorkspace*)inputFile->Get(m_config->getStr("WorkspaceName"));
     
   //----------------------------------------//
   // Prepare model parameters for tossing and fitting toy MC:
@@ -377,7 +385,7 @@ void runToysSinglePoint(bool doImportanceSampling) {
   m_outputTree->AutoSave("SaveSelf");
   
   // Close the input file before the loop repeats:
-  inputFile.Close();
+  inputFile->Close();
 }
 
 /**
@@ -429,13 +437,7 @@ int main(int argc, char **argv) {
   
   // Load the analysis configurations from file:
   m_config = new Config(m_configFile);
-  
-  // Copy the input workspace file locally:
-  TString originFile = m_config->getStr("WorkspaceFile");
-  m_copiedFile = Form("workspace_%s.root",
-		      (m_config->getStr("AnalysisType")).Data());
-  system(Form("cp %s %s", originFile.Data(), m_copiedFile.Data()));
-  
+    
   // Construct the output directories:
   m_outputDir = Form("%s/%s/GenericToys", 
 		     (m_config->getStr("MasterOutput")).Data(),
@@ -546,7 +548,6 @@ int main(int argc, char **argv) {
   m_outputFile->cd();
   m_outputTree->Write();
   m_outputFile->Close();
-  system(Form("rm %s", m_copiedFile.Data()));
   
   // Clock the toys:
   time = clock() - time;

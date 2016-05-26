@@ -8,6 +8,8 @@
 //                                                                            //
 //  This class is used for statistics calculations.                           //
 //                                                                            //
+//  Note, May 25: Disabling expected p0 fits, which double the run time.      //
+//                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "TestStat.h"
@@ -515,15 +517,16 @@ std::vector<double> TestStat::asymptoticP0(std::map<TString,double> mapPoI,
   double obsR0 = getR0FromNLL(nllMu0Obs, nllMuHatObs, muHatObs);
   
   // Calculate expected q0:
+  /*
   double nllMu0Exp = getFitNLL(asimovDataMu1Name, 0.0, true, mapPoI, false);
   double nllMuHatExp = getFitNLL(asimovDataMu1Name, 0.0, false, mapPoI, false);
   double profiledNormExp = (getPoIs())[(std::string)(poiForNorm)];
   double muHatExp = (profiledNormExp / originNorm);
   double expQ0 = getQ0FromNLL(nllMu0Exp, nllMuHatExp, muHatExp);
   double expR0 = getR0FromNLL(nllMu0Exp, nllMuHatExp, muHatExp);
-
+  */
   // Calculate p0 from q0:
-  double expP0 = m_useTwoSided ? getP0FromR0(expR0) : getP0FromQ0(expQ0);
+  double expP0 = 0.5;//m_useTwoSided ? getP0FromR0(expR0) : getP0FromQ0(expQ0);
   double obsP0 = m_useTwoSided ? getP0FromR0(obsR0) : getP0FromQ0(obsQ0);
   
   // Print summary:

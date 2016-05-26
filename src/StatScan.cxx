@@ -289,36 +289,36 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
     Form("%s/toy_limit_values_width%d.txt", m_outputDir.Data(), width);
   
   // Arrays to store limit graph information (medians and error bands):
-  int nToyPoints = 0;
-  double observableValues[100] = {0};  
-  double limitObs[100] = {0};
-  double limitExp_p2[100] = {0};  
-  double limitExp_p1[100] = {0};
-  double limitExp[100] = {0};
-  double limitExp_n1[100] = {0};
-  double limitExp_n2[100] = {0};
+  int nPlotPoint = 0;
+  double observableValues[1000] = {0};  
+  double limitObs[1000] = {0};
+  double limitExp_p2[1000] = {0};  
+  double limitExp_p1[1000] = {0};
+  double limitExp[1000] = {0};
+  double limitExp_n1[1000] = {0};
+  double limitExp_n2[1000] = {0};
 
   // Load from file here. 
   if (asymptotic && !makeNew) {
     std::ifstream limitFileIn(limitFileName);
-    while (limitFileIn >> m_massValues[nToyPoints] >> limitObs[nToyPoints] 
-	   >> limitExp_n2[nToyPoints] >> limitExp_n1[nToyPoints]
-	   >> limitExp[nToyPoints] >> limitExp_p1[nToyPoints] 
-	   >> limitExp_p2[nToyPoints]) {
+    while (limitFileIn >> m_massValues[nPlotPoint] >> limitObs[nPlotPoint] 
+	   >> limitExp_n2[nPlotPoint] >> limitExp_n1[nPlotPoint]
+	   >> limitExp[nPlotPoint] >> limitExp_p1[nPlotPoint] 
+	   >> limitExp_p2[nPlotPoint]) {
       // Store the limits for this mass and width:
-      setLimit(m_massValues[nToyPoints], width, false, asymptotic, 0, 
-	       limitObs[nToyPoints]);
-      setLimit(m_massValues[nToyPoints], width, true, asymptotic, -2, 
-	       limitExp_n2[nToyPoints]);
-      setLimit(m_massValues[nToyPoints], width, true, asymptotic, -1, 
-	       limitExp_n1[nToyPoints]);
-      setLimit(m_massValues[nToyPoints], width, true, asymptotic, 0, 
-	       limitExp[nToyPoints]);
-      setLimit(m_massValues[nToyPoints], width, true, asymptotic, 1, 
-	       limitExp_p1[nToyPoints]);
-      setLimit(m_massValues[nToyPoints], width, true, asymptotic, 2, 
-	       limitExp_p2[nToyPoints]);
-      nToyPoints++;
+      setLimit(m_massValues[nPlotPoint], width, false, asymptotic, 0, 
+	       limitObs[nPlotPoint]);
+      setLimit(m_massValues[nPlotPoint], width, true, asymptotic, -2, 
+	       limitExp_n2[nPlotPoint]);
+      setLimit(m_massValues[nPlotPoint], width, true, asymptotic, -1, 
+	       limitExp_n1[nPlotPoint]);
+      setLimit(m_massValues[nPlotPoint], width, true, asymptotic, 0, 
+	       limitExp[nPlotPoint]);
+      setLimit(m_massValues[nPlotPoint], width, true, asymptotic, 1, 
+	       limitExp_p1[nPlotPoint]);
+      setLimit(m_massValues[nPlotPoint], width, true, asymptotic, 2, 
+	       limitExp_p2[nPlotPoint]);
+      nPlotPoint++;
     }
   }
   
@@ -329,40 +329,42 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
     if ((asymptotic && singleLimitTest(m_massValues[i_m], width, doTilde)) || 
 	(!asymptotic && singleCLScan(m_massValues[i_m],width,makeNew,false))) {
       
-      observableValues[nToyPoints] = m_massValues[i_m];
+      observableValues[nPlotPoint] = m_massValues[i_m];
          
-      limitObs[nToyPoints]
+      limitObs[nPlotPoint]
 	= getLimit(m_massValues[i_m], width, false, asymptotic, 0);
-      limitExp_n2[nToyPoints] 
+      limitExp_n2[nPlotPoint] 
 	= getLimit(m_massValues[i_m], width, true, asymptotic, -2);
-      limitExp_n1[nToyPoints]
+      limitExp_n1[nPlotPoint]
 	= getLimit(m_massValues[i_m], width, true, asymptotic, -1);
-      limitExp[nToyPoints]
+      limitExp[nPlotPoint]
 	= getLimit(m_massValues[i_m], width, true, asymptotic, 0);
-      limitExp_p1[nToyPoints]
+      limitExp_p1[nPlotPoint]
 	= getLimit(m_massValues[i_m], width, true, asymptotic, 1);
-      limitExp_p2[nToyPoints]
+      limitExp_p2[nPlotPoint]
 	= getLimit(m_massValues[i_m], width, true, asymptotic, 2);
 
       limitFileOut << m_massValues[i_m] << " " 
-		   << limitObs[nToyPoints] << " " 
-		   << limitExp_n2[nToyPoints] << " " 
-		   << limitExp_n1[nToyPoints] << " "
-		   << limitExp[nToyPoints] << " " 
-		   << limitExp_p1[nToyPoints] << " " 
-		   << limitExp_p2[nToyPoints] << " " << std::endl;
-      nToyPoints++;
+		   << limitObs[nPlotPoint] << " " 
+		   << limitExp_n2[nPlotPoint] << " " 
+		   << limitExp_n1[nPlotPoint] << " "
+		   << limitExp[nPlotPoint] << " " 
+		   << limitExp_p1[nPlotPoint] << " " 
+		   << limitExp_p2[nPlotPoint] << " " << std::endl;
+      nPlotPoint++;
     }
   }
   limitFileOut.close();
-  
+
+  if (nPlotPoint >= 1000) printer("StatScan: Array bound exceeded",true);
+
   //----------------------------------------//
   // Plot the results:
-  double errExp_p2[100] = {0};  
-  double errExp_p1[100] = {0};
-  double errExp_n1[100] = {0};
-  double errExp_n2[100] = {0};
-  for (int i_t = 0; i_t < nToyPoints; i_t++) {
+  double errExp_p2[1000] = {0};  
+  double errExp_p1[1000] = {0};
+  double errExp_n1[1000] = {0};
+  double errExp_n2[1000] = {0};
+  for (int i_t = 0; i_t < nPlotPoint; i_t++) {
     errExp_p2[i_t] = fabs(limitExp_p2[i_t] - limitExp[i_t]);
     errExp_p1[i_t] = fabs(limitExp_p1[i_t] - limitExp[i_t]);
     errExp_n1[i_t] = fabs(limitExp_n1[i_t] - limitExp[i_t]);
@@ -370,15 +372,15 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
   }
   
   // Graphs for the median expected and observed results:
-  TGraph *gLimitExp = new TGraph(nToyPoints, observableValues, limitExp);
-  TGraph *gLimitObs = new TGraph(nToyPoints, observableValues, limitObs);
+  TGraph *gLimitExp = new TGraph(nPlotPoint, observableValues, limitExp);
+  TGraph *gLimitObs = new TGraph(nPlotPoint, observableValues, limitObs);
   
   // Graphs for the expected error bands:
   TGraphAsymmErrors *gLimitExp_2s 
-    = new TGraphAsymmErrors(nToyPoints, observableValues, limitExp, 0, 0, 
+    = new TGraphAsymmErrors(nPlotPoint, observableValues, limitExp, 0, 0, 
  			    errExp_n2, errExp_p2);
   TGraphAsymmErrors *gLimitExp_1s
-    = new TGraphAsymmErrors(nToyPoints, observableValues, limitExp, 0, 0, 
+    = new TGraphAsymmErrors(nPlotPoint, observableValues, limitExp, 0, 0, 
 			    errExp_n1, errExp_p1);
   
   // Canvas and graph formatting:
@@ -481,30 +483,31 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
 	       width, (int)makeNew, (int)asymptotic), false);
   
   // Arrays to store p0 graph information:
-  int nToyPoints = 0;
-  double observableValues[100] = {0};  
-  double p0Obs[100] = {0};
-  double p0Exp[100] = {0};
+  int nPlotPoint = 0;
+  double observableValues[1000] = {0};  
+  double p0Obs[1000] = {0};
+  double p0Exp[1000] = {0};
   
   //----------------------------------------//
   // Loop over the mass points to load or calculate p0:
-  printer("StatScan: Calculating limits vs. mass from scratch", false);
+  printer("StatScan: Retrieving p0...", false);
   for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
     double currentXS = 1.0;
     if (singleP0Test(m_massValues[i_m], width, currentXS, makeNew, asymptotic)){
-      observableValues[nToyPoints] = m_massValues[i_m];
-      p0Obs[nToyPoints] = getP0(m_massValues[i_m], width, false, asymptotic);
-      p0Exp[nToyPoints] = getP0(m_massValues[i_m], width, true, asymptotic);
-      nToyPoints++;
+      observableValues[nPlotPoint] = m_massValues[i_m];
+      p0Obs[nPlotPoint] = getP0(m_massValues[i_m], width, false, asymptotic);
+      p0Exp[nPlotPoint] = getP0(m_massValues[i_m], width, true, asymptotic);
+      nPlotPoint++;
     }
   }
-  
+  if (nPlotPoint >= 1000) printer("StatScan: Array bound exceeded",true);
+
   //----------------------------------------//
   // Plot the results:
   
   // Median expected and observed results:
-  TGraph *gP0Exp = new TGraph(nToyPoints, observableValues, p0Exp);
-  TGraph *gP0Obs = new TGraph(nToyPoints, observableValues, p0Obs);
+  TGraph *gP0Exp = new TGraph(nPlotPoint, observableValues, p0Exp);
+  TGraph *gP0Obs = new TGraph(nPlotPoint, observableValues, p0Obs);
   
   // Start plotting:
   TCanvas *can = new TCanvas("can","can");
@@ -656,7 +659,7 @@ void StatScan::setP0(int mass, int width, bool expected, bool asymptotic,
   TString key = Form("mass%d_width%d_exp%d_asym%d", mass, width,
 		     (int)expected, (int)asymptotic);
   m_valuesP0[key] = p0Value;
-  printer(Form("StatScan::setP0(%s)=%f", key.Data(), m_valuesP0[key]), false);
+  //printer(Form("StatScan::setP0(%s)=%f", key.Data(), m_valuesP0[key]), false);
 }
 
 /**
@@ -684,34 +687,34 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
 	       mass, width, (int)makeNew), false);
   
   // Arrays to store band information:
-  int nToyPoints = 0;
-  double varValues[100] = {0};  
-  double CLObs[100] = {0};
-  double CLExp_p2[100] = {0};  
-  double CLExp_p1[100] = {0};
-  double CLExp[100] = {0};
-  double CLExp_n1[100] = {0};
-  double CLExp_n2[100] = {0};
+  int nPlotPoint = 0;
+  double varValues[1000] = {0};  
+  double CLObs[1000] = {0};
+  double CLExp_p2[1000] = {0};  
+  double CLExp_p1[1000] = {0};
+  double CLExp[1000] = {0};
+  double CLExp_n1[1000] = {0};
+  double CLExp_n2[1000] = {0};
   
   //----------------------------------------//
   // Scan CL for various cross-sections:
   printer("StatScan::singleCLScan: Loop over cross-sections to get CL", false);
   for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
     if (singleCLTest(mass, width, m_xsValues[i_x], makeNew, asymptotic)) {
-      varValues[nToyPoints] = ((double)m_xsValues[i_x])/1000.0;
-      CLObs[nToyPoints]
+      varValues[nPlotPoint] = ((double)m_xsValues[i_x])/1000.0;
+      CLObs[nPlotPoint]
 	= getCL(mass, width, m_xsValues[i_x], false, asymptotic, 0);
-      CLExp_n2[nToyPoints]
+      CLExp_n2[nPlotPoint]
 	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, -2);
-      CLExp_n1[nToyPoints]
+      CLExp_n1[nPlotPoint]
 	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, -1);
-      CLExp[nToyPoints]
+      CLExp[nPlotPoint]
 	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, 0);
-      CLExp_p1[nToyPoints]
+      CLExp_p1[nPlotPoint]
 	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, 1);
-      CLExp_p2[nToyPoints]
+      CLExp_p2[nPlotPoint]
 	= getCL(mass, width, m_xsValues[i_x], true, asymptotic, 2);
-      nToyPoints++;
+      nPlotPoint++;
     }
     else {
       printer(Form("StatScan::singleCLScan: ERROR for cross-section %d", 
@@ -719,13 +722,16 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
     }
   }
   
+  // Check that array is large enough:
+  if (nPlotPoint >= 1000) printer("StatScan: Array bound exceeded",true);
+  
   //----------------------------------------//
   // Plot the CL scan results:
-  double errExp_p2[100] = {0};  
-  double errExp_p1[100] = {0};
-  double errExp_n1[100] = {0};
-  double errExp_n2[100] = {0};
-  for (int i_t = 0; i_t < nToyPoints; i_t++) {
+  double errExp_p2[1000] = {0};  
+  double errExp_p1[1000] = {0};
+  double errExp_n1[1000] = {0};
+  double errExp_n2[1000] = {0};
+  for (int i_t = 0; i_t < nPlotPoint; i_t++) {
     errExp_p2[i_t] = fabs(CLExp_p2[i_t] - CLExp[i_t]);
     errExp_p1[i_t] = fabs(CLExp_p1[i_t] - CLExp[i_t]);
     errExp_n1[i_t] = fabs(CLExp_n1[i_t] - CLExp[i_t]);
@@ -733,19 +739,19 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
   }
   
   // Median expected and observed results:
-  TGraph *gCLObs = new TGraph(nToyPoints, varValues, CLObs);
-  TGraph *gCLExp = new TGraph(nToyPoints, varValues, CLExp);
-  TGraph *gCLExp_p1 = new TGraph(nToyPoints, varValues, CLExp_p1);
-  TGraph *gCLExp_p2 = new TGraph(nToyPoints, varValues, CLExp_p2);
-  TGraph *gCLExp_n1 = new TGraph(nToyPoints, varValues, CLExp_n1);
-  TGraph *gCLExp_n2 = new TGraph(nToyPoints, varValues, CLExp_n2);
+  TGraph *gCLObs = new TGraph(nPlotPoint, varValues, CLObs);
+  TGraph *gCLExp = new TGraph(nPlotPoint, varValues, CLExp);
+  TGraph *gCLExp_p1 = new TGraph(nPlotPoint, varValues, CLExp_p1);
+  TGraph *gCLExp_p2 = new TGraph(nPlotPoint, varValues, CLExp_p2);
+  TGraph *gCLExp_n1 = new TGraph(nPlotPoint, varValues, CLExp_n1);
+  TGraph *gCLExp_n2 = new TGraph(nPlotPoint, varValues, CLExp_n2);
   
   // Also plot the bands:
   TGraphAsymmErrors *gCLExp_2s 
-    = new TGraphAsymmErrors(nToyPoints, varValues, CLExp, 0, 0, 
+    = new TGraphAsymmErrors(nPlotPoint, varValues, CLExp, 0, 0, 
 			    errExp_n2, errExp_p2);
   TGraphAsymmErrors *gCLExp_1s
-    = new TGraphAsymmErrors(nToyPoints, varValues, CLExp, 0, 0, 
+    = new TGraphAsymmErrors(nPlotPoint, varValues, CLExp, 0, 0, 
 			    errExp_n1, errExp_p1);
   
   // Start plotting:
@@ -855,7 +861,7 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
   delete gCLExp_1s;
   
   // Return true iff. calculation was successful:
-  if (nToyPoints < 2 || observedLimit < 0 || expectedLimit < 0) return false;
+  if (nPlotPoint < 2 || observedLimit < 0 || expectedLimit < 0) return false;
   else return true;
 }
 
@@ -1242,15 +1248,15 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
   //----------------------------------------//
   // Open p0 values from file:
   if (!makeNew) {
-    printer(Form("StatScan::singleP0Test: Loading p0 from file %s",
-		 textFileNameP0.Data()), false);
+    //printer(Form("StatScan::singleP0Test: Loading p0 from file %s",
+    //		 textFileNameP0.Data()), false);
     
     // Open the saved p0 values from toys:
     std::ifstream inputFile(textFileNameP0);
     if (inputFile.is_open()) {
       while (inputFile >> observedP0 >> expectedP0) {
-	std::cout << "observed p0 = " << observedP0 << std::endl;
-	std::cout << "expected p0 = " << expectedP0 << std::endl;
+	//std::cout << "observed p0 = " << observedP0 << std::endl;
+	//std::cout << "expected p0 = " << expectedP0 << std::endl;
       }
     }
     else {
@@ -1338,8 +1344,9 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     //----------------------------------------//
     // Get the asymptotic p0 results:
     if (asymptotic) {
+      testStat->useTwoSidedTestStat(m_config->getBool("UseTwoSided"));
       std::vector<double> asymptoticP0Values
-	= testStat->asymptoticP0(mapPoI, datasetToFit,
+ 	= testStat->asymptoticP0(mapPoI, datasetToFit,
 				 m_config->getStr("WorkspaceSnapshotMu1"),
 				 m_config->getStr("PoIForNormalization"));
       observedP0 = asymptoticP0Values[0];
@@ -1449,9 +1456,9 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
   setP0(mass, width, true, asymptotic, expectedP0);
   
   // Then print to screen:
-  std::cout << "\nStatScan: P0 Results:" << std::endl;
+  std::cout << "StatScan: P0 Results:" << std::endl;
   std::cout << "\tobserved p0 = " << observedP0 << std::endl;
-  std::cout << "\texpected p0 = " << expectedP0 << std::endl;
+  std::cout << "\texpected p0 = " << expectedP0 << "\n" << std::endl;
   
   // Delete pointers, close files, return:
   printer(Form("StatScan::singleP0Test finished mass %d width %d\n", 

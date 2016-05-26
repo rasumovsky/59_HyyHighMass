@@ -78,11 +78,6 @@ int main(int argc, char **argv) {
   Config *config = new Config(configFile);
   TString anaType = config->getStr("AnalysisType");
   
-  // Copy the input workspace file locally:
-  TString originFile = config->getStr("WorkspaceFile");
-  TString copiedFile = Form("workspace_%s.root", anaType.Data());
-  system(Form("cp %s %s", originFile.Data(), copiedFile.Data()));
-  
   // Construct the output directories:
   TString outputDir = Form("%s/%s/GlobalP0Toys", 
 			   (config->getStr("MasterOutput")).Data(),
@@ -173,9 +168,17 @@ int main(int argc, char **argv) {
 	      << std::endl;
     
     // Load model, data, etc. from workspace:
-    TFile inputFile(copiedFile, "read");
+    TString workspaceFileName = config->getStr("WorkspaceFile");
+    TObjArray *array = workspaceFileName.Tokenize("/");
+    workspaceFileName
+      = ((TObjString*)array->At(array->GetEntries()-1))->GetString();
+    TFile *inputFile = new TFile(workspaceFileName);
+    if (inputFile->IsZombie()) {
+      workspaceFileName = config->getStr("WorkspaceFile");
+      inputFile = new TFile(workspaceFileName, "read");
+    }
     RooWorkspace *workspace
-      = (RooWorkspace*)inputFile.Get(config->getStr("WorkspaceName"));
+      = (RooWorkspace*)inputFile->Get(config->getStr("WorkspaceName"));
     
     // The statistics class, for calculating qMu etc. 
     TestStat *testStat = new TestStat(configFile, "new", workspace);
@@ -340,14 +343,13 @@ int main(int argc, char **argv) {
     fOutputTree.AutoSave("SaveSelf");
     
     // Close the input file before the loop repeats:
-    inputFile.Close();
+    inputFile->Close();
   }
   
   // Write the output file, delete local file copies:
   fOutputFile.cd();
   fOutputTree.Write();
   fOutputFile.Close();
-  system(Form("rm %s", copiedFile.Data()));
   
   // Clock the toys:
   time = clock() - time;
