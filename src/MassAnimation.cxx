@@ -87,6 +87,7 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
   }
 
   // Set the range for the observable:
+  /*
   std::vector<double> massRangeVector
     = m_config->getNumV(Form("PoIRange_%s",
 			     (m_config->getStr("PoIForMass")).Data()));
@@ -94,6 +95,7 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
   m_workspace->var(m_obsName)->setMax(massRangeVector[1]);
   m_workspace->var(m_obsName)->setRange("fullRange", massRangeVector[0], 
 					massRangeVector[1]);
+  */
   
   // Settings for this class:
   m_geVPerBin = m_config->getInt("AnimationGeVPerBin");
@@ -194,10 +196,10 @@ void MassAnimation::getDataForFrames() {
     }
     
     // Additional cut for mass range:
-    if (treeMxAOD->HGamEventInfoAuxDyn_m_yy < (1000.0 * massRangeVector[0]) || 
-	treeMxAOD->HGamEventInfoAuxDyn_m_yy > (1000.0 * massRangeVector[1])) {
-      continue;
-    }
+    //if (treeMxAOD->HGamEventInfoAuxDyn_m_yy < (1000.0 * massRangeVector[0]) ||
+    //	treeMxAOD->HGamEventInfoAuxDyn_m_yy > (1000.0 * massRangeVector[1])) {
+    //continue;
+    //}
     
     eventCounter++;
 
@@ -466,11 +468,6 @@ void MassAnimation::makeSingleFrame(int frame) {
   }
   else printer(Form("MassAnimation:makeSingleFrame: Missing PDF %s", 
 		    m_pdfName.Data()), true);
-
-  std::cout << "PRINTING THE INFO FOR DATA AND PDF" << std::endl;
-  m_workspace->data(dataName)->Print("v");
-  m_workspace->pdf(m_pdfName)->Print("v");
-  
   
   // Draw the RooPlot:
   rooPlot->Draw();
@@ -481,14 +478,14 @@ void MassAnimation::makeSingleFrame(int frame) {
     
   // Plot text (ATLAS, sqrt(s), lumi, and time):
   TLatex l; l.SetNDC(); l.SetTextColor(kBlack);
-  l.SetTextFont(72); l.SetTextSize(0.05); 
-  l.DrawLatex(0.60, 0.88, "ATLAS");
-  l.SetTextFont(42); l.SetTextSize(0.05); 
-  l.DrawLatex(0.72, 0.88, m_config->getStr("ATLASLabel"));
+  l.SetTextFont(72); l.SetTextSize(0.07); 
+  l.DrawLatex(0.60, 0.86, "ATLAS");
+  l.SetTextFont(42); l.SetTextSize(0.07); 
+  l.DrawLatex(0.72, 0.86, m_config->getStr("ATLASLabel"));
   double frameLumi = (((double)(frame+1) / (double)m_nFrames) * 
 		      m_config->getNum("AnalysisLuminosity") / 1000.0);
-  l.DrawLatex(0.6, 0.82, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}", frameLumi));
-  l.DrawLatex(0.6, 0.76, m_times[frame]);
+  l.DrawLatex(0.6, 0.78, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}", frameLumi));
+  l.DrawLatex(0.6, 0.70, m_times[frame]);
   
   //---------- Pad 2: The subtraction plot ----------//
   pad2->cd();
@@ -503,18 +500,19 @@ void MassAnimation::makeSingleFrame(int frame) {
     if (doRatio) medianHist->SetBinContent(i_b, 1.0);
     else medianHist->SetBinContent(i_b, 0.0);
   }
-  if (doRatio) medianHist->GetYaxis()->SetRangeUser(0.1, 2.4);
-  else medianHist->GetYaxis()->SetRangeUser(-15.0, 20.0);
+  if (doRatio) {
+    medianHist->GetYaxis()->SetRangeUser(0.1, 2.4);
+    medianHist->GetYaxis()->SetTitle("Data / Fit");
+  }
+  else {
+    medianHist->GetYaxis()->SetRangeUser(-14.9, 19.9);
+    medianHist->GetYaxis()->SetTitle("Data - Fit");
+  }
   medianHist->SetLineColor(kBlue+1);
   medianHist->SetLineWidth(2);
-  medianHist->GetYaxis()->SetTitle("Data / Fit");
-  medianHist->GetXaxis()->SetTitle("m_{#gamma#gamma} [GeV]");
   medianHist->GetYaxis()->SetNdivisions(5);
-  medianHist->GetXaxis()->SetTitleOffset(0.95);
   medianHist->GetYaxis()->SetTitleOffset(0.7);
-  medianHist->GetXaxis()->SetTitleSize(0.1);
-  medianHist->GetYaxis()->SetTitleSize(0.1);
-  medianHist->GetXaxis()->SetLabelSize(0.1);
+  medianHist->GetYaxis()->SetTitleSize(0.12);
   medianHist->GetYaxis()->SetLabelSize(0.1);
   medianHist->Draw();
   subData->Draw("EPSAME");
@@ -526,24 +524,26 @@ void MassAnimation::makeSingleFrame(int frame) {
   
   TH1F *p0Hist = new TH1F("p0hist", "p0hist", rBins, rMin, rMax);
   for (int i_b = 1; i_b <= rBins; i_b++) p0Hist->SetBinContent(i_b, 1.0);
-  p0Hist->GetYaxis()->SetRangeUser(0.0000001, 1.0);
+  p0Hist->GetYaxis()->SetRangeUser(0.0000001, 0.99);
   //p0Hist->SetLineColor(0);
   //p0Hist->SetLineWidth(0);
   p0Hist->GetYaxis()->SetTitle("p_{0}");
-  p0Hist->GetXaxis()->SetTitle("m_{#gamma#gamma} [GeV]");
   p0Hist->GetYaxis()->SetNdivisions(5);
-  p0Hist->GetXaxis()->SetTitleOffset(0.95);
-  p0Hist->GetYaxis()->SetTitleOffset(0.7);
-  p0Hist->GetXaxis()->SetTitleSize(0.1);
-  p0Hist->GetYaxis()->SetTitleSize(0.1);
-  p0Hist->GetXaxis()->SetLabelSize(0.1);
+  p0Hist->GetYaxis()->SetTitleOffset(0.8);
+  p0Hist->GetYaxis()->SetTitleSize(0.09);
   p0Hist->GetYaxis()->SetLabelSize(0.1);
+  
+  p0Hist->GetXaxis()->SetTitle("m_{#gamma#gamma} [GeV]");
+  p0Hist->GetXaxis()->SetTitleOffset(1.2);
+  p0Hist->GetXaxis()->SetTitleSize(0.14);
+  p0Hist->GetXaxis()->SetLabelSize(0.12);
+  
   p0Hist->Draw("axis");
   
   
   // Significance lines and text:
   TLatex sigma; sigma.SetTextColor(kRed+1);
-  sigma.SetTextFont(42); sigma.SetTextSize(0.04);
+  sigma.SetTextFont(42); sigma.SetTextSize(0.06);
   TLine *line = new TLine();
   line->SetLineStyle(2);
   line->SetLineWidth(1);
@@ -558,6 +558,7 @@ void MassAnimation::makeSingleFrame(int frame) {
     sigma.DrawLatex(sigmaXPos, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s));
   }
   m_p0[frame]->Draw("LSAME");
+  pad3->SetLogy();
   
   // Print and also save to file:
   can->Print(Form("%s/plot_mass_frame%d.eps", m_outputDir.Data(), frame));

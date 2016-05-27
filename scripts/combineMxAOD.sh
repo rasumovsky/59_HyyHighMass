@@ -16,5 +16,5 @@ done
 
 xAODMerge combinedMxAOD.root $directoryOut/*.root
 
-rm $directoryOut/*
+#rm $directoryOut/*
 mv combinedMxAOD.root $directoryOut/
