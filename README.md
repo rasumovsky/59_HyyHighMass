@@ -100,12 +100,14 @@ cp *.pcm forTar/
 cp bin/GlobalP0Toys_Faster forTar/
 cp bin/GenericToys forTar/
 cp data/settings_Graviton.cfg forTar/
+cp $WORKSPACE forTar/
 cp scripts/run.sh forTar/
 ```
 
 You should substitute `data/settings_Graviton.cfg` for the config file of 
-interest to you. Similarly, if the executable changes, you should substitute 
-that for `bin/GenericToys`. 
+interest to you. Similarly, you should use the "WorkspaceFile" entry in the .cfg
+file in place of "$WORKSPACE". Finally, if the executable changes, you should 
+substitute that for `bin/GenericToys`. 
 
 #### Modify the config file
 
@@ -114,17 +116,8 @@ you just copied to the `forTar/` directory. Find the `WorkspaceFile` setting,
 and copy that file to the `forTar/` directory. Then change the `WorkspaceFile`
 to point just to the filename, as in the example below.
 
-If your config file originally shows:
-```
-WorkspaceFile: 		/afs/cern.ch/user/a/ahard/work_directory/files_HighMass/GlobalInputs/Workspaces_30_03_2016/2015_Graviton_histfactory_EKHI_v7.root
-```
-Then execute the following command:
-```
-cp /afs/cern.ch/user/a/ahard/work_directory/files_HighMass/GlobalInputs/Workspaces_30_03_2016/2015_Graviton_histfactory_EKHI_v7.root forTar/
-```
 Then update your config file:
 ```
-WorkspaceFile: 		2015_Graviton_histfactory_EKHI_v7.root
 MasterOutput:		.
 PackageLocation:	.
 ```
