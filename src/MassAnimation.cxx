@@ -87,7 +87,7 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
   }
 
   // Set the range for the observable:
-  /*
+  
   std::vector<double> massRangeVector
     = m_config->getNumV(Form("PoIRange_%s",
 			     (m_config->getStr("PoIForMass")).Data()));
@@ -95,7 +95,7 @@ MassAnimation::MassAnimation(TString configFileName, TString options) {
   m_workspace->var(m_obsName)->setMax(massRangeVector[1]);
   m_workspace->var(m_obsName)->setRange("fullRange", massRangeVector[0], 
 					massRangeVector[1]);
-  */
+  
   
   // Settings for this class:
   m_geVPerBin = m_config->getInt("AnimationGeVPerBin");
@@ -524,7 +524,7 @@ void MassAnimation::makeSingleFrame(int frame) {
   
   TH1F *p0Hist = new TH1F("p0hist", "p0hist", rBins, rMin, rMax);
   for (int i_b = 1; i_b <= rBins; i_b++) p0Hist->SetBinContent(i_b, 1.0);
-  p0Hist->GetYaxis()->SetRangeUser(0.0000001, 0.99);
+  p0Hist->GetYaxis()->SetRangeUser(0.00001, 0.99);
   //p0Hist->SetLineColor(0);
   //p0Hist->SetLineWidth(0);
   p0Hist->GetYaxis()->SetTitle("p_{0}");
@@ -550,11 +550,9 @@ void MassAnimation::makeSingleFrame(int frame) {
   line->SetLineColor(kRed+1);
   double sigmaVals[6] = {0.5,0.15865,0.02275,0.001349,0.000032,0.0000002867};
   for (int i_s = 0; i_s < 5; i_s++) {
-    double sigmaXPos = m_p0[frame]->GetXaxis()->GetXmax()
-      - (0.07*(m_p0[frame]->GetXaxis()->GetXmax() -
-	       m_p0[frame]->GetXaxis()->GetXmin()));
-    line->DrawLine(m_p0[frame]->GetXaxis()->GetXmin(), sigmaVals[i_s],
-		   m_p0[frame]->GetXaxis()->GetXmax(), sigmaVals[i_s]);
+    double sigmaXPos = rMax - (0.07*(rMax - rMin));
+    //rMin, rMax
+    line->DrawLine(rMin, sigmaVals[i_s], rMax, sigmaVals[i_s]);
     sigma.DrawLatex(sigmaXPos, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s));
   }
   m_p0[frame]->Draw("LSAME");

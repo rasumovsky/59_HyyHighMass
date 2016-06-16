@@ -427,6 +427,10 @@ int main(int argc, char **argv) {
 	    << analyticZGlobal(observedZ0, fAnalytic->GetParameter(0), 
 			       fAnalytic->GetParameter(2))
 	    << std::endl;
+
+  std::cout << "Functional form of global significance:" << std::endl;
+  std::cout << Form("TMath::NormQuantile(TMath::Power(ROOT::Math::gaussian_cdf(zLocal*(1+%f)), %f));", fAnalytic->GetParameter(2),fAnalytic->GetParameter(0))
+	    << std::endl;
   
   // Finally, save the TGraph containing the local -> global Z mapping:
   TFile *outZFile = new TFile(Form("%s/graph_maxZ0_%s.root", outputDir.Data(), 

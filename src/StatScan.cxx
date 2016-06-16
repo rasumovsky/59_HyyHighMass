@@ -455,7 +455,12 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
   t.DrawLatex(0.32, 0.87, m_config->getStr("ATLASLabel"));
   t.DrawLatex(0.2, 0.81, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
-  t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
+  if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
+    t.DrawLatex(0.2, 0.75, "Spin-0 Selection");
+  }
+  else {
+    t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
+  }
   t.DrawLatex(0.2, 0.69,
 	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
 		   ((double)width)/100.0));
@@ -581,8 +586,12 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   t.DrawLatex(0.32, 0.27, m_config->getStr("ATLASLabel"));
   t.DrawLatex(0.2, 0.21, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
-  
-  t.DrawLatex(0.65, 0.27, "Spin-2 Selection");
+  if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
+    t.DrawLatex(0.2, 0.75, "Spin-0 Selection");
+  }
+  else {
+    t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
+  }
   t.DrawLatex(0.65, 0.21,
 	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
 		   ((double)width)/100.0));
