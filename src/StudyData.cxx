@@ -100,6 +100,16 @@ int chooseCategory() {
     else return 3;
   }
  
+  // Mass categorization:
+  else if (m_categoryName.EqualTo("MassCate")) {
+    if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 600000 &&
+	m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 700000) return 0;
+    else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 700000 &&
+	     m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 800000) return 1;
+    else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 800000 &&
+	m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 900000) return 2;
+    else return 3;
+  }
   // Exit because inputs are unknown:
   else {
     std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
@@ -127,7 +137,13 @@ TString nameCategory(int categoryIndex) {
     else if (categoryIndex == 2) return "ConvUnconv";
     else return "ConvConv";
   }
-  
+  else if (m_categoryName.EqualTo("MassCate")) {
+    if (categoryIndex == 0) return "mgg_600_700";
+    else if (categoryIndex == 1) return "mgg_700_800";
+    else if (categoryIndex == 2) return "mgg_800_inf";
+    else return "mgg_rest";
+  }
+
   // Exit because inputs are unknown:
   else {
     std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
@@ -151,6 +167,16 @@ TString histToCateName(TString histName) {
   else if (histName.Contains("UnconvConv")) return "Unconverted-Converted";
   else if (histName.Contains("ConvUnconv")) return "Converted-Unconverted";
   else if (histName.Contains("ConvConv")) return "2 Converted #gamma's";
+  else if (histName.Contains("mgg_600_700")) {
+    return "600 GeV < m_{#gamma#gamma} < 700 GeV";
+  }
+  else if (histName.Contains("mgg_700_800")) {
+    return "700 GeV < m_{#gamma#gamma} < 800 GeV";
+  }
+  else if (histName.Contains("mgg_800_inf")) {
+    return "m_{#gamma#gamma} > 800 GeV";
+  }
+  else if (histName.Contains("mgg_rest")) return "mgg_rest";
   else return "";
 }
 
@@ -170,6 +196,7 @@ void defineHistograms(TString histName, int nCategories, int nBins, double xMin,
   // Create inclusive histogram:
   m_histograms[histName] = new TH1F(histName, histName, nBins, xMin, xMax);
   m_histograms[histName]->GetXaxis()->SetTitle(histName);
+  m_histograms[histName]->Sumw2();
   if (histName.Contains("GeV")) {
     m_histograms[histName]
       ->GetYaxis()->SetTitle(Form("Entries / %2.1f GeV",binning));
@@ -186,6 +213,7 @@ void defineHistograms(TString histName, int nCategories, int nBins, double xMin,
       = new TH1F(histName, histName, nBins, xMin, xMax);
     m_histograms[Form("%s_%s",histName.Data(), cateName.Data())]
       ->GetXaxis()->SetTitle(histName);
+    m_histograms[Form("%s_%s",histName.Data(), cateName.Data())]->Sumw2();
     if (histName.Contains("GeV")) {
       m_histograms[Form("%s_%s",histName.Data(), cateName.Data())]
 	->GetYaxis()->SetTitle(Form("Entries / %2.1f GeV",binning));
@@ -237,6 +265,9 @@ TString formatHistName(TString histName) {
    -----------------------------------------------------------------------------
    Plot the named histogram.
    @param histName - The name of the histogram.
+   @param ana - The analysis type.
+   @param label - The ATLAS label
+   @param lumi - The dataset luminosity.
 */
 void plotHistogram(TString histName, TString ana, TString label, double lumi) {
   TCanvas *can = new TCanvas("can", "can");
@@ -260,6 +291,80 @@ void plotHistogram(TString histName, TString ana, TString label, double lumi) {
   t.DrawLatex(0.6, 0.69, histToCateName(histName));
 
   TString printName = Form("%s/plot_%s.eps",m_outputDir.Data(),histName.Data());
+  can->Print(printName);
+  delete can;
+}
+
+/**
+   -----------------------------------------------------------------------------
+   Plot the named histogram compared with hists in other categories.
+   @param histName - The name of the histogram.
+   @param nCategories - The number of analysis categories for plotting.
+   @param ana - The analysis type.
+   @param label - The ATLAS label
+   @param lumi - The dataset luminosity.
+*/
+void plotComparisonHist(TString histName, int nCategories, TString ana,
+			TString label, double lumi) {
+  std::cout << "plotComparisonHist(" << histName << ", " << nCategories
+	    << ", " << ana << ", " << label << ", " << lumi << ")" << std::endl;
+  
+  // Get hist name without categorization information:
+  for (int i_c = 0; i_c < nCategories; i_c++) {
+    TString currCateName = nameCategory(i_c);
+    if (histName.Contains(Form("_%s",currCateName.Data()))) {
+      return;
+    }
+  }
+  
+  // Create the canvas:
+  TCanvas *can = new TCanvas("can", "can");
+  can->cd();
+  //gPad->SetLogy();
+  
+  // Create a legend:
+  TLegend leg(0.3, 0.75, 0.5, 0.93);
+  leg.SetTextFont(42); 
+  leg.SetTextSize(0.03);
+  leg.SetBorderSize(0);
+  leg.SetFillColor(0);
+  
+  // Plot each histogram and add legend entry:
+  Color_t lineColors[5] = {kBlue+1, kMagenta+1, kGreen+1, kCyan+1, kRed+1};
+  for (int i_c = 0; i_c < nCategories; i_c++) {
+    if (i_c > 2) continue;
+    TString currCateName = nameCategory(i_c);
+    TString currHistName = Form("%s_%s", histName.Data(), 
+				currCateName.Data());
+    m_histograms[currHistName]
+      ->Scale(1.0 / m_histograms[currHistName]->Integral());
+    m_histograms[currHistName]->SetLineColor(lineColors[i_c]);
+    m_histograms[currHistName]->SetMarkerColor(lineColors[i_c]);
+    m_histograms[currHistName]->SetMarkerStyle(21 + i_c);
+    if (i_c == 0) m_histograms[currHistName]->Draw("E1");
+    else m_histograms[currHistName]->Draw("E1SAME");
+    leg.AddEntry(m_histograms[currHistName],
+		 histToCateName(nameCategory(i_c)), "LEP");
+  }
+  histName = formatHistName(histName);
+  
+  // Print ATLAS text on the plot:    
+  TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
+  t.SetTextFont(72); t.SetTextSize(0.04);
+  t.DrawLatex(0.6, 0.87, "ATLAS");
+  t.SetTextFont(42); t.SetTextSize(0.04);
+  t.DrawLatex(0.72, 0.87, label);
+  t.DrawLatex(0.6, 0.82, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",lumi));
+  if (ana.Contains("Scalar")) t.DrawLatex(0.6, 0.77, "Spin-0 Selection");
+  else if (ana.Contains("GravitonLoose")) {
+    t.DrawLatex(0.6, 0.77, "Spin-2 Loose Iso.");
+  }
+  else t.DrawLatex(0.6, 0.77, "Spin-2 Selection");
+  t.DrawLatex(0.6, 0.72, histToCateName(histName));
+  leg.Draw("SAME");
+
+  TString printName = Form("%s/plot_comparison_%s.eps", m_outputDir.Data(), 
+			   histName.Data());
   can->Print(printName);
   delete can;
 }
@@ -397,7 +502,7 @@ int main(int argc, char *argv[])
   
   // Define per-event histograms:
   m_histograms.clear();
-  int nBins = 50;
+  int nBins = 10;
   int nCategories = config->getInt("MxAODNCategories");
   m_categoryName = config->getStr("MxAODCategorization");
   
@@ -420,6 +525,10 @@ int main(int argc, char *argv[])
   }
   defineHistograms("p_{T}^{#gamma#gamma} [GeV]", nCategories, nBins, 0, 1000);
   defineHistograms("cos(#theta*)", nCategories, nBins, 0, 1);
+  defineHistograms("N_{Jets}", nCategories, 5, -0.5, 4.5);
+  defineHistograms("N_{Photons}", nCategories, 5, -0.5, 4.5);
+  defineHistograms("N_{Electrons}", nCategories, 5, -0.5, 4.5);
+  defineHistograms("N_{Muons}", nCategories, 5, -0.5, 4.5);
   
   // Define histograms of per-photon variables:
   for (int i_p = 0; i_p < 2; i_p++) {
@@ -427,12 +536,32 @@ int main(int argc, char *argv[])
 		     nCategories, nBins, 0.0, 1000.0);
     defineHistograms(Form("#eta(#gamma_{%d})",i_p+1),
 		     nCategories, nBins, -2.5, 2.5);
+    defineHistograms(Form("#eta_{S2}(#gamma_{%d})",i_p+1),
+		     nCategories, nBins, -2.5, 2.5);
     defineHistograms(Form("#phi(#gamma_{%d})",i_p+1),
 		     nCategories, nBins, -3.141, 3.141);
     defineHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1), 
 		     nCategories, nBins, 0.0, 50.0);
     defineHistograms(Form("E_{T}^{cone40}(#gamma_{%d}) [GeV]",i_p+1), 
 		     nCategories, nBins, -5.0, 95.0);
+    defineHistograms(Form("Conversion type #gamma_{%d}",i_p+1),
+		     nCategories, 6, -0.5, 5.5);
+  
+    defineHistograms(Form("Conversion radius #gamma_{%d}",i_p+1),
+		     nCategories, nBins, 0.0, 1000.0);
+    defineHistograms(Form("isEMTight #gamma_{%d}",i_p+1),
+		     nCategories, 2, -0.5, 1.5);
+    defineHistograms(Form("gain_{max-E} #gamma_{%d}",i_p+1),
+		     nCategories, 3, -0.5, 2.5);
+     
+    defineHistograms(Form("E_{0}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
+    defineHistograms(Form("E_{1}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
+    defineHistograms(Form("E_{2}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
+    defineHistograms(Form("E_{3}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
   }
   
   // Prepare for loop over input MxAOD/TTree:
@@ -482,79 +611,6 @@ int main(int argc, char *argv[])
 			   config->getInt("MxAODCutFlowIndex"));
     }
     
-    /*
-      // FOR CHECKING INDIVIDUAL EVENTS:
-    if (m_treeMxAOD->EventInfoAux_runNumber == 297730 && 
-	m_treeMxAOD->EventInfoAux_eventNumber == 80543259) {
-      std::cout << "HERES THE EVENT" << std::endl;
-      std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
-		<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
-		<< ", cutFlow = " << m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow
-		<< std::endl;
-    }
-    */
-    
-    /*
-    // Cut on corrupted events for the comparison:
-    if ((m_treeMxAOD->EventInfoAux_runNumber==298771 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==76919692) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==298967 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==235052382) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==299184 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==1239655641) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==299184 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==477056034) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==299584 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==988888955) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300655 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==635185630) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300655 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==1384431697) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300655 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==1871618509) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300655 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==450811118) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300655 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==1138806777) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300571 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==984316794) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300571 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==1348391999) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300571 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==1649040157) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300687 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==3234631017) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300687 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==3317227088) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300863 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==353026105) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300863 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==2887245828) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300800 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==406587713) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300800 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==2250556573) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300800 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==564565599) || 
-	(m_treeMxAOD->EventInfoAux_runNumber==300487 && 
-	 m_treeMxAOD->EventInfoAux_eventNumber==558130976)) { 
-      continue;
-    }
-          
-
-    // Check for corrupted events:
-    if (std::isnan(m_treeMxAOD->HGamEventInfoAuxDyn_m_yy)) {
-      std::cout << "CORRUPTED EVENT: run=" 
-		<< m_treeMxAOD->EventInfoAux_runNumber << " event=" 
-		<< m_treeMxAOD->EventInfoAux_eventNumber << std::endl;
-    }
-
-    // Cut for first 643pb-1 dataset:
-    if (m_treeMxAOD->EventInfoAux_runNumber > 300279 || m_treeMxAOD->EventInfoAux_runNumber == 298687) {
-    continue;
-    }
-    */
-
     if (prevRun != (int)(m_treeMxAOD->EventInfoAux_runNumber)) {
       //std::cout << "NEW RUN! " << m_treeMxAOD->EventInfoAux_runNumber 
       //	<< std::endl;
@@ -678,13 +734,6 @@ int main(int argc, char *argv[])
     eventList << m_treeMxAOD->EventInfoAux_runNumber << " " 
 	      << m_treeMxAOD->EventInfoAux_eventNumber << std::endl;
 
-    //
-    //
-    // ADDITIONAL MYY CUT!!!
-    //
-    //
-    //if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 700000) continue;
-    
     // Fill the event variable histograms:
     fillHistograms("z_{vertex} [mm]", category,
 		   m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ);
@@ -694,6 +743,16 @@ int main(int argc, char *argv[])
 		   m_treeMxAOD->HGamEventInfoAuxDyn_pT_yy / 1000.0);
     fillHistograms("cos(#theta*)", category,
 		   m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy);
+    //std::cout << "CHECK0" << std::endl;
+    fillHistograms("N_{Jets}", category,
+		   (*m_treeMxAOD->HGamAntiKt4EMTopoJetsAuxDyn_pt).size());
+    fillHistograms("N_{Photons}", category,
+		   (*m_treeMxAOD->HGamPhotonsAuxDyn_pt).size());
+    fillHistograms("N_{Electrons}", category,
+		   (*m_treeMxAOD->HGamElectronsAuxDyn_pt).size());
+    fillHistograms("N_{Muons}", category,
+		   (*m_treeMxAOD->HGamMuonsAuxDyn_pt).size());
+    //std::cout << "CHECK1" << std::endl;
     
     // Fill the photon variable histograms in loop over photons:
     for (int i_p = 0; i_p < 2; i_p++) {
@@ -701,6 +760,8 @@ int main(int argc, char *argv[])
 		     (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p] / 1000.0);
       fillHistograms(Form("#eta(#gamma_{%d})",i_p+1), category, 
 		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]);
+      fillHistograms(Form("#eta_{S2}(#gamma_{%d})",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta_s2)[i_p]);
       fillHistograms(Form("#phi(#gamma_{%d})",i_p+1), category, 
 		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p]);
       fillHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1),
@@ -710,6 +771,27 @@ int main(int argc, char *argv[])
 		     category,
 		     ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[i_p]
 		      / 1000.0));
+      fillHistograms(Form("Conversion type #gamma_{%d}",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[i_p]);
+      //std::cout << "CHECK2" << std::endl;
+      /*
+      fillHistograms(Form("Conversion radius #gamma_{%d}",i_p+1), category, 
+      	     (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionRadius)[i_p]);
+      fillHistograms(Form("isEMTight #gamma_{%d}",i_p+1), category, 
+      	     (*m_treeMxAOD->HGamPhotonsAuxDyn_isTight)[i_p]);
+      fillHistograms(Form("gain_{max-E} #gamma_{%d}",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[i_p]);
+      std::cout << "CHECK2.5" << std::endl;
+      fillHistograms(Form("E_{0}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[i_p]);
+      fillHistograms(Form("E_{1}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[i_p]);
+      fillHistograms(Form("E_{2}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[i_p]);
+      fillHistograms(Form("E_{3}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[i_p]);
+      */
+      //std::cout << "CHECK3" << std::endl;
     }
   }// End of loop over events
   eventList.close();
@@ -720,9 +802,17 @@ int main(int argc, char *argv[])
   TFile *histogramFile = new TFile(histogramFileName, "RECREATE");
   for (std::map<TString,TH1F*>::iterator histIter = m_histograms.begin(); 
        histIter != m_histograms.end(); histIter++) {
+    // Plot individual histogram:
     plotHistogram(histIter->first, config->getStr("AnalysisType"),
 		  config->getStr("ATLASLabel"),
 		  config->getNum("AnalysisLuminosity")/1000.0);
+    // Plot comparison of histograms in each category:
+    if (m_categoryName.EqualTo("MassCate")) {
+      plotComparisonHist(histIter->first, nCategories, 
+			 config->getStr("AnalysisType"),
+			 config->getStr("ATLASLabel"),
+			 config->getNum("AnalysisLuminosity")/1000.0);
+    }
     histIter->second
       ->Write(Form("hist_%s", (formatHistName(histIter->first)).Data()));
   }
