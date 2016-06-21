@@ -102,12 +102,19 @@ int chooseCategory() {
  
   // Mass categorization:
   else if (m_categoryName.EqualTo("MassCate")) {
+    /*
     if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 600000 &&
 	m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 700000) return 0;
     else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 700000 &&
 	     m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 800000) return 1;
     else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 800000 &&
-	m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 900000) return 2;
+	     m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 900000) return 2;
+    else return 3;
+    */
+    if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 700000) return 0;
+    else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 700000 &&
+	     m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 800000) return 1;
+    else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 800000) return 2;
     else return 3;
   }
   // Exit because inputs are unknown:
@@ -168,7 +175,7 @@ TString histToCateName(TString histName) {
   else if (histName.Contains("ConvUnconv")) return "Converted-Unconverted";
   else if (histName.Contains("ConvConv")) return "2 Converted #gamma's";
   else if (histName.Contains("mgg_600_700")) {
-    return "600 GeV < m_{#gamma#gamma} < 700 GeV";
+    return "m_{#gamma#gamma} < 700 GeV";
   }
   else if (histName.Contains("mgg_700_800")) {
     return "700 GeV < m_{#gamma#gamma} < 800 GeV";
@@ -323,7 +330,7 @@ void plotComparisonHist(TString histName, int nCategories, TString ana,
   //gPad->SetLogy();
   
   // Create a legend:
-  TLegend leg(0.3, 0.75, 0.5, 0.93);
+  TLegend leg(0.6, 0.72, 0.9, 0.91);
   leg.SetTextFont(42); 
   leg.SetTextSize(0.03);
   leg.SetBorderSize(0);
@@ -341,7 +348,11 @@ void plotComparisonHist(TString histName, int nCategories, TString ana,
     m_histograms[currHistName]->SetLineColor(lineColors[i_c]);
     m_histograms[currHistName]->SetMarkerColor(lineColors[i_c]);
     m_histograms[currHistName]->SetMarkerStyle(21 + i_c);
-    if (i_c == 0) m_histograms[currHistName]->Draw("E1");
+    if (i_c == 0) {
+      m_histograms[currHistName]->GetYaxis()
+	->SetRangeUser(0, 2.0 * m_histograms[currHistName]->GetMaximum());
+      m_histograms[currHistName]->Draw("E1");
+    }
     else m_histograms[currHistName]->Draw("E1SAME");
     leg.AddEntry(m_histograms[currHistName],
 		 histToCateName(nameCategory(i_c)), "LEP");
@@ -351,16 +362,16 @@ void plotComparisonHist(TString histName, int nCategories, TString ana,
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.04);
-  t.DrawLatex(0.6, 0.87, "ATLAS");
+  t.DrawLatex(0.35, 0.87, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.04);
-  t.DrawLatex(0.72, 0.87, label);
-  t.DrawLatex(0.6, 0.82, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",lumi));
-  if (ana.Contains("Scalar")) t.DrawLatex(0.6, 0.77, "Spin-0 Selection");
+  t.DrawLatex(0.45, 0.87, label);
+  t.DrawLatex(0.35, 0.82, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",lumi));
+  if (ana.Contains("Scalar")) t.DrawLatex(0.35, 0.77, "Spin-0 Selection");
   else if (ana.Contains("GravitonLoose")) {
-    t.DrawLatex(0.6, 0.77, "Spin-2 Loose Iso.");
+    t.DrawLatex(0.35, 0.77, "Spin-2 Loose Iso.");
   }
   else t.DrawLatex(0.6, 0.77, "Spin-2 Selection");
-  t.DrawLatex(0.6, 0.72, histToCateName(histName));
+  t.DrawLatex(0.35, 0.72, histToCateName(histName));
   leg.Draw("SAME");
 
   TString printName = Form("%s/plot_comparison_%s.eps", m_outputDir.Data(), 
@@ -525,8 +536,8 @@ int main(int argc, char *argv[])
   }
   defineHistograms("p_{T}^{#gamma#gamma} [GeV]", nCategories, nBins, 0, 1000);
   defineHistograms("cos(#theta*)", nCategories, nBins, 0, 1);
-  defineHistograms("N_{Jets}", nCategories, 5, -0.5, 4.5);
-  defineHistograms("N_{Photons}", nCategories, 5, -0.5, 4.5);
+  defineHistograms("N_{Jets}", nCategories, 9, -0.5, 8.5);
+  defineHistograms("N_{Photons}", nCategories, 3, 1.5, 4.5);
   defineHistograms("N_{Electrons}", nCategories, 5, -0.5, 4.5);
   defineHistograms("N_{Muons}", nCategories, 5, -0.5, 4.5);
   
@@ -543,7 +554,7 @@ int main(int argc, char *argv[])
     defineHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1), 
 		     nCategories, nBins, 0.0, 50.0);
     defineHistograms(Form("E_{T}^{cone40}(#gamma_{%d}) [GeV]",i_p+1), 
-		     nCategories, nBins, -5.0, 95.0);
+		     nCategories, nBins, -5.0, 25.0);
     defineHistograms(Form("Conversion type #gamma_{%d}",i_p+1),
 		     nCategories, 6, -0.5, 5.5);
   
@@ -595,7 +606,7 @@ int main(int argc, char *argv[])
   std::ofstream eventList(Form("%s/eventList.txt", m_outputDir.Data()));
   
   //--------------------------------------//
-  // Loop over events to build dataset for signal parameterization:
+  // Loop over events:
   int nEvents = m_treeMxAOD->fChain->GetEntries();
   std::cout << "There are " << nEvents << " events to process." << std::endl;
   for (int index = 0; index < nEvents; index++) {
@@ -630,11 +641,13 @@ int main(int argc, char *argv[])
     // Also cut on events that don't make it to the desired cut:
     if (m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow <
 	config->getInt("MxAODCutFlowIndex")) continue;
-    
+
+    //---------- Pre-selection Cut ----------//
     if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedPreselection) continue;
     m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")]++;
     m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")]++;
-    
+
+    //---------- PID Cut ----------//
     if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedPID) continue;
     m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+1]++;
     m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+1]++;
@@ -705,10 +718,11 @@ int main(int argc, char *argv[])
     
     //---------- Select the event ----------//
     if ((config->getStr("AnalysisType")).Contains("Graviton") &&
+	!(config->getStr("AnalysisType")).Contains("GravitonLoose") &&
 	!(m_treeMxAOD->HGamEventInfoAuxDyn_isPassedExotic && 
 	  m_treeMxAOD->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy &&
 	  m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 150000)) {
-	  //m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 200000)) {
+      //m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 200000)) {
       continue;
     }
     else if ((config->getStr("AnalysisType")).EqualTo("Scalar") &&

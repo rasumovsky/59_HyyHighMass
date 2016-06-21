@@ -457,13 +457,16 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
   if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
     t.DrawLatex(0.2, 0.75, "Spin-0 Selection");
+    t.DrawLatex(0.2, 0.69,
+		Form("G*#rightarrow#gamma#gamma, #Gamma/m_{X}=%2.2f",
+		     ((double)width)/100.0));
   }
   else {
     t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
+    t.DrawLatex(0.2, 0.69,
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		     ((double)width)/100.0));
   }
-  t.DrawLatex(0.2, 0.69,
-	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
-		   ((double)width)/100.0));
   
   // Print the canvas:
   can->Print(Form("%s/limits_width%d.eps", m_outputDir.Data(), width));

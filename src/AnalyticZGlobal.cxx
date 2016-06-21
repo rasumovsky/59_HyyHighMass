@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  Name: SimpleSignificance.cxx                                              //
+//  Name: AnalyticZGlobal.cxx                                                 //
 //                                                                            //
 //  Creator: Andrew Hard                                                      //
 //  Email: ahard@cern.ch                                                      //
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
   
   // Load the analysis configuration file:
   Config *config = new Config(configFile);
-  TString outputDir = Form("%s/%s/SimpleSignificance", 
+  TString outputDir = Form("%s/%s/AnalyticZGlobal", 
 			   (config->getStr("MasterOutput")).Data(),
 			   (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s", outputDir.Data()));
