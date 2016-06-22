@@ -68,7 +68,6 @@ void fillCutFlowFromMxAOD(TFile *file, int maximumBin) {
     m_cutNames.push_back("isolation");
     m_cutNames.push_back("pT_cuts");
   }
-  
 }
 
 /**
@@ -102,21 +101,23 @@ int chooseCategory() {
  
   // Mass categorization:
   else if (m_categoryName.EqualTo("MassCate")) {
-    /*
-    if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 600000 &&
-	m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 700000) return 0;
-    else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 700000 &&
-	     m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 800000) return 1;
-    else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 800000 &&
-	     m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 900000) return 2;
-    else return 3;
-    */
     if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 700000) return 0;
     else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 700000 &&
 	     m_treeMxAOD->HGamEventInfoAuxDyn_m_yy < 800000) return 1;
     else if (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy >= 800000) return 2;
     else return 3;
   }
+  
+  // Gain categorization:
+  else if (m_categoryName.EqualTo("GainCate")) {
+    int gain1 = (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[0];
+    int gain2 = (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[1];
+    if (gain1 == 0 && gain2 == 0) return 0;
+    else if (gain1 == 0) return 1; 
+    else if (gain2 == 0) return 2;
+    else return 3;
+  }
+  
   // Exit because inputs are unknown:
   else {
     std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
@@ -150,7 +151,13 @@ TString nameCategory(int categoryIndex) {
     else if (categoryIndex == 2) return "mgg_800_inf";
     else return "mgg_rest";
   }
-
+  else if (m_categoryName.EqualTo("GainCate")) {
+    if (categoryIndex == 0) return "gain_0_0";
+    else if (categoryIndex == 1) return "gain_0_1";
+    else if (categoryIndex == 2) return "gain_1_0";
+    else return "gain_1_1";
+  }
+  
   // Exit because inputs are unknown:
   else {
     std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
@@ -184,6 +191,10 @@ TString histToCateName(TString histName) {
     return "m_{#gamma#gamma} > 800 GeV";
   }
   else if (histName.Contains("mgg_rest")) return "mgg_rest";
+  else if (histName.Contains("gain_0_0")) return "gain(#gamma1,#gamma2)=0";
+  else if (histName.Contains("gain_0_1")) return "gain(#gamma1)=0";
+  else if (histName.Contains("gain_1_0")) return "gain(#gamma2)=0";
+  else if (histName.Contains("gain_1_1")) return "gain(#gamma1,#gamma2)>0";
   else return "";
 }
 
@@ -338,7 +349,7 @@ void plotComparisonHist(TString histName, int nCategories, TString ana,
   
   // Plot each histogram and add legend entry:
   Color_t lineColors[5] = {kBlue+1, kMagenta+1, kGreen+1, kCyan+1, kRed+1};
-  for (int i_c = 0; i_c < nCategories; i_c++) {
+  for (int i_c = nCategories-1; i_c >= 0; i_c--) {
     if (i_c > 2) continue;
     TString currCateName = nameCategory(i_c);
     TString currHistName = Form("%s_%s", histName.Data(), 
@@ -348,7 +359,7 @@ void plotComparisonHist(TString histName, int nCategories, TString ana,
     m_histograms[currHistName]->SetLineColor(lineColors[i_c]);
     m_histograms[currHistName]->SetMarkerColor(lineColors[i_c]);
     m_histograms[currHistName]->SetMarkerStyle(21 + i_c);
-    if (i_c == 0) {
+    if (i_c == nCategories-1) {
       m_histograms[currHistName]->GetYaxis()
 	->SetRangeUser(0, 2.0 * m_histograms[currHistName]->GetMaximum());
       m_histograms[currHistName]->Draw("E1");
@@ -548,7 +559,7 @@ int main(int argc, char *argv[])
     defineHistograms(Form("#eta(#gamma_{%d})",i_p+1),
 		     nCategories, nBins, -2.5, 2.5);
     defineHistograms(Form("#eta_{S2}(#gamma_{%d})",i_p+1),
-		     nCategories, nBins, -2.5, 2.5);
+		     nCategories, 11, -3.0, 3.0);
     defineHistograms(Form("#phi(#gamma_{%d})",i_p+1),
 		     nCategories, nBins, -3.141, 3.141);
     defineHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1), 
@@ -560,8 +571,6 @@ int main(int argc, char *argv[])
   
     defineHistograms(Form("Conversion radius #gamma_{%d}",i_p+1),
 		     nCategories, nBins, 0.0, 1000.0);
-    defineHistograms(Form("isEMTight #gamma_{%d}",i_p+1),
-		     nCategories, 2, -0.5, 1.5);
     defineHistograms(Form("gain_{max-E} #gamma_{%d}",i_p+1),
 		     nCategories, 3, -0.5, 2.5);
      
@@ -641,7 +650,7 @@ int main(int argc, char *argv[])
     // Also cut on events that don't make it to the desired cut:
     if (m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow <
 	config->getInt("MxAODCutFlowIndex")) continue;
-
+    
     //---------- Pre-selection Cut ----------//
     if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedPreselection) continue;
     m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")]++;
@@ -675,21 +684,34 @@ int main(int argc, char *argv[])
     
     double pT1 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0];
     double pT2 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1];
-    bool isCaloIsoTight1 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[0] <
+    bool isCaloIso1 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[0] <
 			    ((0.022 * pT1) + isoConstant));
-    bool isCaloIsoTight2 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[1] <
+    bool isCaloIso2 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[1] <
 			    ((0.022 * pT2) + isoConstant));
+    bool isCaloIsoTight1 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[0] <
+			    ((0.022 * pT1) + 2450.00));
+    bool isCaloIsoTight2 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[1] <
+			    ((0.022 * pT2) + 2450.00));
+    
     bool isTrackIso1
       = ((*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[0] < (0.05 * pT1));
     bool isTrackIso2
       = ((*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[1] < (0.05 * pT2));
     
     if (((config->getStr("AnalysisType")).EqualTo("Scalar") &&
-	 !(isCaloIsoTight1 && isCaloIsoTight2 && isTrackIso1 && isTrackIso2)) ||
+	 !(isCaloIso1 && isCaloIso2 && isTrackIso1 && isTrackIso2)) ||
 	((config->getStr("AnalysisType")).EqualTo("Graviton") &&
-	 !(isCaloIsoTight1 && isCaloIsoTight2 && isTrackIso1 && isTrackIso2)) ||
+	 !(isCaloIso1 && isCaloIso2 && isTrackIso1 && isTrackIso2)) ||
 	((config->getStr("AnalysisType")).EqualTo("GravitonLoose") &&
-	 !(isCaloIsoTight1 && isCaloIsoTight2))) {
+	 !(isCaloIso1 && isCaloIso2))) {
+      continue;
+    }
+
+    // Loose-not-tight selection:
+    if ((config->isDefined("LooseNotTight") && 
+	 config->getBool("LooseNotTight")) && 
+	(config->getStr("AnalysisType")).EqualTo("GravitonLoose") && 
+	isCaloIsoTight1 && isCaloIsoTight2 && isTrackIso1 && isTrackIso2) {
       continue;
     }
     
@@ -730,13 +752,6 @@ int main(int argc, char *argv[])
 	       m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 150000)) {
       continue;
     }
-        
-    /*
-      // CHECK FOR PASSING EVENT COMPARISON
-      std::cout << "PASSING EVENT: Run = " 
-	      << m_treeMxAOD->EventInfoAux_runNumber << ", Event = " 
-	      << m_treeMxAOD->EventInfoAux_eventNumber << std::endl;
-    */    
     
     // Choose the category:
     int category = chooseCategory();
@@ -757,7 +772,7 @@ int main(int argc, char *argv[])
 		   m_treeMxAOD->HGamEventInfoAuxDyn_pT_yy / 1000.0);
     fillHistograms("cos(#theta*)", category,
 		   m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy);
-    //std::cout << "CHECK0" << std::endl;
+    
     fillHistograms("N_{Jets}", category,
 		   (*m_treeMxAOD->HGamAntiKt4EMTopoJetsAuxDyn_pt).size());
     fillHistograms("N_{Photons}", category,
@@ -766,7 +781,6 @@ int main(int argc, char *argv[])
 		   (*m_treeMxAOD->HGamElectronsAuxDyn_pt).size());
     fillHistograms("N_{Muons}", category,
 		   (*m_treeMxAOD->HGamMuonsAuxDyn_pt).size());
-    //std::cout << "CHECK1" << std::endl;
     
     // Fill the photon variable histograms in loop over photons:
     for (int i_p = 0; i_p < 2; i_p++) {
@@ -787,14 +801,14 @@ int main(int argc, char *argv[])
 		      / 1000.0));
       fillHistograms(Form("Conversion type #gamma_{%d}",i_p+1), category, 
 		     (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[i_p]);
-      //std::cout << "CHECK2" << std::endl;
+      
+      fillHistograms(Form("gain_{max-E} #gamma_{%d}",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[i_p]);
+      
       /*
       fillHistograms(Form("Conversion radius #gamma_{%d}",i_p+1), category, 
       	     (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionRadius)[i_p]);
-      fillHistograms(Form("isEMTight #gamma_{%d}",i_p+1), category, 
-      	     (*m_treeMxAOD->HGamPhotonsAuxDyn_isTight)[i_p]);
-      fillHistograms(Form("gain_{max-E} #gamma_{%d}",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[i_p]);
+          
       std::cout << "CHECK2.5" << std::endl;
       fillHistograms(Form("E_{0}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
 		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[i_p]);
@@ -805,7 +819,6 @@ int main(int argc, char *argv[])
       fillHistograms(Form("E_{3}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
 		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[i_p]);
       */
-      //std::cout << "CHECK3" << std::endl;
     }
   }// End of loop over events
   eventList.close();
