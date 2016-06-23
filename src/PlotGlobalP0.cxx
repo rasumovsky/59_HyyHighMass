@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
     hForAxis->GetXaxis()->SetTitle("m_{G*} [GeV]");
   }
   else hForAxis->GetXaxis()->SetTitle("m_{X} [GeV]");
-  hForAxis->GetYaxis()->SetRangeUser(0.00001, 1.0);
+  hForAxis->GetYaxis()->SetRangeUser(0.0001, 1.0);
   hForAxis->Draw("axis");
   gPad->SetLogy();
   graphP0->Draw("LSAME");
@@ -136,25 +136,25 @@ int main(int argc, char **argv) {
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.05);
-  t.DrawLatex(0.6, 0.44, "ATLAS");
+  t.DrawLatex(0.2, 0.27, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.05);
-  t.DrawLatex(0.72, 0.44, config->getStr("ATLASLabel"));
-  t.DrawLatex(0.6, 0.38, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+  t.DrawLatex(0.32, 0.27, config->getStr("ATLASLabel"));
+  t.DrawLatex(0.2, 0.21, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (config->getNum("AnalysisLuminosity")/1000.0)));
   if ((config->getStr("AnalysisType")).Contains("Scalar")) {
-    t.DrawLatex(0.6, 0.32, "Spin-0 Selection");
-    t.DrawLatex(0.6, 0.26,
+    t.DrawLatex(0.6, 0.27, "Spin-0 Selection");
+    t.DrawLatex(0.6, 0.21,
 		Form("X#rightarrow#gamma#gamma, #Gamma/m_{X}=%2.2f", width));
   }
   else if ((config->getStr("AnalysisType")).Contains("GravitonLoose")) {
-    t.DrawLatex(0.6, 0.32, "Spin-2 Loose Iso.");
-    t.DrawLatex(0.6, 0.26,
+    t.DrawLatex(0.6, 0.27, "Spin-2 Loose Iso.");
+    t.DrawLatex(0.6, 0.21,
 		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
 		     width));
   }
   else {
-    t.DrawLatex(0.6, 0.32, "Spin-2 Selection");
-    t.DrawLatex(0.6, 0.26,
+    t.DrawLatex(0.6, 0.27, "Spin-2 Selection");
+    t.DrawLatex(0.6, 0.21,
 		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
 		     width));
   }
@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
   line->SetLineWidth(1);
   line->SetLineColor(kRed+1);
   double sigmaVals[5] = {0.5,0.15865,0.02275,0.001349,0.000032};
-  for (int i_s = 0; i_s < 5; i_s++) {
+  for (int i_s = 0; i_s < 4; i_s++) {
     double sigmaXPos = massMax - (0.07*(massMax - massMin));
     line->DrawLine(massMin, sigmaVals[i_s], massMax, sigmaVals[i_s]);
     sigma.DrawLatex(sigmaXPos, 1.1*sigmaVals[i_s], Form("%d#sigma",i_s));

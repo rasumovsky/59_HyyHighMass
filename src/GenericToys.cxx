@@ -82,7 +82,7 @@ void runToysSinglePoint(bool doImportanceSampling) {
   std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
   for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
     std::vector<double> currRange
-      = m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
+      = m_config->getNumV(Form("PoIRange_%s", (listPoI[i_p]).Data()));
     if (testStat->theWorkspace()->var(listPoI[i_p])) {
       testStat->theWorkspace()->var(listPoI[i_p])
 	->setRange(currRange[0], currRange[1]);

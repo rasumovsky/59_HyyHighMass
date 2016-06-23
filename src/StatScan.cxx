@@ -459,13 +459,13 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
     t.DrawLatex(0.2, 0.75, "Spin-0 Selection");
     t.DrawLatex(0.2, 0.69,
 		Form("G*#rightarrow#gamma#gamma, #Gamma/m_{X}=%2.2f",
-		     ((double)width)/100.0));
+		     ((double)width)/1000.0));
   }
   else {
     t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
     t.DrawLatex(0.2, 0.69,
 		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
-		     ((double)width)/100.0));
+		     ((double)width)/1000.0));
   }
   
   // Print the canvas:
@@ -600,7 +600,7 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   }
   t.DrawLatex(0.65, 0.21,
 	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
-		   ((double)width)/100.0));
+		   ((double)width)/1000.0));
 
   gP0Obs->Draw("LSAME");
 
@@ -999,19 +999,23 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
       testStat->theWorkspace()->import(*m_dataToFit);
     }
     
+    // Strategy settings (if defined):
+    if (m_config->isDefined("FitOptions")) {
+      testStat->setFitOptions(m_config->getStr("FitOptions"));
+    }
+    
     // Set the PoI ranges for this study:
     std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
     for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
       std::vector<double> currRange
-	= m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
+	= m_config->getNumV(Form("PoIRange_%s", (listPoI[i_p]).Data()));
       if (testStat->theWorkspace()->var(listPoI[i_p])) {
 	testStat->theWorkspace()->var(listPoI[i_p])
 	  ->setRange(currRange[0], currRange[1]);
       }
       else {
-	std::cout << "StatScan: Workspace has no variable " << listPoI[i_p]
-		  << std::endl;
-	exit(0);
+	printer(Form("StatScan: Workspace has no variable %s",
+		     listPoI[i_p].Data()), true);
       }
     }
     
@@ -1036,7 +1040,7 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
     std::map<TString,double> mapPoI; mapPoI.clear();
     mapPoI[m_config->getStr("PoIForNormalization")] = xSectionDouble;
     mapPoI[m_config->getStr("PoIForMass")] = (double)mass;
-    mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
+    mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/1000.0);
     
     
     //----------------------------------------//
@@ -1069,7 +1073,7 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
       testStat->setParam(m_config->getStr("PoIForMass"), 
 			 (double)mass, true);
       testStat->setParam(m_config->getStr("PoIForWidth"), 
-			 (((double)width)/100.0), true);
+			 (((double)width)/1000.0), true);
       
       // Perform the mu=1 fit and mu-free fit (necessary for qmu calculation):
       double nllObsMu1 
@@ -1223,7 +1227,7 @@ bool StatScan::singleLimitTest(int mass, int width, bool doTilde) {
 	      m_configFileName.Data(), asymptoticsOptions.Data(),
 	      (m_config->getStr("PoIForMass")).Data(), mass,
 	      (m_config->getStr("PoIForWidth")).Data(), 
-	      ((double)width/100.0)));
+	      ((double)width/1000.0)));
   
   TString asymptoticsCLsDir = Form("%s/%s/AsymptoticsCls", 
 				   (m_config->getStr("MasterOutput")).Data(),
@@ -1233,7 +1237,7 @@ bool StatScan::singleLimitTest(int mass, int width, bool doTilde) {
 				(m_config->getStr("PoIForMass")).Data(), 
 				((double)mass),
 				(m_config->getStr("PoIForWidth")).Data(), 
-				((double)width/100.0)));
+				((double)width/1000.0)));
   std::map<TString,double> asymptoticLimits; asymptoticLimits.clear();
   if (limitInput.is_open()) {
     while (limitInput >> asymptoticLimits["Obs"]
@@ -1256,7 +1260,7 @@ bool StatScan::singleLimitTest(int mass, int width, bool doTilde) {
    -----------------------------------------------------------------------------
    Calculate the p0 for a given mass and width hypothesis.
    @param mass - Integer representing the resonance mass.
-   @param width - Integer representing the resonance width * 100.
+   @param width - Integer representing the resonance width * 1000.
    @param crossSection - Integer representing the cross-section * 1000.
    @param makeNew - True if from toy MC, false if from text file storage.
    @param asymptotic - True iff. asymptotic results are desired. 
@@ -1337,11 +1341,16 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
       testStat->theWorkspace()->import(*m_dataToFit);
     }
     
+    // Strategy settings (if defined):
+    if (m_config->isDefined("FitOptions")) {
+      testStat->setFitOptions(m_config->getStr("FitOptions"));
+    }
+  
     // Set the PoI ranges for this study:
     std::vector<TString> listPoI = m_config->getStrV("WorkspacePoIs");
     for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
       std::vector<double> currRange
-	= m_config->getNumV(Form("ScanPoIRange_%s", (listPoI[i_p]).Data()));
+	= m_config->getNumV(Form("PoIRange_%s", (listPoI[i_p]).Data()));
       if (testStat->theWorkspace()->var(listPoI[i_p])) {
 	testStat->theWorkspace()->var(listPoI[i_p])
 	  ->setRange(currRange[0], currRange[1]);
@@ -1374,7 +1383,7 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     mapPoI[m_config->getStr("PoIForNormalization")]
       = ((double)crossSection/1000.0);
     mapPoI[m_config->getStr("PoIForMass")] = (double)mass;
-    mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/100.0);
+    mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/1000.0);
     
     //----------------------------------------//
     // Get the asymptotic p0 results:
@@ -1400,7 +1409,7 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
       // Also force the mass and width to be constant always:
       testStat->setParam(m_config->getStr("PoIForMass"), (double)mass, true);
       testStat->setParam(m_config->getStr("PoIForWidth"), 
-			 (((double)width)/100.0), true);
+			 (((double)width)/1000.0), true);
       
       // Perform the mu=0 fit, make sure normalization PoI is set to zero:
       mapPoI[m_config->getStr("PoIForNormalization")] = 0.0;
