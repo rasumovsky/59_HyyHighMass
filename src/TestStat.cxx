@@ -499,10 +499,10 @@ std::vector<double> TestStat::asymptoticP0(std::map<TString,double> mapPoI,
     asimovDataMu1Name.Append(Form("_%s%2.2f", poiName.Data(), poiValue));
   }
   
-  // Generate mu1 asimov data:
-  if (!m_workspace->data(asimovDataMu1Name)) {
-    createAsimovData(1.0, snapshotName, mapPoI, asimovDataMu1Name);
-  }
+  // Generate mu1 asimov data for expected:
+  //if (!m_workspace->data(asimovDataMu1Name)) {
+  //createAsimovData(1.0, snapshotName, mapPoI, asimovDataMu1Name);
+  //}
   
   // Then set the signal strength to zero for fitting:
   double originNorm = mapPoI[poiForNorm];

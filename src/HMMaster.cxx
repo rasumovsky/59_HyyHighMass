@@ -213,6 +213,11 @@ int main (int argc, char **argv) {
     exit(0);
   }
   
+  std::cout << "\nMIT License\n"
+	    << "Copyright (c) 2016 Andrew Straiton Hard.\n"
+	    << "License for HyyHighMass package may be found in LICENSE.txt\n" 
+	    << std::endl;
+  
   // The job name and options (which analysis steps to perform):
   TString masterOption = argv[1];
   TString configFileName = argv[2];
