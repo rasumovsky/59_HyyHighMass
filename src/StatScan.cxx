@@ -400,13 +400,22 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
   // Canvas and graph formatting:
   TCanvas *can = new TCanvas("can","can");
   can->cd();
-  
-  gLimitExp->GetXaxis()->SetTitle("m_{G*} [GeV]");
-  gLimitObs->GetXaxis()->SetTitle("m_{G*} [GeV]");
-  gLimitExp_2s->GetXaxis()->SetTitle("m_{G*} [GeV]");
-  gLimitExp->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
-  gLimitObs->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
-  gLimitExp_2s->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [pb]");
+  if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
+    gLimitExp->GetXaxis()->SetTitle("m_{X} [GeV]");
+    gLimitObs->GetXaxis()->SetTitle("m_{X} [GeV]");
+    gLimitExp_2s->GetXaxis()->SetTitle("m_{X} [GeV]");
+    gLimitExp->GetYaxis()->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrow#gamma#gamma} [fb]");
+    gLimitObs->GetYaxis()->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrow#gamma#gamma} [fb]");
+    gLimitExp_2s->GetYaxis()->SetTitle("95% CL limit on #sigma_{X}#timesBR_{X#rightarrow#gamma#gamma} [fb]");
+  }
+  else {
+    gLimitExp->GetXaxis()->SetTitle("m_{G*} [GeV]");
+    gLimitObs->GetXaxis()->SetTitle("m_{G*} [GeV]");
+    gLimitExp_2s->GetXaxis()->SetTitle("m_{G*} [GeV]");
+    gLimitExp->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [fb]");
+    gLimitObs->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [fb]");
+    gLimitExp_2s->GetYaxis()->SetTitle("95% CL limit on #sigma_{G*}#timesBR_{G*#rightarrow#gamma#gamma} [fb]");
+  }
   
   gLimitExp->SetLineColor(kBlack);
   gLimitExp->SetLineStyle(2);
@@ -536,16 +545,21 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   can->cd();
   
   // Toy graph formatting:
-  gP0Exp->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
+    gP0Exp->GetXaxis()->SetTitle("m_{X} [GeV]");
+    gP0Obs->GetXaxis()->SetTitle("m_{X} [GeV]");
+  }
+  else {
+    gP0Exp->GetXaxis()->SetTitle("m_{G*} [GeV]");
+    gP0Obs->GetXaxis()->SetTitle("m_{G*} [GeV]");
+  }
   gP0Exp->GetYaxis()->SetTitle("p_{0}");
-  gP0Exp->SetLineColor(kBlack);
-  gP0Exp->SetLineStyle(2);
-  gP0Exp->SetLineWidth(2);
-  
-  gP0Obs->GetXaxis()->SetTitle("m_{G*} [GeV]");
   gP0Obs->GetYaxis()->SetTitle("p_{0}");  
+  gP0Exp->SetLineColor(kBlack);
   gP0Obs->SetLineColor(kBlack);
+  gP0Exp->SetLineStyle(2);
   gP0Obs->SetLineStyle(1);
+  gP0Exp->SetLineWidth(2);
   gP0Obs->SetLineWidth(2);
   
   // Legend:
@@ -591,16 +605,27 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
   if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
     t.DrawLatex(0.2, 0.21, "Spin-0 Selection");
+    if (width == 0) {
+      t.DrawLatex(0.65, 0.21, "X#rightarrow#gamma#gamma, NWA");
+    }
+    else {
+      t.DrawLatex(0.65, 0.21,
+		  Form("X#rightarrow#gamma#gamma, #Gamma/m_{X}=%2.2f",
+		       ((double)width)/1000.0));
+    }
   }
   else if ((m_config->getStr("AnalysisType")).Contains("GravitonLoose")) {
     t.DrawLatex(0.2, 0.21, "Spin-2 Loose Iso.");
+    t.DrawLatex(0.65, 0.21,
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		     ((double)width)/1000.0));
   }
   else {
     t.DrawLatex(0.2, 0.21, "Spin-2 Selection");
+    t.DrawLatex(0.65, 0.21,
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		     ((double)width)/1000.0));
   }
-  t.DrawLatex(0.65, 0.21,
-	      Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
-		   ((double)width)/1000.0));
 
   gP0Obs->Draw("LSAME");
 
@@ -788,10 +813,18 @@ bool StatScan::singleCLScan(int mass, int width, bool makeNew, bool asymptotic){
   can->cd();
   
   // Toy graph formatting:
-  gCLExp->GetXaxis()
-    ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
-  gCLObs->GetXaxis()
-    ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
+  if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
+    gCLExp->GetXaxis()
+      ->SetTitle("#sigma_{X}#timesBR(X#rightarrow#gamma#gamma [fb]");
+    gCLObs->GetXaxis()
+      ->SetTitle("#sigma_{X}#timesBR(X#rightarrow#gamma#gamma [fb]");
+  }
+  else {
+    gCLExp->GetXaxis()
+      ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
+    gCLObs->GetXaxis()
+      ->SetTitle("#sigma_{G*}#timesBR(G*#rightarrow#gamma#gamma [fb]");
+  }
   gCLExp->GetYaxis()->SetTitle("#it{CL_{s}} value");
   gCLObs->GetYaxis()->SetTitle("#it{CL_{s}} value");
   gCLExp->SetLineColor(kBlack);
@@ -1383,7 +1416,19 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     mapPoI[m_config->getStr("PoIForNormalization")]
       = ((double)crossSection/1000.0);
     mapPoI[m_config->getStr("PoIForMass")] = (double)mass;
-    mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/1000.0);
+    
+    if ((m_config->getStr("AnalysisType")).Contains("Scalar") &&
+	!(m_config->getStr("PoIForWidth")).EqualTo("GoM")) {
+      if (width == 0) {
+	mapPoI[m_config->getStr("PoIForWidth")] = 0.004;
+      }
+      else {
+	mapPoI[m_config->getStr("PoIForWidth")] = 0.001 * (double)(mass*width);
+      }
+    }
+    else {
+      mapPoI[m_config->getStr("PoIForWidth")] = (((double)width)/1000.0);
+    }
     
     //----------------------------------------//
     // Get the asymptotic p0 results:
@@ -1403,13 +1448,26 @@ bool StatScan::singleP0Test(int mass, int width, int crossSection,
     //----------------------------------------//
     // Get p0 results using toy MC:
     else {
-      
       // Step 1: get observed q0 (no expected!)
       
       // Also force the mass and width to be constant always:
       testStat->setParam(m_config->getStr("PoIForMass"), (double)mass, true);
-      testStat->setParam(m_config->getStr("PoIForWidth"), 
-			 (((double)width)/1000.0), true);
+      
+      
+      if ((m_config->getStr("AnalysisType")).Contains("Scalar") &&
+	  !(m_config->getStr("PoIForWidth")).EqualTo("GoM")) {
+	if (width == 0) {
+	  testStat->setParam(m_config->getStr("PoIForWidth"), 0.004, true);
+	}
+	else {
+	  testStat->setParam(m_config->getStr("PoIForWidth"), 
+			     0.001 * (double)(mass*width), true);
+	}
+      }
+      else {
+	testStat->setParam(m_config->getStr("PoIForWidth"), 
+			   (((double)width)/1000.0), true);
+      }
       
       // Perform the mu=0 fit, make sure normalization PoI is set to zero:
       mapPoI[m_config->getStr("PoIForNormalization")] = 0.0;

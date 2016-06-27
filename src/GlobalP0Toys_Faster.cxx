@@ -94,6 +94,9 @@ int main(int argc, char **argv) {
   
   // Variables to store in the TTree:
   double weight = 1.0;
+  double m_toyMass = 100;
+  double m_toyWidth = 0.1;
+  double m_toyXSection = 0.0;
   int bestFitUpdate;
   double numEvents;
   bool convergedMu1, convergedMu0, convergedMuFree;
@@ -114,8 +117,11 @@ int main(int argc, char **argv) {
   std::vector<double> numEventsPerCate; numEventsPerCate.clear();
   std::vector<double> nllPerRetry; nllPerRetry.clear();
 
-  fOutputTree.Branch("weight", &weight, "weight/D");
   fOutputTree.Branch("seed", &seed, "seed/I");
+  fOutputTree.Branch("weight", &weight, "weight/D");
+  fOutputTree.Branch("toyMass", &m_toyMass, "toyMass/D");
+  fOutputTree.Branch("toyWidth", &m_toyWidth, "toyWidth/D");
+  fOutputTree.Branch("toyXSection", &m_toyXSection, "toyXSection/D");
   fOutputTree.Branch("bestFitUpdate", &bestFitUpdate, "bestFitUpdate/I");
   fOutputTree.Branch("numEvents", &numEvents, "numEvents/D");
   fOutputTree.Branch("numEventsPerCate", &numEventsPerCate);
@@ -142,23 +148,10 @@ int main(int argc, char **argv) {
   fOutputTree.Branch("valuesPoIsMu1", &valuesPoIsMu1);
   fOutputTree.Branch("valuesPoIsMu0", &valuesPoIsMu0);
   fOutputTree.Branch("valuesPoIsMuFree", &valuesPoIsMuFree);
-  
-  // Set the mass and width according to the given hypothesis:
-  // Note: the mapPoIFromMuFree is added below. Will use the best-fit values
-  // from the ML fit (EXCEPT FOR CROSS-SECTION!), so that spurious signal mass 
-  // is properly set for the background-only fit.
+
+  // Get a list of PoI:
   std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
-  std::vector<double> inValPoIMu0 = config->getNumV("PoIValuesMu0");
-  std::vector<double> inValPoIMu1 = config->getNumV("PoIValuesMu1");
-  std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
-  std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
-  std::map<TString,double> mapPoIFromMuFree; mapPoIFromMuFree.clear();
-  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
-    mapPoIMu0[listPoI[i_p]] = inValPoIMu0[i_p];
-    mapPoIMu1[listPoI[i_p]] = inValPoIMu1[i_p];
-    mapPoIFromMuFree[listPoI[i_p]] = inValPoIMu0[i_p];// same as mu0 for now
-  }
-  
+
   //----------------------------------------//
   // Loop to generate pseudo experiments:
   std::cout << "GlobalP0Toys: Generating " << nToysPerJob
@@ -201,6 +194,44 @@ int main(int argc, char **argv) {
     // Set the nominal snapshot:
     TString snapshotName = config->getStr("WorkspaceSnapshot");
     testStat->setNominalSnapshot(snapshotName);
+    
+    // Set the mass and width according to the given hypothesis:
+    // Note: the mapPoIFromMuFree is added below. Will use the best-fit values
+    // from the ML fit (EXCEPT FOR CROSS-SECTION!), so that spurious signal mass
+    // is properly set for the background-only fit.
+    std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
+    std::map<TString,double> mapPoIFromMuFree; mapPoIFromMuFree.clear();
+    const RooArgSet *snapshot = workspace->getSnapshot(snapshotName);
+    TIterator *snapIter = snapshot->createIterator();
+    RooRealVar *snapPar = NULL;
+    while ((snapPar = (RooRealVar*)snapIter->Next())) {
+      TString currName = snapPar->GetName();
+      for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+	if (currName.EqualTo(listPoI[i_p])) {
+	  if (currName.EqualTo(config->getStr("PoIForNormalization"))) {
+	    mapPoIMu0[listPoI[i_p]] = 0.0;
+	    mapPoIFromMuFree[listPoI[i_p]] = mapPoIMu0[i_p];// same as mu0
+	  }
+	  else {
+	    mapPoIMu0[listPoI[i_p]] = snapPar->getVal();
+	    mapPoIFromMuFree[listPoI[i_p]] = snapPar->getVal();// same as mu0
+	  }
+	}
+      }
+      // Set the parameters for storage in the TTree:
+      if (config->isDefined("PoIForNormalization") && 
+	  currName.EqualTo(config->getStr("PoIForNormalization"))) {
+	m_toyXSection = snapPar->getVal();
+      }
+      if (config->isDefined("PoIForMass") && 
+	  currName.EqualTo(config->getStr("PoIForMass"))) {
+	m_toyMass = snapPar->getVal();
+      }
+      if (config->isDefined("PoIForWidth") &&
+	  currName.EqualTo(config->getStr("PoIForWidth"))) {
+	m_toyWidth = snapPar->getVal();
+      }
+    }
     
     // Also turn off MC stat errors if:
     if (config->isDefined("TurnOffTemplateStat") && 

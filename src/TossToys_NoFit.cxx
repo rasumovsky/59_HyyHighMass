@@ -86,17 +86,6 @@ int main(int argc, char **argv) {
   system(Form("mkdir -vp %s/log", outputDir.Data()));
   system(Form("mkdir -vp %s/single_files", outputDir.Data()));
   
-  // Set the mass and width according to the given hypothesis:
-  std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
-  std::vector<double> inValPoIMu0 = config->getNumV("PoIValuesMu0");
-  std::vector<double> inValPoIMu1 = config->getNumV("PoIValuesMu1");
-  std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
-  std::map<TString,double> mapPoIMu1; mapPoIMu1.clear();
-  for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
-    mapPoIMu0[listPoI[i_p]] = inValPoIMu0[i_p];
-    mapPoIMu1[listPoI[i_p]] = inValPoIMu1[i_p];
-  }
-  
   // Load model, data, etc. from workspace:
   TFile inputFile(copiedFile, "read");
   RooWorkspace *workspace
@@ -104,6 +93,28 @@ int main(int argc, char **argv) {
   
   // The statistics class, for calculating qMu etc. 
   TestStat *testStat = new TestStat(configFile, "new", workspace);
+  
+  // Set the mass and width according to the given hypothesis:
+  // Note: the mapPoIFromMuFree is added below. Will use the best-fit values
+  // from the ML fit (EXCEPT FOR CROSS-SECTION!), so that spurious signal mass
+  // is properly set for the background-only fit.
+  std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
+  std::map<TString,double> mapPoIMu0; mapPoIMu0.clear();
+  const RooArgSet *snapshot 
+    = workspace->getSnapshot(config->getStr("WorkspaceSnapshot"));
+  TIterator *snapIter = snapshot->createIterator();
+  RooRealVar *snapPar = NULL;
+  while ((snapPar = (RooRealVar*)snapIter->Next())) {
+    TString currName = snapPar->GetName();
+    for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
+      if (currName.EqualTo(listPoI[i_p])) {
+	if (currName.EqualTo(config->getStr("PoIForNormalization"))) {
+	  mapPoIMu0[listPoI[i_p]] = 0.0;
+	}
+	else mapPoIMu0[listPoI[i_p]] = snapPar->getVal();
+      }
+    }
+  }
   
   //----------------------------------------//
   // Loop to generate pseudo experiments:
