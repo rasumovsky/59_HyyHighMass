@@ -284,11 +284,13 @@ int main(int argc, char *argv[])
   }// End of loop over events
 
   // Add Ghost events:
+  RooRealVar weight("weight", "weight", 1.0);
   if (config->isDefined("AddGhostEventsToData") && 
       config->isDefined("AddGhostEventsToData")) {
     for (double mass = obs1->getMin(); mass <= obs1->getMax(); mass += 1.0) {
       obs1->setVal(mass);
-      dataMap[cate1]->add(RooArgSet(*obs1), 0.000001);
+      weight.setVal(0.000001);
+      dataMap[cate1]->add(RooArgSet(*obs1, weight), weight.getVal());
     }
   }
   
@@ -305,9 +307,21 @@ int main(int argc, char *argv[])
   
   // Loop over the frames, creating combined datasets for each:
   TString dataName = "Data2016";
-  RooDataSet *newData = new RooDataSet(dataName, dataName, *observables, 
-				       RooFit::Index(*categories),
-				       RooFit::Import(dataMap));
+  
+  RooDataSet *newData = NULL;
+  if (config->isDefined("AddGhostEventsToData") && 
+      config->isDefined("AddGhostEventsToData")) {
+    observables->add(weight);
+    newData = new RooDataSet(dataName, dataName, *observables, 
+			     RooFit::Index(*categories),
+			     RooFit::Import(dataMap), WeightVar(weight));
+  }
+  else {
+    newData = new RooDataSet(dataName, dataName, *observables, 
+			     RooFit::Index(*categories),
+			     RooFit::Import(dataMap));    
+  }
+  
   workspace->import(*newData);
   
   // Save the workspace with the new dataset:

@@ -133,13 +133,13 @@ int main(int argc, char **argv) {
   else if ((config->getStr("AnalysisType")).Contains("GravitonLoose")) {
     t.DrawLatex(0.6, 0.27, "Spin-2 Loose Iso.");
     t.DrawLatex(0.6, 0.21,
-		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{Pl}=%2.2f",
 		     width));
   }
   else {
     t.DrawLatex(0.6, 0.27, "Spin-2 Selection");
     t.DrawLatex(0.6, 0.21,
-		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{Pl}=%2.2f",
 		     width));
   }
   

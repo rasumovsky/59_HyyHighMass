@@ -473,7 +473,7 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
   else {
     t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
     t.DrawLatex(0.2, 0.69,
-		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{Pl}=%2.2f",
 		     ((double)width)/1000.0));
   }
   
@@ -617,13 +617,13 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   else if ((m_config->getStr("AnalysisType")).Contains("GravitonLoose")) {
     t.DrawLatex(0.2, 0.21, "Spin-2 Loose Iso.");
     t.DrawLatex(0.65, 0.21,
-		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{Pl}=%2.2f",
 		     ((double)width)/1000.0));
   }
   else {
     t.DrawLatex(0.2, 0.21, "Spin-2 Selection");
     t.DrawLatex(0.65, 0.21,
-		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{PI}=%2.2f",
+		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{Pl}=%2.2f",
 		     ((double)width)/1000.0));
   }
 
