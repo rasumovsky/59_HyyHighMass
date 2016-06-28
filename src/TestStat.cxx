@@ -815,12 +815,12 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
     m_numEventsPerCate.push_back(currEvt);
 
     // Add ghost events if requested:
-    if (m_config->isDefined("AddGhostEvents") &&
-	m_config->getBool("AddGhostEvents")) {
-      addGhostEvents(toyDataMap[(std::string)cateType->GetName()],
-		     (RooRealVar*)(currObs->first()), wt);
-      currObs->add(*wt);
-    }
+    //if (m_config->isDefined("AddGhostEvents") &&
+    //	m_config->getBool("AddGhostEvents")) {
+    //addGhostEvents(toyDataMap[(std::string)cateType->GetName()],
+    //		     (RooRealVar*)(currObs->first()), wt);
+    //currObs->add(*wt);
+    //}
     
     /*
     TCanvas *can = new TCanvas("can", "can", 800, 800);
@@ -849,18 +849,18 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
   }
   RooDataSet* pseudoData = NULL;
   TString newDataName = (toyIndex < 0) ? "toyData" : Form("toyData%d",toyIndex);
-  if (m_config->isDefined("AddGhostEvents") &&
-      m_config->getBool("AddGhostEvents")) {
-    pseudoData = new RooDataSet(newDataName, newDataName, *observables, 
-				RooFit::Index(*categories),
-				RooFit::Import(toyDataMap),
-				RooFit::WeightVar(*wt));
-  }
-  else {
+  //if (m_config->isDefined("AddGhostEvents") &&
+  //  m_config->getBool("AddGhostEvents")) {
+  //pseudoData = new RooDataSet(newDataName, newDataName, *observables, 
+  //				RooFit::Index(*categories),
+  //				RooFit::Import(toyDataMap),
+  //				RooFit::WeightVar(*wt));
+  //}
+  //else {
     pseudoData = new RooDataSet(newDataName, newDataName, *observables, 
 				RooFit::Index(*categories),
 				RooFit::Import(toyDataMap));
-  }
+    //}
   
   // Save the parameters used to generate toys:
   storeParams(nuisanceParameters, m_mapNP);

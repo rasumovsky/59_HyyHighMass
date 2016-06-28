@@ -88,33 +88,17 @@ int main(int argc, char **argv) {
   double inMass=0.0; double inP0_1=0.0; double inP0_2=0.0;
   double massMin=0.0; double massMax=0.0;
   std::ifstream inputFile(inputFileP0);
-  if ((config->getStr("AnalysisType")).EqualTo("Scalar")) {
-    while (inputFile >> inMass >> inP0_1) {
-      double zLocal = getZFromP(inP0_1);
-      double zGlobal = analyticZGlobal(zLocal,
-				       config->getNum("AnalyticZGlobal_N"), 
-				       config->getNum("AnalyticZGlobal_alpha"));
-      double pGlobal = getPFromZ(zGlobal);
-      graphP0->SetPoint(pointIndex, inMass, pGlobal);
-      if (pointIndex == 0) { massMin = inMass; massMax = inMass; }
-      else if (inMass > massMax) massMax = inMass;
-      else if (inMass < massMin) massMin = inMass;
-      pointIndex++;
-    }
-  }
-  else {
-    while (inputFile >> inMass >> inP0_1 >> inP0_2) {
-      double zLocal = getZFromP(inP0_1);
-      double zGlobal = analyticZGlobal(zLocal,
-				       config->getNum("AnalyticZGlobal_N"), 
-				       config->getNum("AnalyticZGlobal_alpha"));
-      double pGlobal = getPFromZ(zGlobal);
-      graphP0->SetPoint(pointIndex, inMass, pGlobal);
-      if (pointIndex == 0) { massMin = inMass; massMax = inMass; }
-      else if (inMass > massMax) massMax = inMass;
-      else if (inMass < massMin) massMin = inMass;
-      pointIndex++;
-    }
+  while (inputFile >> inMass >> inP0_1 >> inP0_2) {
+    double zLocal = getZFromP(inP0_1);
+    double zGlobal = analyticZGlobal(zLocal,
+				     config->getNum("AnalyticZGlobal_N"), 
+				     config->getNum("AnalyticZGlobal_alpha"));
+    double pGlobal = getPFromZ(zGlobal);
+    graphP0->SetPoint(pointIndex, inMass, pGlobal);
+    if (pointIndex == 0) { massMin = inMass; massMax = inMass; }
+    else if (inMass > massMax) massMax = inMass;
+    else if (inMass < massMin) massMin = inMass;
+    pointIndex++;
   }
   inputFile.close();
   

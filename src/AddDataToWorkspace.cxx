@@ -282,6 +282,15 @@ int main(int argc, char *argv[])
     dataMap[cate1]->add(RooArgSet(*obs1));
   
   }// End of loop over events
+
+  // Add Ghost events:
+  if (config->isDefined("AddGhostEventsToData") && 
+      config->isDefined("AddGhostEventsToData")) {
+    for (double mass = obs1->getMin(); mass <= obs1->getMax(); mass += 1.0) {
+      obs1->setVal(mass);
+      dataMap[cate1]->add(RooArgSet(*obs1), 0.000001);
+    }
+  }
   
   // Remove files that were copied:
   if (config->getBool("MakeLocalMxAODCopies")) removeLocalFileCopies(fileNames);
