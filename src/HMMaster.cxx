@@ -169,6 +169,9 @@ void submitStatViaBsub(TString exeConfigFile, TString exeOption, int exeWidth,
     system(Form("cp %s/bin/%s ForJob/",
 		(m_config->getStr("PackageLocation")).Data(),
 		(m_config->getStr("exeStatScan")).Data()));
+    system(Form("cp %s/bin/%s ForJob/",
+		(m_config->getStr("PackageLocation")).Data(),
+		(m_config->getStr("exeAsymptoticsCLs")).Data()));
     system(Form("cp %s ForJob/",(m_config->getStr("WorkspaceFile")).Data()));
     system(Form("cp -f %s/%s %s/jobFileStatScan.sh", 
 		(m_config->getStr("PackageLocation")).Data(), 

@@ -304,16 +304,20 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
   
   // Arrays to store limit graph information (medians and error bands):
   int nPlotPoint = 0;
-  double observableValues[1000] = {0};  
-  double limitObs[1000] = {0};
-  double limitExp_p2[1000] = {0};  
-  double limitExp_p1[1000] = {0};
-  double limitExp[1000] = {0};
-  double limitExp_n1[1000] = {0};
-  double limitExp_n2[1000] = {0};
-
+  double observableValues[10000] = {0};  
+  double limitObs[10000] = {0};
+  double limitExp_p2[10000] = {0};  
+  double limitExp_p1[10000] = {0};
+  double limitExp[10000] = {0};
+  double limitExp_n1[10000] = {0};
+  double limitExp_n2[10000] = {0};
+  
+  //----------------------------------------//
   // Load from file here. 
   if (asymptotic && !makeNew) {
+    std::cout << "StatScan::scanMassLimit: Loading asymptotics from file." 
+	      << std::endl;
+    /*
     std::ifstream limitFileIn(limitFileName);
     while (limitFileIn >> m_massValues[nPlotPoint] >> limitObs[nPlotPoint] 
 	   >> limitExp_n2[nPlotPoint] >> limitExp_n1[nPlotPoint]
@@ -334,50 +338,99 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
 	       limitExp_p2[nPlotPoint]);
       nPlotPoint++;
     }
-  }
-  
-  //----------------------------------------//
-  // Loop over the mass points to load or calculate limit results:
-  std::ofstream limitFileOut(limitFileName);
-  for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
-    if ((asymptotic && singleLimitTest(m_massValues[i_m], width, doTilde)) || 
-	(!asymptotic && singleCLScan(m_massValues[i_m],width,makeNew,false))) {
-      
-      observableValues[nPlotPoint] = m_massValues[i_m];
-         
-      limitObs[nPlotPoint]
-	= getLimit(m_massValues[i_m], width, false, asymptotic, 0);
-      limitExp_n2[nPlotPoint] 
-	= getLimit(m_massValues[i_m], width, true, asymptotic, -2);
-      limitExp_n1[nPlotPoint]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, -1);
-      limitExp[nPlotPoint]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, 0);
-      limitExp_p1[nPlotPoint]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, 1);
-      limitExp_p2[nPlotPoint]
-	= getLimit(m_massValues[i_m], width, true, asymptotic, 2);
+    */
+    
+    for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
+      double currMass = ((double)m_massValues[i_m]);
+      double currWidth = 0.001 * ((double)width);
+      TString inFileName
+	= Form("%s/%s/AsymptoticsCls/text_limits__%s_%2.2f_%s_%2.2f.txt",
+	       (m_config->getStr("MasterOutput")).Data(),
+	       (m_config->getStr("JobName")).Data(),
+	       (m_config->getStr("PoIForMass")).Data(), currMass,
+	       (m_config->getStr("PoIForWidth")).Data(), currWidth);
+   
 
-      limitFileOut << m_massValues[i_m] << " " 
-		   << limitObs[nPlotPoint] << " " 
-		   << limitExp_n2[nPlotPoint] << " " 
-		   << limitExp_n1[nPlotPoint] << " "
-		   << limitExp[nPlotPoint] << " " 
-		   << limitExp_p1[nPlotPoint] << " " 
-		   << limitExp_p2[nPlotPoint] << " " << std::endl;
-      nPlotPoint++;
+      if ((m_config->getStr("AnalysisType")).Contains("Scalar") &&
+	  (m_config->getStr("PoIForWidth")).EqualTo("wX")) {
+	inFileName 
+	  = Form("%s/%s/AsymptoticsCls/text_limits__%s_%2.2f_%s_%2.2f.txt",
+		 (m_config->getStr("MasterOutput")).Data(),
+		 (m_config->getStr("JobName")).Data(),
+		 (m_config->getStr("PoIForMass")).Data(), currMass,
+		 (m_config->getStr("PoIForWidth")).Data(), currWidth*currMass);
+      }
+      
+      std::cout << "\t--> " << inFileName << std::endl; 
+      std::ifstream limitFileIn(inFileName);
+      while (limitFileIn >> limitObs[nPlotPoint] >> limitExp[nPlotPoint]
+	     >> limitExp_p2[nPlotPoint] >> limitExp_p1[nPlotPoint]
+	     >> limitExp_n1[nPlotPoint] >> limitExp_n2[nPlotPoint]) {
+	// Store the limits for this mass and width:
+	observableValues[nPlotPoint] = m_massValues[i_m];
+	
+	setLimit(m_massValues[i_m], width, false, asymptotic, 0, 
+		 limitObs[nPlotPoint]);
+	setLimit(m_massValues[i_m], width, true, asymptotic, -2, 
+		 limitExp_n2[nPlotPoint]);
+	setLimit(m_massValues[i_m], width, true, asymptotic, -1, 
+		 limitExp_n1[nPlotPoint]);
+	setLimit(m_massValues[i_m], width, true, asymptotic, 0, 
+		 limitExp[nPlotPoint]);
+	setLimit(m_massValues[i_m], width, true, asymptotic, 1, 
+		 limitExp_p1[nPlotPoint]);
+	setLimit(m_massValues[i_m], width, true, asymptotic, 2, 
+		 limitExp_p2[nPlotPoint]);
+	nPlotPoint++;
+      }
+      limitFileIn.close();
     }
   }
-  limitFileOut.close();
 
-  if (nPlotPoint >= 1000) printer("StatScan: Array bound exceeded",true);
+  //----------------------------------------//
+  // Loop over the mass points to load or calculate limit results:
+  else {
+    std::ofstream limitFileOut(limitFileName);
+    for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
+      if ((asymptotic && singleLimitTest(m_massValues[i_m], width, doTilde)) || 
+	  (!asymptotic && singleCLScan(m_massValues[i_m],width,makeNew,false))){
+	
+	observableValues[nPlotPoint] = m_massValues[i_m];
+	
+	limitObs[nPlotPoint]
+	  = getLimit(m_massValues[i_m], width, false, asymptotic, 0);
+	limitExp_n2[nPlotPoint] 
+	  = getLimit(m_massValues[i_m], width, true, asymptotic, -2);
+	limitExp_n1[nPlotPoint]
+	  = getLimit(m_massValues[i_m], width, true, asymptotic, -1);
+	limitExp[nPlotPoint]
+	  = getLimit(m_massValues[i_m], width, true, asymptotic, 0);
+	limitExp_p1[nPlotPoint]
+	  = getLimit(m_massValues[i_m], width, true, asymptotic, 1);
+	limitExp_p2[nPlotPoint]
+	  = getLimit(m_massValues[i_m], width, true, asymptotic, 2);
+	
+	limitFileOut << m_massValues[i_m] << " " 
+		     << limitObs[nPlotPoint] << " " 
+		     << limitExp_n2[nPlotPoint] << " " 
+		     << limitExp_n1[nPlotPoint] << " "
+		     << limitExp[nPlotPoint] << " " 
+		     << limitExp_p1[nPlotPoint] << " " 
+		     << limitExp_p2[nPlotPoint] << " " << std::endl;
+	nPlotPoint++;
+      }
+    }
+    limitFileOut.close();
+  }
+
+  if (nPlotPoint >= 10000) printer("StatScan: Array bound exceeded",true);
 
   //----------------------------------------//
   // Plot the results:
-  double errExp_p2[1000] = {0};  
-  double errExp_p1[1000] = {0};
-  double errExp_n1[1000] = {0};
-  double errExp_n2[1000] = {0};
+  double errExp_p2[10000] = {0};  
+  double errExp_p1[10000] = {0};
+  double errExp_n1[10000] = {0};
+  double errExp_n2[10000] = {0};
   for (int i_t = 0; i_t < nPlotPoint; i_t++) {
     errExp_p2[i_t] = fabs(limitExp_p2[i_t] - limitExp[i_t]);
     errExp_p1[i_t] = fabs(limitExp_p1[i_t] - limitExp[i_t]);
@@ -436,43 +489,53 @@ void StatScan::scanMassLimit(int width, bool makeNew, bool asymptotic,
   leg.SetFillColor(0);
   leg.SetTextSize(0.04);
   if (!m_config->getBool("DoBlind")) {
-    leg.AddEntry(gLimitObs,"Observed #it{CL_{s}} limit","P");
+    if (asymptotic) leg.AddEntry(gLimitObs,"Observed #it{CL_{s}} limit","l");
+    else leg.AddEntry(gLimitObs,"Observed #it{CL_{s}} limit","P");
   }
   leg.AddEntry(gLimitExp,"Expected #it{CL_{s}} limit","l");
-  leg.AddEntry(gLimitExp_1s,"Expected #pm 1#sigma_{exp}","F");
-  leg.AddEntry(gLimitExp_2s,"Expected #pm 2#sigma_{exp}","F");
+  leg.AddEntry(gLimitExp_1s,"Expected #pm 1#sigma","F");
+  leg.AddEntry(gLimitExp_2s,"Expected #pm 2#sigma","F");
   
   // Plotting options:
   gLimitExp_2s->GetXaxis()->SetRangeUser(m_massValues[0], 
 					 m_massValues[m_massValues.size()-1]);
-  gLimitExp_2s->GetYaxis()->SetRangeUser(1, 1000);
+  gLimitExp_2s->GetYaxis()->SetRangeUser(0.1, 1000);
   
   gPad->SetLogy();
   gLimitExp_2s->Draw("A3");
   gLimitExp->Draw("Lsame");
   gLimitExp_1s->Draw("3same");
   gLimitExp->Draw("LSAME");
-  if (!m_config->getBool("DoBlind")) gLimitObs->Draw("PSAME");
+  if (!m_config->getBool("DoBlind")) {
+    if (asymptotic) gLimitObs->Draw("LSAME");
+    else gLimitObs->Draw("PSAME");
+  }
   gPad->RedrawAxis();
   leg.Draw("SAME");
   
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.05);
-  t.DrawLatex(0.2, 0.87, "ATLAS");
+  t.DrawLatex(0.25, 0.87, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.05);
-  t.DrawLatex(0.32, 0.87, m_config->getStr("ATLASLabel"));
-  t.DrawLatex(0.2, 0.81, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
+  t.DrawLatex(0.37, 0.87, m_config->getStr("ATLASLabel"));
+  t.DrawLatex(0.25, 0.81, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",
 			      (m_config->getNum("AnalysisLuminosity")/1000.0)));
   if ((m_config->getStr("AnalysisType")).Contains("Scalar")) {
-    t.DrawLatex(0.2, 0.75, "Spin-0 Selection");
-    t.DrawLatex(0.2, 0.69,
-		Form("G*#rightarrow#gamma#gamma, #Gamma/m_{X}=%2.2f",
-		     ((double)width)/1000.0));
+    t.DrawLatex(0.25, 0.75, "Spin-0 Selection");
+    if (width == 0) {
+      t.DrawLatex(0.25, 0.69,
+		  Form("X#rightarrow#gamma#gamma, NWA (#Gamma_{X}=4 MeV)"));
+    }
+    else {
+      t.DrawLatex(0.25, 0.69,
+		  Form("X#rightarrow#gamma#gamma, #Gamma_{X}/m_{X}=%2.1f%%",
+		       ((double)width)/10.0));
+    }
   }
   else {
-    t.DrawLatex(0.2, 0.75, "Spin-2 Selection");
-    t.DrawLatex(0.2, 0.69,
+    t.DrawLatex(0.25, 0.75, "Spin-2 Selection");
+    t.DrawLatex(0.25, 0.69,
 		Form("G*#rightarrow#gamma#gamma, #it{k}/#bar{M}_{Pl}=%2.2f",
 		     ((double)width)/1000.0));
   }
@@ -515,9 +578,9 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
   
   // Arrays to store p0 graph information:
   int nPlotPoint = 0;
-  double observableValues[1000] = {0};  
-  double p0Obs[1000] = {0};
-  double p0Exp[1000] = {0};
+  double observableValues[10000] = {0};  
+  double p0Obs[10000] = {0};
+  double p0Exp[10000] = {0};
   
   //----------------------------------------//
   // Loop over the mass points to load or calculate p0:
@@ -531,7 +594,7 @@ void StatScan::scanMassP0(int width, bool makeNew, bool asymptotic) {
       nPlotPoint++;
     }
   }
-  if (nPlotPoint >= 1000) printer("StatScan: Array bound exceeded",true);
+  if (nPlotPoint >= 10000) printer("StatScan: Array bound exceeded",true);
 
   //----------------------------------------//
   // Plot the results:
@@ -1252,15 +1315,30 @@ bool StatScan::singleLimitTest(int mass, int width, bool doTilde) {
   printer(Form("StatScan::singleLimitTest(mass=%d, width=%d)", mass, width),
 	  false);
   
+  // Set the width value:
+  double widthValue = ((double)width) / 1000.0;
+  if ((m_config->getStr("AnalysisType")).Contains("Scalar") &&
+      !(m_config->getStr("PoIForWidth")).EqualTo("GoM")) {
+    if (width == 0) widthValue = 0.004;
+    else widthValue = 0.001 * (double)(mass*width);
+  }
+  
   // Options for AsymptoticsCLs.cxx macro:
   TString asymptoticsOptions = "SetVal_NoTemplateStat";
   if (doTilde) asymptoticsOptions.Append("_DoTilde");
   
-  system(Form("./bin/AsymptoticsCLs %s %s %s=%d %s=%f", 
-	      m_configFileName.Data(), asymptoticsOptions.Data(),
-	      (m_config->getStr("PoIForMass")).Data(), mass,
-	      (m_config->getStr("PoIForWidth")).Data(), 
-	      ((double)width/1000.0)));
+  if (m_options.Contains("BatchJob")) {
+    system(Form("./AsymptoticsCLs %s %s %s=%d %s=%f", 
+		m_configFileName.Data(), asymptoticsOptions.Data(),
+		(m_config->getStr("PoIForMass")).Data(), mass,
+		(m_config->getStr("PoIForWidth")).Data(), widthValue));
+  }
+  else {
+    system(Form("./bin/AsymptoticsCLs %s %s %s=%d %s=%f", 
+		m_configFileName.Data(), asymptoticsOptions.Data(),
+		(m_config->getStr("PoIForMass")).Data(), mass,
+		(m_config->getStr("PoIForWidth")).Data(), widthValue));
+  }
   
   TString asymptoticsCLsDir = Form("%s/%s/AsymptoticsCls", 
 				   (m_config->getStr("MasterOutput")).Data(),
