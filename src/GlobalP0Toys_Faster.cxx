@@ -151,6 +151,7 @@ int main(int argc, char **argv) {
 
   // Get a list of PoI:
   std::vector<TString> listPoI = config->getStrV("WorkspacePoIs");
+  std::cout << "listPoI size = " << listPoI.size() << std::endl;
 
   //----------------------------------------//
   // Loop to generate pseudo experiments:
@@ -204,13 +205,14 @@ int main(int argc, char **argv) {
     const RooArgSet *snapshot = workspace->getSnapshot(snapshotName);
     TIterator *snapIter = snapshot->createIterator();
     RooRealVar *snapPar = NULL;
+    
     while ((snapPar = (RooRealVar*)snapIter->Next())) {
       TString currName = snapPar->GetName();
       for (int i_p = 0; i_p < (int)listPoI.size(); i_p++) {
 	if (currName.EqualTo(listPoI[i_p])) {
 	  if (currName.EqualTo(config->getStr("PoIForNormalization"))) {
 	    mapPoIMu0[listPoI[i_p]] = 0.0;
-	    mapPoIFromMuFree[listPoI[i_p]] = mapPoIMu0[i_p];// same as mu0
+	    mapPoIFromMuFree[listPoI[i_p]] = mapPoIMu0[listPoI[i_p]];
 	  }
 	  else {
 	    mapPoIMu0[listPoI[i_p]] = snapPar->getVal();

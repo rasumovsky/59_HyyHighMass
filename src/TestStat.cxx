@@ -748,7 +748,7 @@ RooDataSet* TestStat::createPseudoData(int seed, int valPoI,
 		   (iterPoI->first).Data()), true);
     }
   }
-  
+
   // Check if other parameter settings have been specified for toys:
   // WARNING! This overrides the randomization settings above!
   for (std::map<TString,double>::iterator iterParam = m_paramValToSet.begin();
