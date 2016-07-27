@@ -157,7 +157,7 @@ void MassAnimation::getDataForFrames() {
   for (int i_f = 0; i_f < (int)fileNames.size(); i_f++) {
     chain->AddFile(fileNames[i_f]);
   }
-  HGammaMxAOD *treeMxAOD = new HGammaMxAOD(chain, m_config->getStr("MxAODTag"));
+  HGammaMxAOD *treeMxAOD = new HGammaMxAOD(chain);
   
   //--------------------------------------//
   // Loop over events to build dataset:

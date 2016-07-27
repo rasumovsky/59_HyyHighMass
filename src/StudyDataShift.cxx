@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
-//  StudyData.cxx                                                             //
+//  StudyDataShift.cxx                                                        //
 //                                                                            //
 //  Author: Andrew Hard                                                       //
 //  Date: 29/04/2016                                                          //
@@ -31,34 +31,18 @@ std::vector<TString> m_cutNames;
 std::vector<int> m_runList;
 std::map<int,int> m_eventsPerRun;
 
-TString m_options;
-
 /**
    -----------------------------------------------------------------------------
-   Retrieve the total number of events in the file for event normalization:
-   @param file - The current MxAOD file in the TChain.
-   @param maxCutFlowIndex - An int to store the number of cutflow hist bins.
-   @return - The total number of weighted events in the file. Also, the max
-   cutFlowIndex passed by reference.
 */
-double getNTotEvtFromHist(TFile *file, int& maxCutFlowIndex) {
-  // Find the cutflow histograms from the file based on limited name info:
-  TIter next(file->GetListOfKeys());
-  TObject *currObj;
-  while ((currObj = (TObject*)next())) {
-    TString currName = currObj->GetName();
-    if (currName.Contains("CutFlow") && currName.Contains("weighted")
-	&& currName.Contains("noDalitz")) {
-      maxCutFlowIndex = ((TH1F*)file->Get(currName))->GetNbinsX();
-      return (((TH1F*)file->Get(currName))->GetBinContent(3));
-      //return (((TH1F*)file->Get(currName))->GetBinContent(3) * 
-      //      ((TH1F*)file->Get(currName))->GetBinContent(2) /
-      //      ((TH1F*)file->Get(currName))->GetBinContent(1));
-    }
+double shiftedPT(double pT, double mass) {
+  if (mass < 400000) return pT;
+  else if (mass >= 600000) return pT;
+  else if (mass >= 400000 && mass < 500000) {
+    return (pT * (1.0 - (0.1*((mass-400000)/100000))));
   }
-  std::cout << "createSignalParameterization: ERROR! MxAOD doesn't have cutflow"
-	    << std::endl;
-  exit(0);
+  else if (mass >= 500000 && mass < 600000) {
+    return (pT * (1.0 - (0.1*((600000-mass)/100000))));
+  }
 }
 
 /**
@@ -161,7 +145,7 @@ int chooseCategory() {
   
   // Exit because inputs are unknown:
   else {
-    std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
+    std::cout << "StudyDataShift: ERROR! Categorization not found" << std::endl;
     exit(0);
   }
 }
@@ -205,7 +189,7 @@ TString nameCategory(int categoryIndex) {
   
   // Exit because inputs are unknown:
   else {
-    std::cout << "StudyData: ERROR! Categorization not found" << std::endl;
+    std::cout << "StudyDataShift: ERROR! Categorization not found" << std::endl;
     exit(0);
   }
 }
@@ -342,15 +326,11 @@ void define2DHistograms(TString histName, int nCategories, TString xName,
    @param histName - The name of the histogram.
    @param category -The index of the category into which this event falls.
    @param value - The value to fill into the histogram for this event.
-   @param weight - The event weight.
 */
-void fillHistograms(TString histName, int category, double value,
-		    double weight) {
-    
-  m_histograms[histName]->Fill(value, weight);
+void fillHistograms(TString histName, int category, double value) {
+  m_histograms[histName]->Fill(value);
   TString cateName = nameCategory(category);
-  m_histograms[Form("%s_%s", histName.Data(), cateName.Data())]
-    ->Fill(value, weight);
+  m_histograms[Form("%s_%s", histName.Data(), cateName.Data())]->Fill(value);
 }
 
 /**
@@ -360,15 +340,13 @@ void fillHistograms(TString histName, int category, double value,
    @param category -The index of the category into which this event falls.
    @param xValue - The x value to fill into the histogram for this event.
    @param yValue - The y value to fill into the histogram for this event.
-   @param weight - The event weight.
 */
 void fill2DHistograms(TString histName, int category, double xValue, 
-		      double yValue, double weight) {
-    
-  m_histograms2D[histName]->Fill(xValue, yValue, weight);
+		      double yValue) {
+  m_histograms2D[histName]->Fill(xValue, yValue);
   TString cateName = nameCategory(category);
   m_histograms2D[Form("%s_%s", histName.Data(), cateName.Data())]
-    ->Fill(xValue, yValue, weight);
+    ->Fill(xValue, yValue);
 }
 
 /**
@@ -438,8 +416,6 @@ void plotHistogram(TString histName, TString ana, TString label, double lumi) {
    @param lumi - The dataset luminosity.
 */
 void plot2DHistogram(TString histName, TString ana, TString label, double lumi){
-  std::cout << "plot2DHistogram(" << histName << ", " << ana << ", " << label
-	    << ", " << lumi << ")" << std::endl;
   
   TCanvas *can = new TCanvas("can", "can", 800, 1000);
   can->cd();
@@ -454,97 +430,61 @@ void plot2DHistogram(TString histName, TString ana, TString label, double lumi){
   pad2->SetRightMargin(0.15);
   pad1->Draw();
   pad2->Draw();
+    
+  //gStyle->SetPalette(1);
   pad1->cd();
-  
-  pad1->SetLogz();
-  m_histograms2D[histName]->GetZaxis()
-    ->SetRangeUser(0.1, m_histograms2D[histName]->GetMaximum());
-  m_histograms2D[histName]->SetContour(256);
-  m_histograms2D[histName]->Draw("colz");
-  //m_histograms2D[histName]->Draw("scat=1.0");
-  
-  histName = formatHistName(histName);
   /*
+  const Int_t NRGBs = 5;
+  const Int_t NCont = 255;
+  Double_t stops[NRGBs] = {0.00, 0.34, 0.61, 0.84, 1.00};
+  Double_t red[NRGBs]   = {0.00, 0.00, 0.87, 1.00, 0.51};
+  Double_t green[NRGBs] = {0.00, 0.81, 1.00, 0.20, 0.00};
+  Double_t blue[NRGBs]  = {0.51, 1.00, 0.12, 0.00, 0.00};
+  TColor::CreateGradientColorTable(NRGBs, stops, red, green, blue, NCont);
+  gStyle->SetNumberContours(NCont);
+  */
+  //gStyle->SetNumberContours(255);
+  m_histograms2D[histName]->Draw("scat=1.0");
+  m_histograms2D[histName]->Draw();
+  histName = formatHistName(histName);
+  
   TLine *line = new TLine();
   line->SetLineStyle(2);
   line->SetLineWidth(2);
   line->SetLineColor(kRed+1);
   line->DrawLine(700, m_histograms2D[histName]->GetYaxis()->GetXmin(),
-  		 700, m_histograms2D[histName]->GetYaxis()->GetXmax());
+		 700, m_histograms2D[histName]->GetYaxis()->GetXmax());
   line->DrawLine(800, m_histograms2D[histName]->GetYaxis()->GetXmin(),
-  		 800, m_histograms2D[histName]->GetYaxis()->GetXmax());
-  */
+		 800, m_histograms2D[histName]->GetYaxis()->GetXmax());
+  
+  pad2->cd();
+  TProfile *profile = m_histograms2D[histName]->ProfileX();
+  profile->GetYaxis()
+    ->SetTitle(m_histograms2D[histName]->GetYaxis()->GetTitle());
+  profile->Draw("E1");
+  line->DrawLine(700, profile->GetMinimum(),
+		 700, profile->GetMaximum());
+  line->DrawLine(800, profile->GetMinimum(),
+		 800, profile->GetMaximum());
   
   // Print ATLAS text on the plot:    
   TLatex t; t.SetNDC(); t.SetTextColor(kBlack);
   t.SetTextFont(72); t.SetTextSize(0.05);
-  t.DrawLatex(0.55, 0.86, "ATLAS");
+  t.DrawLatex(0.57, 0.43, "ATLAS");
   t.SetTextFont(42); t.SetTextSize(0.05);
-  t.DrawLatex(0.67, 0.86, label);
-  t.DrawLatex(0.55, 0.80, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",lumi));
-  if (ana.Contains("Scalar")) t.DrawLatex(0.55, 0.74, "Spin-0 Selection");
+  t.DrawLatex(0.69, 0.43, label);
+  t.DrawLatex(0.57, 0.37, Form("#sqrt{s} = 13 TeV, %2.1f fb^{-1}",lumi));
+  if (ana.Contains("Scalar")) t.DrawLatex(0.57, 0.31, "Spin-0 Selection");
   else if (ana.Contains("GravitonLoose")) {
-    t.DrawLatex(0.55, 0.74, "Spin-2 Loose Iso.");
+    t.DrawLatex(0.57, 0.31, "Spin-2 Loose Iso.");
   }
-  else t.DrawLatex(0.55, 0.74, "Spin-2 Selection");
-  t.DrawLatex(0.55, 0.68, histToCateName(histName));
+  else t.DrawLatex(0.57, 0.31, "Spin-2 Selection");
+  t.DrawLatex(0.57, 0.25, histToCateName(histName));
   
-  pad2->cd();
-  
+
   TString printName
     = Form("%s/plot2D_%s.eps", m_outputDir.Data(), histName.Data());
-  
-  // Load the MC profile:
-  if (m_options.Contains("CompareMC")) {
-        
-    TFile file("MCFile.root", "READ");
-    TH2D *temp = (TH2D*)file.Get(Form("hist_%s",
-				      (formatHistName(histName)).Data()));
-    TProfile *profMC = temp->ProfileX();
-    profMC->SetNameTitle("profMC", "profMC");
-    profMC->GetYaxis()
-      ->SetTitle(m_histograms2D[histName]->GetYaxis()->GetTitle());
-    profMC->SetLineColor(kRed);
-    profMC->SetMarkerColor(kRed);
-    
-    TProfile *profile = m_histograms2D[histName]->ProfileX();
-    profile->GetYaxis()
-      ->SetTitle(m_histograms2D[histName]->GetYaxis()->GetTitle());
-    profile->Draw("E1");
-    profMC->Draw("E1SAME");
-    profile->Draw("E1SAME");
-    
-    /*    
-    line->DrawLine(700, profMC->GetMinimum(),
-		   700, profMC->GetMaximum());
-    line->DrawLine(800, profMC->GetMinimum(),
-		   800, profMC->GetMaximum());
-    */
-    
-    TLegend leg(0.62, 0.23, 0.81, 0.33);
-    leg.SetBorderSize(0);
-    leg.SetFillColor(0);
-    leg.SetTextSize(0.04);
-    leg.AddEntry(profile, "Data","EP");
-    leg.AddEntry(profMC, "Sherpa LO MC","EP");
-    leg.Draw("SAME");
-    
-    can->Print(printName);
-    file.Close();
-  }
-  else {
-    TProfile *profile = m_histograms2D[histName]->ProfileX();
-    profile->GetYaxis()
-      ->SetTitle(m_histograms2D[histName]->GetYaxis()->GetTitle());
-    profile->Draw("E1");
-    /*
-    line->DrawLine(700, profile->GetMinimum(),
-		   700, profile->GetMaximum());
-    line->DrawLine(800, profile->GetMinimum(),
-		   800, profile->GetMaximum());
-    */
-    can->Print(printName);
-  }
+  can->Print(printName);
   delete can;
 }
 
@@ -573,6 +513,7 @@ void plotComparisonHist(TString histName, int nCategories, TString ana,
   // Create the canvas:
   TCanvas *can = new TCanvas("can", "can");
   can->cd();
+  //gPad->SetLogy();
   
   // Create a legend:
   TLegend leg(0.6, 0.72, 0.9, 0.91);
@@ -633,7 +574,7 @@ void plotComparisonHist(TString histName, int nCategories, TString ana,
    @return - An updated list of file names.
 */
 std::vector<TString> makeLocalFileCopies(std::vector<TString> fileNames) {
-  std::cout << "StudyData: Making local copies of inputs."
+  std::cout << "StudyDataShift: Making local copies of inputs."
 	    << std::endl;
   std::vector<TString> result; result.clear();
   for (int i_f = 0; i_f < (int)fileNames.size(); i_f++) {
@@ -658,7 +599,7 @@ std::vector<TString> makeLocalFileCopies(std::vector<TString> fileNames) {
    @param fileNames - The original file names.
 */
 void removeLocalFileCopies(std::vector<TString> fileNames) {
-  std::cout << "StudyData: Removing local copies of inputs."
+  std::cout << "StudyDataShift: Removing local copies of inputs."
 	    << std::endl;
   for (int i_f = 0; i_f < (int)fileNames.size(); i_f++) {
     system(Form("rm %s", fileNames[i_f].Data()));
@@ -720,7 +661,6 @@ void printProgressBar(int index, int total) {
 /**
    -----------------------------------------------------------------------------
    Check if a vector contains a value, and add the value if it doesn't.
-   @param value - The value to add to the vector.
 */
 void vectorAdd(int value) {
   for (int i_v = 0; i_v < (int)m_runList.size(); i_v++) {
@@ -747,18 +687,15 @@ int main(int argc, char *argv[])
   }
   
   Config *config = new Config(TString(argv[1]));
-  m_options = argv[2];
-
+  TString options = argv[2];
+  
   // Check that output directory exists:
-  m_outputDir = Form("%s/%s/StudyData", (config->getStr("MasterOutput")).Data(),
+  m_outputDir = Form("%s/%s/StudyDataShift", (config->getStr("MasterOutput")).Data(),
 		     (config->getStr("JobName")).Data());
   system(Form("mkdir -vp %s", m_outputDir.Data()));
   
   // Set the plot Style to ATLAS defaults:
   CommonFunc::SetAtlasStyle();
-  
-  // Define output file with variables:
-  std::ofstream outputForGAN(Form("%s/variablesForGAN.txt",m_outputDir.Data()));
   
   // Define per-event histograms:
   m_histograms.clear();
@@ -789,7 +726,7 @@ int main(int argc, char *argv[])
   defineHistograms("N_{Photons}", nCategories, 3, 1.5, 4.5);
   defineHistograms("N_{Electrons}", nCategories, 5, -0.5, 4.5);
   defineHistograms("N_{Muons}", nCategories, 5, -0.5, 4.5);
-
+  
   // Define histograms of per-photon variables:
   for (int i_p = 0; i_p < 2; i_p++) {
     defineHistograms(Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1),
@@ -806,17 +743,24 @@ int main(int argc, char *argv[])
 		     nCategories, nBins, -5.0, 25.0);
     defineHistograms(Form("Conversion type #gamma_{%d}",i_p+1),
 		     nCategories, 6, -0.5, 5.5);
+  
+    defineHistograms(Form("Conversion radius #gamma_{%d}",i_p+1),
+		     nCategories, nBins, 0.0, 1000.0);
     defineHistograms(Form("gain_{max-E} #gamma_{%d}",i_p+1),
 		     nCategories, 3, -0.5, 2.5);
-    
-    // Also define some 2D histograms:
-    define2DHistograms(Form("timing_maxEcell%d",i_p+1),
-		       nCategories, "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("timing_{max-E cell} #gamma_{%d} [ns]", i_p+1),
-		       50, -2, 2);
-    define2DHistograms(Form("myy_vs_PID%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("PID_{#gamma%d}",i_p+1), 2, -0.5, 1.5);    
+     
+    defineHistograms(Form("E_{0}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
+    defineHistograms(Form("E_{1}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
+    defineHistograms(Form("E_{2}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
+    defineHistograms(Form("E_{3}^{Raw}(#gamma_{%d}) [GeV]",i_p+1),
+		     nCategories, nBins, 0, 1000);
+  }
+  
+  // Also define some 2D histograms:
+  for (int i_p = 0; i_p < 2; i_p++) {
     define2DHistograms(Form("myy_vs_pt%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
 		       Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1), 25, 0, 1000);
@@ -840,65 +784,14 @@ int main(int argc, char *argv[])
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
 		       Form("calo. iso. #gamma_{%d}) [GeV]",i_p+1), 50, -10,10);
     
-    // Shower-shape variables:
-    define2DHistograms(Form("myy_vs_weta1_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("weta1_{#gamma%d}",i_p+1), 40, 0.4, 0.9);
-    
-    define2DHistograms(Form("myy_vs_weta2_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("weta2_{#gamma%d}",i_p+1), 40, 0.4, 0.9);
-    
-    define2DHistograms(Form("myy_vs_wtots1_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("wstots1_{#gamma%d}",i_p+1), 40, 0.0, 5.0);
-    
-    define2DHistograms(Form("myy_vs_e277_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("e277_{#gamma%d}",i_p+1), 40, 0.0, 1500.0);
-    
-    define2DHistograms(Form("myy_vs_relEreso_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("relEreso_{#gamma%d}",i_p+1), 40, 0.0, 1.0);
-    
-    define2DHistograms(Form("myy_vs_Eratio%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("Eratio_{#gamma%d}",i_p+1), 40, 0.7, 1.1);
-    
-    define2DHistograms(Form("myy_vs_Reta%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("Reta_{#gamma%d}",i_p+1), 40, 0.8, 1.0);
-    
-    define2DHistograms(Form("myy_vs_f1_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("f1_{#gamma%d}",i_p+1), 40, 0.0, 1.0);
-    
-    define2DHistograms(Form("myy_vs_Rhad_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("Rhad_{#gamma%d}",i_p+1), 40, -0.04, 0.04);
-    
-    define2DHistograms(Form("myy_vs_Rhad1_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("Rhad1_{#gamma%d}",i_p+1), 40, -0.04, 0.04);
-    
-    define2DHistograms(Form("myy_vs_Rphi_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("Rphi_{#gamma%d}",i_p+1), 40, 0.7, 1.0);
-    
-    define2DHistograms(Form("myy_vs_DeltaE_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("DeltaE_{#gamma%d}",i_p+1), 50, -5.0, 5.0);
-    
-    define2DHistograms(Form("myy_vs_fracs1_%d",i_p+1), nCategories, 
-		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("fracs1_{#gamma%d}",i_p+1), 50, 0.0, 1.0);
-    
+    /////
+        
     // Ratio of sampling layers:
     define2DHistograms(Form("myy_vs_rawcl_ratioEs1Es2_%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
 		       Form("ratio E_{S1}/E_{S2} #gamma_{%d} [GeV]",i_p+1),
 		       50, 0, 2);
-    
+
     // Cluster deposits:
     define2DHistograms(Form("myy_vs_clES0_%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
@@ -948,16 +841,16 @@ int main(int argc, char *argv[])
     // Ratio of cluster E to photon E
     define2DHistograms(Form("myy_vs_clES0overE_%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("E0_{cl}/E #gamma_{%d}",i_p+1), 50, 0, 0.5);
+		       Form("E0_{cl}/E #gamma_{%d}",i_p+1), 50, 0, 1);
     define2DHistograms(Form("myy_vs_clES1overE_%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("E1_{cl}/E #gamma_{%d}",i_p+1), 50, 0, 0.5);
+		       Form("E1_{cl}/E #gamma_{%d}",i_p+1), 50, 0, 1);
     define2DHistograms(Form("myy_vs_clES2overE_%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
 		       Form("E2_{cl}/E #gamma_{%d}",i_p+1), 50, 0, 1);
     define2DHistograms(Form("myy_vs_clES3overE_%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		       Form("E3_{cl}/E #gamma_{%d}",i_p+1), 50, 0, 0.3);
+		       Form("E3_{cl}/E #gamma_{%d}",i_p+1), 50, 0, 1);
 
     // Ratio of raw cluster E to photon E
     define2DHistograms(Form("myy_vs_rawES0overE_%d",i_p+1), nCategories, 
@@ -972,83 +865,24 @@ int main(int argc, char *argv[])
     define2DHistograms(Form("myy_vs_rawES3overE_%d",i_p+1), nCategories, 
 		       "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
 		       Form("E3_{raw cl}/E #gamma_{%d}",i_p+1), 50, 0, 1);
+    
+    
+    
   }
   define2DHistograms("myy_vs_deta", nCategories, 
 		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#Delta#eta_{#gamma#gamma}", 25, 0, 6);
+		     "#Delta#eta(#gamma#gamma)", 25, 0, 6);
   define2DHistograms("myy_vs_phi", nCategories, 
 		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#Delta#phi_{#gamma#gamma}", 25, 0, 2.0*TMath::Pi());
+		     "#Delta#phi(#gamma#gamma)", 25, 0, 2.0*TMath::Pi());
   define2DHistograms("myy_vs_zvtx", nCategories, 
 		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "z_{pointing} [mm]", 30, -400, 400);
+		     "z_{pointing} [mm]", 30, -150, 150);
   define2DHistograms("myy_vs_npv", nCategories, 
 		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
 		     "N_{PV}", 40, -0.5, 40);
   
 
-  define2DHistograms("myy_vs_actualIPX", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "Actual Interactions Per Crossing", 40, 0, 40);
-  define2DHistograms("myy_vs_avgIPX", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "Avg. Interactions Per Crossing", 40, 0, 40);
-  define2DHistograms("myy_vs_beamPosX", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "x_{beam} [mm]", 50, -25, 25);
-  define2DHistograms("myy_vs_beamPosY", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "y_{beam} [mm]", 50, -25, 25);
-  define2DHistograms("myy_vs_beamPosZ", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "z_{beam} [mm]", 50, -25, 25);
-  define2DHistograms("myy_vs_beamPosSigmaX", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#sigma(x_{beam}) [mm]", 50, 0, 50);
-  define2DHistograms("myy_vs_beamPosSigmaY", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#sigma(y_{beam}) [mm]", 50, 0, 50);
-  define2DHistograms("myy_vs_beamPosSigmaZ", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#sigma(z_{beam}) [mm]", 50, 0, 50);
-  define2DHistograms("myy_vs_beamPosSigmaXY", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#sigma(xy_{beam}) [mm]", 50, 0, 50);
-  define2DHistograms("myy_vs_bunchDistanceFromFront", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "Distance From Front", 50, 0, 200);
-  define2DHistograms("myy_vs_bunchGapBeforeTrain", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "Bunch Gap Before Train", 50, 0, 200);
-  define2DHistograms("myy_vs_zSelected", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "z_{selected} [mm]", 50, -400, 400);
-  define2DHistograms("myy_vs_zHardest", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "z_{hardest} [mm]", 50, -400, 400);
-  define2DHistograms("myy_vs_zDiff", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "z_{hardest}-z_{selected} [mm]", 50, -400, 400);
-  define2DHistograms("myy_vs_mu", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#mu", 40, 0, 40);
-  define2DHistograms("myy_vs_pT_hard", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "p_{T}^{Hard} [GeV]", 50, 0, 500);
-  define2DHistograms("myy_vs_met_TST", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#slash{E}_{T}^{TST} [GeV]", 50, 0, 2000);
-  define2DHistograms("myy_vs_sumet_TST", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#sum E_{T}^{TST} [GeV]", 50, 0, 2000);
-  define2DHistograms("myy_vs_met_phi", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "#phi_{#slash{E}_{T}^{TST}}", 40, -1*TMath::Pi(),
-		     TMath::Pi());
-  define2DHistograms("myy_vs_costheta", nCategories, 
-		     "m_{#gamma#gamma} [GeV]", 36, 200, 2000, 
-		     "cos(#theta*)", 50, 0, 1);
-  
   // Prepare for loop over input MxAOD/TTree:
   std::vector<TString> fileNames = config->getStrV("MxAODsForData");
   // Make local copies of files if requested, to improve speed:
@@ -1062,8 +896,6 @@ int main(int argc, char *argv[])
   }
   m_treeMxAOD = new HGammaMxAOD(chain);
     
-  //chain->MakeClass("test");
-  
   // Count events:
   for (int i_c = 0; i_c < 50; i_c++) {
     m_cutFlowCounter_Hist[i_c] = 0;
@@ -1071,16 +903,12 @@ int main(int argc, char *argv[])
   }
   m_cutNames.clear();
   m_runList.clear();
+  TString currFileName = "";
   int countPass = 0;
   int countCate[50] = {0};
   m_eventsPerRun.clear();
-  int prevRun = 0;
   
-  // Variables for weighted events:
-  double luminosity = config->getNum("AnalysisLuminosity");
-  double nTotEvt = 1000.0;
-  TString currFileName = "";
-  int cutFlowIndex = 0;
+  int prevRun = 0;
   
   // Also create a text file of all passing events:
   std::ofstream eventList(Form("%s/eventList.txt", m_outputDir.Data()));
@@ -1098,14 +926,13 @@ int main(int argc, char *argv[])
     // Add each new file to the cutflow:
     if (!currFileName.EqualTo(chain->GetFile()->GetName())) {
       currFileName = chain->GetFile()->GetName();
-      if (config->getBool("MxAODIsMC")) {
-	nTotEvt = getNTotEvtFromHist(chain->GetFile(), cutFlowIndex);
-      }
-      fillCutFlowFromMxAOD(chain->GetFile(),
+      fillCutFlowFromMxAOD(chain->GetFile(), 
 			   config->getInt("MxAODCutFlowIndex"));
     }
     
     if (prevRun != (int)(m_treeMxAOD->EventInfoAux_runNumber)) {
+      //std::cout << "NEW RUN! " << m_treeMxAOD->EventInfoAux_runNumber 
+      //	<< std::endl;
       prevRun = m_treeMxAOD->EventInfoAux_runNumber;
     }
     
@@ -1123,34 +950,39 @@ int main(int argc, char *argv[])
     if (m_treeMxAOD->HGamEventInfoAuxDyn_cutFlow <
 	config->getInt("MxAODCutFlowIndex")) continue;
     
+    ////////// Shift the pT and recalculate the mass. 
+    double pT1 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0];
+    double pT2 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1];
+    double pT1_shifted = shiftedPT(pT1, m_treeMxAOD->HGamEventInfoAuxDyn_m_yy);
+    double pT2_shifted = shiftedPT(pT2, m_treeMxAOD->HGamEventInfoAuxDyn_m_yy);
+    std::vector<double> pT_shifted; pT_shifted.clear();
+    pT_shifted.push_back(pT1_shifted);
+    pT_shifted.push_back(pT2_shifted);
+    
+    std::vector<double> ET_shifted; ET_shifted.clear();
+    ET_shifted.push_back(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]) * 
+			 pT_shifted[0]);
+    ET_shifted.push_back(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]) * 
+			 pT_shifted[1]);
+    
+    // Then re-calculate mass
+    // use pt shifted, eta, phi, and E.
+
+    TLorentzVector Vp1, Vp2, Vdiphoton;
+    Vp1.SetPtEtaPhiE(pT_shifted[0], (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0],
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0], ET_shifted[0]);
+    Vp2.SetPtEtaPhiE(pT_shifted[1], (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1],
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1], ET_shifted[1]);
+    Vdiphoton  = Vp1 + Vp2;
+    double mass_shifted = Vdiphoton.M();
+    
+
+    
     //---------- Pre-selection Cut ----------//
     if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedPreselection) continue;
     m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")]++;
     m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")]++;
-        
-    // Choose the category:
-    int category = chooseCategory();
-    
-    // Calculate an event weight (=1 for data):
-    double weight = 1.0;    
-    if (config->getBool("MxAODIsMC")) {
-      weight = (luminosity * 
-		m_treeMxAOD->HGamEventInfoAuxDyn_crossSectionBRfilterEff *
-		m_treeMxAOD->HGamEventInfoAuxDyn_weight / nTotEvt);
-      //std::cout << "weight = lumi(" << luminosity << ") * xsbrfe("
-      //	<< m_treeMxAOD->HGamEventInfoAuxDyn_crossSectionBRfilterEff
-      //	<< ") * weight(" << m_treeMxAOD->HGamEventInfoAuxDyn_weight
-      //	<< ") / ntotevt(" << nTotEvt << ") = " << weight << std::endl;
-    }
-    
-    // Fill a 2D plot of the photon ID bit:
-    for (int i_p = 0; i_p < 2; i_p++) {
-      fill2DHistograms(Form("myy_vs_PID%d",i_p+1), category, 
-		  (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		  (int)((bool)(*m_treeMxAOD->HGamPhotonsAuxDyn_isTight)[i_p]),
-		  weight);
-    }
-    
+
     //---------- PID Cut ----------//
     if (!m_treeMxAOD->HGamEventInfoAuxDyn_isPassedPID) continue;
     m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+1]++;
@@ -1158,10 +990,10 @@ int main(int argc, char *argv[])
     
     //---------- Myy Cut ----------//
     if (((config->getStr("AnalysisType")).EqualTo("Scalar") && 
-	 m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 150000) ||
+	 mass_shifted <= 150000) ||
 	((config->getStr("AnalysisType")).Contains("Graviton") && 
-	 m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 150000)) {
-	 //m_treeMxAOD->HGamEventInfoAuxDyn_m_yy <= 200000)) {
+	 mass_shifted <= 150000)) {
+	 //mass_shifted <= 200000)) {
       continue;
     }
     m_cutFlowCounter_Hist[config->getInt("MxAODCutFlowIndex")+2]++;
@@ -1177,8 +1009,6 @@ int main(int argc, char *argv[])
       isoConstant = 7000.00;
     }
     
-    double pT1 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[0];
-    double pT2 = (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[1];
     bool isCaloIso1 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[0] <
 			    ((0.022 * pT1) + isoConstant));
     bool isCaloIso2 = ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[1] <
@@ -1214,8 +1044,8 @@ int main(int argc, char *argv[])
     m_cutFlowCounter_Flag[config->getInt("MxAODCutFlowIndex")+3]++;
     
     //---------- pT cut ----------//
-    double pTRatio1 = (pT1 / m_treeMxAOD->HGamEventInfoAuxDyn_m_yy);
-    double pTRatio2 = (pT2 / m_treeMxAOD->HGamEventInfoAuxDyn_m_yy);
+    double pTRatio1 = (pT1 / mass_shifted);
+    double pTRatio2 = (pT2 / mass_shifted);
     if (((config->getStr("AnalysisType")).EqualTo("Scalar") && 
 	 (pTRatio1 <= 0.4 || pTRatio2 <= 0.3)) ||
 	((config->getStr("AnalysisType")).Contains("Graviton") && 
@@ -1238,387 +1068,245 @@ int main(int argc, char *argv[])
 	!(config->getStr("AnalysisType")).Contains("GravitonLoose") &&
 	!(m_treeMxAOD->HGamEventInfoAuxDyn_isPassedExotic && 
 	  m_treeMxAOD->HGamEventInfoAuxDyn_isPassedIsolationLowHighMyy &&
-	  m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 150000)) {
-      //m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 200000)) {
+	  mass_shifted > 150000)) {
+      //mass_shifted > 200000)) {
       continue;
     }
     else if ((config->getStr("AnalysisType")).EqualTo("Scalar") &&
 	     !(m_treeMxAOD->HGamEventInfoAuxDyn_isPassedLowHighMyy && 
-	       m_treeMxAOD->HGamEventInfoAuxDyn_m_yy > 150000)) {
+	       mass_shifted > 150000)) {
       continue;
     }
-        
+    
+    // Choose the category:
+    int category = chooseCategory();
+    
     // Add to event counts:
     countPass++;
     countCate[category]++;
     m_eventsPerRun[m_treeMxAOD->EventInfoAux_runNumber]++;
     eventList << m_treeMxAOD->EventInfoAux_runNumber << " " 
 	      << m_treeMxAOD->EventInfoAux_eventNumber << std::endl;
-    
-    
-    //----------------------------------------//
+
     // Fill the event variable histograms:
-    
-    
     fillHistograms("z_{vertex} [mm]", category,
-		   m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ, weight);
+		   m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ);
     fillHistograms("m_{#gamma#gamma} [GeV]", category, 
-		   m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0, weight);
+		   mass_shifted / 1000.0);
     fillHistograms("p_{T}^{#gamma#gamma} [GeV]", category, 
-		   m_treeMxAOD->HGamEventInfoAuxDyn_pT_yy / 1000.0, weight);
+		   m_treeMxAOD->HGamEventInfoAuxDyn_pT_yy / 1000.0);
     fillHistograms("cos(#theta*)", category,
-		   m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy, weight);
+		   m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy);
     
     fillHistograms("N_{Jets}", category,
-		   (*m_treeMxAOD->HGamAntiKt4EMTopoJetsAuxDyn_pt).size(),
-		   weight);
+		   (*m_treeMxAOD->HGamAntiKt4EMTopoJetsAuxDyn_pt).size());
     fillHistograms("N_{Photons}", category,
-		   (*m_treeMxAOD->HGamPhotonsAuxDyn_pt).size(), weight);
+		   (*m_treeMxAOD->HGamPhotonsAuxDyn_pt).size());
     fillHistograms("N_{Electrons}", category,
-		   (*m_treeMxAOD->HGamElectronsAuxDyn_pt).size(), weight);
+		   (*m_treeMxAOD->HGamElectronsAuxDyn_pt).size());
     fillHistograms("N_{Muons}", category,
-		   (*m_treeMxAOD->HGamMuonsAuxDyn_pt).size(), weight);
+		   (*m_treeMxAOD->HGamMuonsAuxDyn_pt).size());
     
     // Fill the photon variable histograms in loop over photons:
     for (int i_p = 0; i_p < 2; i_p++) {
       fillHistograms(Form("p_{T}(#gamma_{%d}) [GeV]",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p] / 1000.0, 
-		     weight);
+		     pT_shifted[i_p] / 1000.0);
       fillHistograms(Form("#eta(#gamma_{%d})",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p], weight);
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]);
       fillHistograms(Form("#eta_{S2}(#gamma_{%d})",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta_s2)[i_p], weight);
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_eta_s2)[i_p]);
       fillHistograms(Form("#phi(#gamma_{%d})",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p], weight);
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p]);
       fillHistograms(Form("p_{T}^{cone20}(#gamma_{%d}) [GeV]",i_p+1),
 		     category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p] / 1000.0,
-		     weight);
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p] / 1000.0);
       fillHistograms(Form("E_{T}^{cone40}(#gamma_{%d}) [GeV]",i_p+1), 
 		     category,
 		     ((*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[i_p]
-		      / 1000.0), weight);
+		      / 1000.0));
       fillHistograms(Form("Conversion type #gamma_{%d}",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[i_p], 
-		     weight);
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[i_p]);
+      
       fillHistograms(Form("gain_{max-E} #gamma_{%d}",i_p+1), category, 
-		     (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[i_p],
-		     weight);
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[i_p]);
       
-      // Fill 2D plots: 
-      fill2DHistograms(Form("timing_maxEcell%d",i_p+1), category,
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_time)[i_p],
-		       weight);
+      /*
+      fillHistograms(Form("Conversion radius #gamma_{%d}",i_p+1), category, 
+      	     (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionRadius)[i_p]);
+          
+      std::cout << "CHECK2.5" << std::endl;
+      fillHistograms(Form("E_{0}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[i_p]);
+      fillHistograms(Form("E_{1}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[i_p]);
+      fillHistograms(Form("E_{2}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[i_p]);
+      fillHistograms(Form("E_{3}^{Raw}(#gamma_{%d}) [GeV]",i_p+1), category, 
+		     (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[i_p]);
+      */
+    }
+    
+    
+    
+    // Fill 2D plots: 
+    for (int i_p = 0; i_p < 2; i_p++) {
       fill2DHistograms(Form("myy_vs_pt%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p] / 1000.0),
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (pT_shifted[i_p] / 1000.0));
       fill2DHistograms(Form("myy_vs_fabseta%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       fabs((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]),
-		       weight);
+		       (mass_shifted / 1000.0),
+		       fabs((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]));
       fill2DHistograms(Form("myy_vs_phi%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p]), weight);
+		       (mass_shifted / 1000.0),
+		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[i_p]));
       fill2DHistograms(Form("myy_vs_conv%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[i_p]),
-		       weight);
+		       (mass_shifted / 1000.0),
+		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[i_p]));
       fill2DHistograms(Form("myy_vs_gain%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[i_p],
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_maxEcell_gain)[i_p]);
       fill2DHistograms(Form("myy_vs_trkiso%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p]/1000.0,
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_ptcone20)[i_p]/1000.0);
       fill2DHistograms(Form("myy_vs_caloiso%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       (*m_treeMxAOD->HGamPhotonsAuxDyn_topoetcone40)[i_p]
-		       / 1000.0, weight);
-      
-      // Shower-shape variables:
-      fill2DHistograms(Form("myy_vs_weta1_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_weta1)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_weta2_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_weta2)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_wtots1_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_wtots1)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_e277_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_e277)[i_p] / 1000.0,
-		       weight);
-      fill2DHistograms(Form("myy_vs_relEreso_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_relEreso)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_Eratio%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_Eratio)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_Reta%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_Reta)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_f1_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_f1)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_Rhad_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_Rhad)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_Rhad1_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_Rhad1)[i_p], weight);
-      fill2DHistograms(Form("myy_vs_Rphi_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_Rphi)[i_p], weight); 
-      fill2DHistograms(Form("myy_vs_DeltaE_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_DeltaE)[i_p] / 1000.0, 
-		       weight);
-      fill2DHistograms(Form("myy_vs_fracs1_%d",i_p+1), nCategories, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_fracs1)[i_p], weight);
-                  
+		       / 1000.0);
+            
       /////
       
       // Ratio of sampling layers:
       fill2DHistograms(Form("myy_vs_rawcl_ratioEs1Es2_%d",i_p+1), category, 
-		      (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		      (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_ratioEs1Es2)[i_p], 
-		       weight);
+		      (mass_shifted / 1000.0),
+		      (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_ratioEs1Es2)[i_p]);
       
       // Cluster deposits:
       fill2DHistograms(Form("myy_vs_clES0_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es0)[i_p] / 1000.0,
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es0)[i_p] / 1000.0);
       fill2DHistograms(Form("myy_vs_clES1_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es1)[i_p] / 1000.0,
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es1)[i_p] / 1000.0);
       fill2DHistograms(Form("myy_vs_clES2_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es2)[i_p] / 1000.0,
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es2)[i_p] / 1000.0);
       fill2DHistograms(Form("myy_vs_clES3_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es3)[i_p] / 1000.0,
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es3)[i_p] / 1000.0);
       
       // Raw cluster deposits:
       fill2DHistograms(Form("myy_vs_rawclES0_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es0)[i_p]/1000.0,
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es0)[i_p]/1000.0);
       fill2DHistograms(Form("myy_vs_rawclES1_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es1)[i_p]/1000.0, 
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es1)[i_p]/1000.0);
       fill2DHistograms(Form("myy_vs_rawclES2_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es2)[i_p]/1000.0, 
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es2)[i_p]/1000.0);
       fill2DHistograms(Form("myy_vs_rawclES3_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es3)[i_p]/1000.0, 
-		       weight);
+		       (mass_shifted / 1000.0),
+		       (*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es3)[i_p]/1000.0);
       
       // ratio of cluster E to raw cluster E:
       fill2DHistograms(Form("myy_vs_ratioES0_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es0)[i_p] /
-			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es0)[i_p]),
-		       weight);
+			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es0)[i_p]));
       fill2DHistograms(Form("myy_vs_ratioES1_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es1)[i_p] /
-			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es1)[i_p]),
-		       weight);
+			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es1)[i_p]));
       fill2DHistograms(Form("myy_vs_ratioES2_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es2)[i_p] /
-			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es2)[i_p]), 
-		       weight);
+			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es2)[i_p]));
       fill2DHistograms(Form("myy_vs_ratioES3_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es3)[i_p] /
-			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es3)[i_p]),
-		       weight);
+			(*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es3)[i_p]));
       
       // Ratio of cluster E to photon E
       fill2DHistograms(Form("myy_vs_clES0overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es0)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
       fill2DHistograms(Form("myy_vs_clES1overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es1)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
       fill2DHistograms(Form("myy_vs_clES2overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es2)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
       fill2DHistograms(Form("myy_vs_clES3overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_cl_Es3)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
       
       // Ratio of raw cluster E to photon E
       fill2DHistograms(Form("myy_vs_rawES0overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es0)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
       fill2DHistograms(Form("myy_vs_rawES1overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es1)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
       fill2DHistograms(Form("myy_vs_rawES2overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es2)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
       fill2DHistograms(Form("myy_vs_rawES3overE_%d",i_p+1), category, 
-		       (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		       (mass_shifted / 1000.0),
 		       ((*m_treeMxAOD->HGamPhotonsAuxDyn_rawcl_Es3)[i_p] /
-			(cosh((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[i_p]) * 
-			 (*m_treeMxAOD->HGamPhotonsAuxDyn_pt)[i_p])), weight);
+			ET_shifted[i_p]));
+      
     }
     fill2DHistograms("myy_vs_deta", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+		     (mass_shifted / 1000.0),
 		     fabs((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0] - 
-			  (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]), weight);
+			  (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]));
+    
     fill2DHistograms("myy_vs_phi", category, 
-    		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
+    		     (mass_shifted / 1000.0),
 		     fabs((*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0] - 
-			  (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]), weight);
+			  (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]));
+    
     fill2DHistograms("myy_vs_zvtx", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		     m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ, weight);
+		     (mass_shifted / 1000.0),
+		     m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ);
     fill2DHistograms("myy_vs_npv", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		     m_treeMxAOD->HGamEventInfoAuxDyn_numberOfPrimaryVertices,
-		     weight);
-    
-    // Additional event-level variables:
-    fill2DHistograms("myy_vs_actualIPX", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0),
-		     m_treeMxAOD->EventInfoAux_actualInteractionsPerCrossing,
-		     weight);
-    fill2DHistograms("myy_vs_avgIPX", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->EventInfoAux_averageInteractionsPerCrossing,
-		     weight);
-    fill2DHistograms("myy_vs_beamPosX", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     1000.0 * m_treeMxAOD->EventInfoAux_beamPosX, weight);  
-    fill2DHistograms("myy_vs_beamPosY", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     1000.0 * m_treeMxAOD->EventInfoAux_beamPosY, weight);
-    fill2DHistograms("myy_vs_beamPosZ", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     1000.0 * m_treeMxAOD->EventInfoAux_beamPosZ, weight);
-    fill2DHistograms("myy_vs_beamPosSigmaX", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     1000.0 * m_treeMxAOD->EventInfoAux_beamPosSigmaX, weight);
-    fill2DHistograms("myy_vs_beamPosSigmaY", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     1000.0 * m_treeMxAOD->EventInfoAux_beamPosSigmaY, weight);
-    fill2DHistograms("myy_vs_beamPosSigmaZ", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     1000.0 * m_treeMxAOD->EventInfoAux_beamPosSigmaZ, weight);
-    fill2DHistograms("myy_vs_beamPosSigmaXY", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     1000.0 * m_treeMxAOD->EventInfoAux_beamPosSigmaXY, weight);
-    fill2DHistograms("myy_vs_bunchDistanceFromFront", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->EventInfoAuxDyn_bunchDistanceFromFront,
-		     weight);
-    fill2DHistograms("myy_vs_bunchDistanceFromFront", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->EventInfoAuxDyn_bunchGapBeforeTrain, weight);
-    fill2DHistograms("myy_vs_zSelected", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ, weight);
-    fill2DHistograms("myy_vs_zHardest", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_hardestVertexZ, weight);
-    fill2DHistograms("myy_vs_zDiff", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_hardestVertexZ -
-		      m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ),weight);
-    fill2DHistograms("myy_vs_mu", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_mu, weight);
-    fill2DHistograms("myy_vs_pT_hard", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_pT_hard / 1000.0, weight);
-    fill2DHistograms("myy_vs_met_TST", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_met_TST / 1000.0, weight);
-    fill2DHistograms("myy_vs_sumet_TST", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_sumet_TST/1000.0, weight);
-    fill2DHistograms("myy_vs_met_phi", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_phi_TST, weight);
-    fill2DHistograms("myy_vs_costheta", category, 
-		     (m_treeMxAOD->HGamEventInfoAuxDyn_m_yy / 1000.0), 
-		     m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy, weight);
-    
-    // Output file to use in neural network study:
-    outputForGAN << TMath::Log(TMath::Power((*m_treeMxAOD
-					     ->HGamPhotonsAuxDyn_pt)[0],0.25))
-		 << " " 
-		 << TMath::Log(TMath::Power((*m_treeMxAOD
-					     ->HGamPhotonsAuxDyn_pt)[1],0.25))
-		 << " " 
-		 << ((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0] / 4.0) << " " 
-		 << ((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1] / 4.0) << " " 
-		 << ((*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0])/(2*TMath::Pi())
-		 << " " 
-		 << ((*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1])/(2*TMath::Pi())
-		 << " " 
-		 << (TMath::Log(TMath::Power(m_treeMxAOD
-					     ->HGamEventInfoAuxDyn_m_yy,0.5))-3)
-		 << std::endl;
+		     (mass_shifted / 1000.0),
+		     m_treeMxAOD->HGamEventInfoAuxDyn_numberOfPrimaryVertices);
     
   }// End of loop over events
   eventList.close();
-  outputForGAN.close();
-  std::cout << "End of event loop" << std::endl;
-
+  
   // Create output file for histograms:
   TString histogramFileName = Form("%s/histogramFile_%s.root", 
 				   m_outputDir.Data(), m_categoryName.Data());
   TFile *histogramFile = new TFile(histogramFileName, "RECREATE");
   
   // Plot and save all 1D histograms:
-  std::cout << "Save 1D histograms" << std::endl;
   for (std::map<TString,TH1F*>::iterator histIter = m_histograms.begin(); 
        histIter != m_histograms.end(); histIter++) {
     // Plot individual histogram:
     plotHistogram(histIter->first, config->getStr("AnalysisType"),
-		  config->getStr("ATLASLabel"), luminosity / 1000.0);
+		  config->getStr("ATLASLabel"),
+		  config->getNum("AnalysisLuminosity")/1000.0);
     // Plot comparison of histograms in each category:
     if (m_categoryName.EqualTo("MassCate")) {
       plotComparisonHist(histIter->first, nCategories, 
 			 config->getStr("AnalysisType"),
-			 config->getStr("ATLASLabel"), luminosity / 1000.0);
+			 config->getStr("ATLASLabel"),
+			 config->getNum("AnalysisLuminosity")/1000.0);
     }
     histIter->second
       ->Write(Form("hist_%s", (formatHistName(histIter->first)).Data()));
   }
   
   // Plot and save all 2D histograms:
-  std::cout << "Save 2D histograms." << std::endl;
   for (std::map<TString,TH2D*>::iterator histIter2D = m_histograms2D.begin(); 
        histIter2D != m_histograms2D.end(); histIter2D++) {
     // Plot individual histogram:
@@ -1630,7 +1318,6 @@ int main(int argc, char *argv[])
   }
   
   // Write output file:
-  std::cout << "Writing output file" << std::endl;
   histogramFile->Close();
   
   
@@ -1647,7 +1334,7 @@ int main(int argc, char *argv[])
   }
   
   // Detailed summary:
-  std::cout << "\nStudyData: Printing cut-flow from MxAOD and offline analysis."
+  std::cout << "\nStudyDataShift: Printing cut-flow from MxAOD and offline."
 	    << std::endl;
   for (int i_c = 0; i_c < (int)m_cutNames.size(); i_c++) {
     std::cout << "\t" << i_c << "\t" << m_cutNames[i_c] << " \t" 
@@ -1675,6 +1362,36 @@ int main(int argc, char *argv[])
   delete m_treeMxAOD;
   delete chain;
   delete config;
-  delete histogramFile;  
+  delete histogramFile;
+  
   return 0;
 }
+
+/*
+// DETAILED EVENT CHECKLIST:
+std::cout << "\nRun = " << m_treeMxAOD->EventInfoAux_runNumber
+<< ", Event = " << m_treeMxAOD->EventInfoAux_eventNumber
+<< ", conv1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[0] 
+<< ", conv2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_conversionType)[1] 
+<< ", eta1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0]
+<< ", eta2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1]
+<< ", phi1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[0]
+<< ", phi2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1]
+<< ", pT1 = " << pT1_shifted
+<< ", pT2 = " << pT2_shifted
+<< ", zvtx = " << m_treeMxAOD->HGamEventInfoAuxDyn_selectedVertexZ
+<< ", E0,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[0]
+<< ", E0,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E0_raw)[1]
+
+<< ", E1,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[0]
+<< ", E1,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E1_raw)[1]
+
+<< ", E2,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[0]
+<< ", E2,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E2_raw)[1]
+
+<< ", E3,1 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[0]
+<< ", E3,2 = " << (*m_treeMxAOD->HGamPhotonsAuxDyn_E3_raw)[1]
+/<< ", myy = " << mass_shifted / 1000.0
+<< std::endl;
+}
+*/

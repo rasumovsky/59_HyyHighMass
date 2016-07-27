@@ -3,7 +3,7 @@
 //  DupSleuth.cxx                                                             //
 //                                                                            //
 //  Author: Andrew Hard                                                       //
-//  Date: 29/01/2016                                                          //
+//  Date: 25/07/2016                                                          //
 //  Email: ahard@cern.ch                                                      //
 //                                                                            //
 //  This main method provides a tool for performing individual fits to the    //
@@ -12,24 +12,19 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-
-
 /// c++ headers
 #include <fstream>
 #include <stdio.h>
 #include <iostream>
 #include <vector>
-//#include <utility>
-//#include <cassert>
 #include <stdlib.h>
 #include <string>
 #include <sstream>
-//#include <algorithm>
 #include <list>
 #include <map>
 #include <cstdlib>
-//#include <cmath>
 
+// ROOT headers:
 #include "TChain.h"
 #include "TFile.h"
 
@@ -39,6 +34,9 @@ std::map<UInt_t,std::vector<ULong64_t> > r2e;
    -----------------------------------------------------------------------------
    Check for duplciate run+event combinations. Use a map to reduce the size of
    the problem (2nd order loops over individual runs instead of all runs). 
+   @param run - The run number of the event.
+   @param event - The event number.
+   @return - True iff. event is duplicated. 
 */
 bool isDuplicate(UInt_t run, ULong64_t event) {
   
