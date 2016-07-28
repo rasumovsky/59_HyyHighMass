@@ -512,7 +512,6 @@ void plot2DHistogram(TString histName, TString ana, TString label, double lumi){
       ->SetTitle(m_histograms2D[histName]->GetYaxis()->GetTitle());
     profile->Draw("E1");
     profMC->Draw("E1SAME");
-    profile->Draw("E1SAME");
     
     /*    
     line->DrawLine(700, profMC->GetMinimum(),
@@ -1574,11 +1573,11 @@ int main(int argc, char *argv[])
 		     m_treeMxAOD->HGamEventInfoAuxDyn_cosTS_yy, weight);
     
     // Output file to use in neural network study:
-    outputForGAN << TMath::Log(TMath::Power((*m_treeMxAOD
-					     ->HGamPhotonsAuxDyn_pt)[0],0.25))
+    outputForGAN << 0.25*TMath::Log(0.001*(*m_treeMxAOD
+					   ->HGamPhotonsAuxDyn_pt)[0])-1.3
 		 << " " 
-		 << TMath::Log(TMath::Power((*m_treeMxAOD
-					     ->HGamPhotonsAuxDyn_pt)[1],0.25))
+		 << 0.25*TMath::Log(0.001*(*m_treeMxAOD
+					   ->HGamPhotonsAuxDyn_pt)[1])-1.3
 		 << " " 
 		 << ((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[0] / 4.0) << " " 
 		 << ((*m_treeMxAOD->HGamPhotonsAuxDyn_eta)[1] / 4.0) << " " 
@@ -1586,8 +1585,8 @@ int main(int argc, char *argv[])
 		 << " " 
 		 << ((*m_treeMxAOD->HGamPhotonsAuxDyn_phi)[1])/(2*TMath::Pi())
 		 << " " 
-		 << (TMath::Log(TMath::Power(m_treeMxAOD
-					     ->HGamEventInfoAuxDyn_m_yy,0.5))-3)
+		 << 0.5*TMath::Log(0.001*m_treeMxAOD
+				   ->HGamEventInfoAuxDyn_m_yy)-3
 		 << std::endl;
     
   }// End of loop over events

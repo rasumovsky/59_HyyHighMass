@@ -28,7 +28,7 @@
 */
 void mapToVectors(std::map<std::string,double> map, 
 		  std::vector<std::string>& names, std::vector<double>& values){
-  names.clear(); 
+  names.clear();
   values.clear();
   for (std::map<std::string,double>::iterator mapIter = map.begin(); 
        mapIter != map.end(); mapIter++) {

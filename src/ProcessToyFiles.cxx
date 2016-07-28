@@ -6,10 +6,8 @@
 //  Email: ahard@cern.ch                                                      //
 //  Date: 01/04/2016                                                          //
 //                                                                            //
-//  Plots the resonant analysis limits as a function of MX.                   //
-//                                                                            //
-//  Macro options:                                                            //
-//  - "New" or "FromFile"                                                     //
+//  Unpack .tar files from one directory and place the extracted .root files  //
+//  in a new directory.                                                       //
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -117,9 +115,16 @@ void haddCurrentFiles() {
     for (int i_w = 0; i_w < (int)m_widthValues.size(); i_w++) {
       for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
 	for (int mu = 0; mu < 2; mu++) {
-	  TString outputFile1 = Form("%s/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root", m_outputDir.Data(), mu, m_massValues[i_m], m_widthValues[i_w], m_xsValues[i_x]);
-	  TString outputFile2 = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root", mu, m_massValues[i_m], m_widthValues[i_w], m_xsValues[i_x]);
-	  TString inputFile = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_*_ForScan_mass%d_width%d_xs%d.root", mu, m_massValues[i_m], m_widthValues[i_w], m_xsValues[i_x]);
+	  TString outputFile1
+	    = Form("%s/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root",
+		   m_outputDir.Data(), mu, m_massValues[i_m],
+		   m_widthValues[i_w], m_xsValues[i_x]);
+	  TString outputFile2 = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root",
+				     mu, m_massValues[i_m], m_widthValues[i_w],
+				     m_xsValues[i_x]);
+	  TString inputFile = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_*_ForScan_mass%d_width%d_xs%d.root",
+				   mu, m_massValues[i_m], m_widthValues[i_w],
+				   m_xsValues[i_x]);
 	  // This three-step is done to prevent the output from being deleted
 	  // but also to allow previous outputs to be added together.
 	  system(Form("hadd -f dummy.root %s", inputFile.Data()));
@@ -134,7 +139,8 @@ void haddCurrentFiles() {
 
 /**
    -----------------------------------------------------------------------------
-   The main method scans the 95% CL for various signal cross-sections.
+   The main method unpacks .tar files from one directory and places the 
+   extracted .root files in a new directory.
    @param inputDir - The directory containing .tar files.
    @param outputDir - The directory where the output .root files belong.
 */
