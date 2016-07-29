@@ -104,11 +104,11 @@ void detectMassWidthXSFiles(TString toyDirectory) {
    -----------------------------------------------------------------------------
    Hadd several ROOT files together.
 */
-void haddCurrentFiles() {
+void haddCurrentFiles(TString jobName) {
   std::cout << "ProcessToyFiles: hadd a batch of files..." << std::endl;
   // Detect cross-sections, masses, widths:
   //detectMassWidthXSFiles(m_inputDir);
-  detectMassWidthXSFiles("Graviton_Mar30/GenericToys/single_files/");
+  detectMassWidthXSFiles(Form("%s/GenericToys/single_files/",jobName.Data()));
   
   // Loop over cross-section, mass, width:
   for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
@@ -119,12 +119,12 @@ void haddCurrentFiles() {
 	    = Form("%s/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root",
 		   m_outputDir.Data(), mu, m_massValues[i_m],
 		   m_widthValues[i_w], m_xsValues[i_x]);
-	  TString outputFile2 = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root",
-				     mu, m_massValues[i_m], m_widthValues[i_w],
-				     m_xsValues[i_x]);
-	  TString inputFile = Form("Graviton_Mar30/GenericToys/single_files/toy_mu%d_*_ForScan_mass%d_width%d_xs%d.root",
-				   mu, m_massValues[i_m], m_widthValues[i_w],
-				   m_xsValues[i_x]);
+	  TString outputFile2 = Form("%s/GenericToys/single_files/toy_mu%d_ALL_ForScan_mass%d_width%d_xs%d.root", 
+				     jobName.Data(), mu, m_massValues[i_m],
+				     m_widthValues[i_w], m_xsValues[i_x]);
+	  TString inputFile = Form("%s/GenericToys/single_files/toy_mu%d_*_ForScan_mass%d_width%d_xs%d.root",
+				   jobName.Data(), mu, m_massValues[i_m],
+				   m_widthValues[i_w], m_xsValues[i_x]);
 	  // This three-step is done to prevent the output from being deleted
 	  // but also to allow previous outputs to be added together.
 	  system(Form("hadd -f dummy.root %s", inputFile.Data()));
@@ -147,8 +147,9 @@ void haddCurrentFiles() {
 int main(int argc, char **argv) {
   
   // Check that arguments are provided.
-  if (argc < 3) {
-    std::cout << "\nUsage: " << argv[0] << " <inputDir> <outputDir>"
+  if (argc < 5) {
+    std::cout << "\nUsage: " << argv[0] 
+	      << " <inputDir> <outputDir> <jobName> <fPerHadd>"
 	      << std::endl;
     exit(0);
   }
@@ -158,10 +159,13 @@ int main(int argc, char **argv) {
   // Output directory: location for ROOT files to go
   m_outputDir = argv[2];
   system(Form("mkdir -vp %s", m_outputDir.Data()));
+  // number of files to hadd at one time:
+  TString jobName = argv[3];
+  int nFilesToAdd = atoi(argv[4]);
   
   // Create a list of input tar files:
   int maxIndex = 0;
-  int nFilesToAdd = 50;
+  
   system(Form("ls %s | tee tarFileList.txt", m_inputDir.Data()));
   std::ifstream tarFileList("tarFileList.txt");
   if (tarFileList.is_open()) {
@@ -179,14 +183,14 @@ int main(int argc, char **argv) {
       
       // Otherwise hadd the existing files together:
       else {
-	haddCurrentFiles();
+	haddCurrentFiles(jobName);
 	maxIndex = 0;
       }
       //system(Form("rm %s/%s", inputDir.Data(), currTarFile.Data()));
     }
     
     // Then hadd the remaining files:
-    haddCurrentFiles();
+    haddCurrentFiles(jobName);
     tarFileList.close();
   }
   

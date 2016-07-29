@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
   TString scanOptions = config->getStr("StatScanOptions");
   if (options.Contains("BatchJob")) scanOptions += "BatchJob";
   StatScan *scan = new StatScan(configFile, scanOptions);
-  if (options.Contains("New")) scan->setInputDirectory(inputDir);
+  if (config->getBool("MakeNewScan")) scan->setInputDirectory(inputDir);
   else scan->setInputDirectory(outputDir);
   scan->setOutputDirectory(outputDir);
   

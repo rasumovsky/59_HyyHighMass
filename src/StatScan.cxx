@@ -32,6 +32,9 @@ StatScan::StatScan(TString configFileName, TString options) {
   printer(Form("StatScan::StatScan(%s, %s)", configFileName.Data(), 
 	       options.Data()), false);
   
+  // Clear data:
+  clearData();
+
   // Set output directory:
   setInputDirectory(Form("%s/%s/GenericToys/single_files",
 			 (m_config->getStr("MasterOutput")).Data(),
@@ -39,10 +42,7 @@ StatScan::StatScan(TString configFileName, TString options) {
   setOutputDirectory(Form("%s/%s/StatScan",
 			  (m_config->getStr("MasterOutput")).Data(),
 			  (m_config->getStr("JobName")).Data()));
-  
-  // Clear data:
-  clearData();
-  
+    
   // Use observed dataset nominally:
   defineDataForFitting(m_config->getStr("WorkspaceObsData"), NULL);
       
@@ -81,7 +81,8 @@ void StatScan::defineDataForFitting(TString dataNameForFits,
    @param toyDirectory - The directory in which the toy MC files reside.
 */
 void StatScan::detectMassWidthXSFiles(TString toyDirectory) {
-
+  std::cout << "StatScan::detectMassWidthXSFiles(" << toyDirectory << std::endl;
+  
   // First clear existing list:
   m_massValues.clear();
   m_widthValues.clear();
@@ -141,6 +142,20 @@ void StatScan::detectMassWidthXSFiles(TString toyDirectory) {
   std::sort(m_massValues.begin(), m_massValues.end());
   std::sort(m_widthValues.begin(), m_widthValues.end());
   std::sort(m_xsValues.begin(), m_xsValues.end());
+  
+  std::cout << "Detected masses: ";
+  for (int i_m = 0; i_m < (int)m_massValues.size(); i_m++) {
+    std::cout << " " << m_massValues[i_m];
+  }
+  std::cout << "\nDetected widths: ";
+  for (int i_w = 0; i_w < (int)m_widthValues.size(); i_w++) {
+    std::cout << " " << m_widthValues[i_w];
+  }
+  std::cout << "\nDetected cross-sections: ";
+  for (int i_x = 0; i_x < (int)m_xsValues.size(); i_x++) {
+    std::cout << " " << m_xsValues[i_x];
+  }
+  std::cout << "\n";
 }
 
 /**
@@ -1007,12 +1022,14 @@ bool StatScan::singleCLTest(int mass, int width, int crossSection,
 	       mass, width, (int)makeNew), false);
 
   bool successful = true;
-  
+
+  /*  
   if (!asymptotic) {
     printer("singleCLTest: ERROR! Toys need to be updated for CL with qmutilde",
 	    true);
   }
-
+  */
+  
   // Store band information:
   double CLObs = 0.0;
   double CLExp_p2 = 0.0;

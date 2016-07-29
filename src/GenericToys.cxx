@@ -460,7 +460,7 @@ int main(int argc, char **argv) {
   
   // Initialize variables to store in the TTree:
   m_toyMass = (double)m_toyMassInt;
-  m_toyWidth = ((double)m_toyWidthInt) / 100.0;
+  m_toyWidth = ((double)m_toyWidthInt) / 1000.0;
   m_toyXSection = ((double)m_toyXSectionInt) / 1000.0;
   
   m_bestFitUpdate = 0;

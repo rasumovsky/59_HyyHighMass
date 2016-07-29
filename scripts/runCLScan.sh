@@ -9,10 +9,12 @@ width=10
 toyOption="ToyForScan"
 
 # Loop over mass values:
-for mass in 500 1000 1500 2000
+#for mass in 500 1000 1500 2000 2500
+for mass in 500
 do
     # Loop over cross-sections (for CL/p0 scan):
-    for xs in 200 300 500 900 1700 3300 6500 12900 25700 51300 102500
+    #for xs in 100 200 400 800 1600 3200 6400 12800 25600 51200
+    for xs in 6400
     do
 	echo "mass $mass and width $width and cross-section $xs"
 	./GenericToys settings_Graviton.cfg $toyOption $1 $2 0 $mass $width $xs

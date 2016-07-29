@@ -52,8 +52,8 @@ else
 
     ./${exe_name} ${configfile} ${option} ${width} ${massMin} ${massMax} ${massStep} 1> ${out}.log 2>${out}.err;
     
-    mv *.log ${output_dir}/log/
-    mv *.err ${output_dir}/err/
+    #mv *.log ${output_dir}/log/
+    #mv *.err ${output_dir}/err/
     rm * -rf
     
 ####################
