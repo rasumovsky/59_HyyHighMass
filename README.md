@@ -11,12 +11,6 @@ in the configuration files residing in the `data/` directory.
 If you have any questions about the code, please contact the author, who will be
 happy to assist you in getting the code running.
 
-#### Current status:
-As of May 4, 2016, the following features are completely functional: toy MC for 
-local and global significance, toy MC for limits, asymptotic significance tests,
-cutflows and data comparisons using MxAODs, and significance extrapolation. 
-However, there are bugs in the asymptotic limit setting procedure that will be
-resolved soon.
 
 ### Input files
 
@@ -62,7 +56,7 @@ This command compiles the following macros:
  - LocalP0Analysis  
  - TossToys_NoFit
  - AddDataToWorkspace
-
+ - PlotWS
 
 Every program in this package can be run via the `HMMaster` main method. The 
 user only needs to specify the step of the analysis to run and the config file
@@ -75,6 +69,7 @@ analysis of the global p0 for the scalar analysis, simply run the command below:
 The analysis steps are listed and explained below.
  - Workspace: create a workspace using the model specified in the config file.
  - AddDataToWS: add a dataset in MxAODs to the workspace. 
+ - PlotWS: plot the signal and background fits to data from a workspace.
  - GlobalP0Toys: create a pseudo-experiment ensemble to get the global Z value.
  - GlobalP0Analysis: analyze the global toy ensemble to get the global z value.
  - LocalP0Analysis: analyze pseudo-experiments to cross-check asymptotic qmu,q0.

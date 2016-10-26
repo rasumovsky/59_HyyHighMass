@@ -7,3 +7,4 @@ make bin/MassAnimation
 make bin/LocalP0Analysis  
 make bin/TossToys_NoFit
 make bin/AddDataToWorkspace
+make bin/PlotWS

@@ -15,6 +15,7 @@
 //  MasterOption:                                                             //
 //    - Workspace                                                             //
 //    - AddDataToWS                                                           //
+//    - PlotWS                                                                //
 //    - GlobalP0Toys                                                          //
 //    - GlobalP0Analysis                                                      //
 //    - LocalP0Analysis                                                       //
@@ -255,6 +256,13 @@ int main (int argc, char **argv) {
     std::cout << "HMMaster: Adding data from MxAODs to the workspace"
 	      << std::endl;
     system(Form("./bin/AddDataToWorkspace %s none", fullConfigPath.Data())); 
+  }
+
+  //--------------------------------------//
+  // Step 0.2: Plot data and fits:
+  if (masterOption.Contains("PlotWS")) {
+    std::cout << "HMMaster: Plotting fits using workspace." << std::endl;
+    system(Form("./bin/PlotWS %s none", fullConfigPath.Data()));
   }
 
   //--------------------------------------//
