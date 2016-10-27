@@ -43,20 +43,6 @@ double minimize(ModelConfig *mc, RooAbsData *data) {
 
 /**
    -----------------------------------------------------------------------------
-   A simple method for translating category names into printable names.
-   @param channelname - the short-hand name of the channel
-   @return - a printable channel name.
-*/
-TString categoryTranslator(TString channelname) {
-  if(channelname=="BB_13TeV") return "barrel-barrel";
-  if(channelname=="nonBB_13TeV") return "non-barrel-barrel";
-  if(channelname=="CC_13TeV") return "central-central";
-  if(channelname=="nonCC_13TeV") return "non-central-central";
-  return "";
-}
-
-/**
-   -----------------------------------------------------------------------------
    The main method of this macro. Plots the workspace data and fits. 
    @param jobname - the name of the job.
    @param inputWSFileName - the name of the input workspace file.
@@ -124,8 +110,7 @@ int main(int argc, char** argv) {
   else isBonly = !(w->loadSnapshot("ucmles"));
   
   // Option to do fit:
-  if (doFit) minimize(mc,m_data);
-  
+  if (doFit) minimize(mc, m_data);
   
   // Loop over the analysis categories:
   for (int i= 0; i < numChannels; i++) {
@@ -139,7 +124,7 @@ int main(int argc, char** argv) {
     std::cout << "\t\tIndex: " << i << ", Pdf: " << pdfi->GetName() 
 	      << ", Data: " << datai->GetName()  << ", SumEntries: " 
 	      << datai->sumEntries() << " NumEntries: "<< datai->numEntries()
-	      <<std::endl;
+	      << std::endl;
     
     // Grab the variable to plot:
     RooRealVar *x = (RooRealVar*)pdfi->getObservables(datai)->first();
@@ -249,35 +234,31 @@ int main(int argc, char** argv) {
     text->SetTextFont(42);
     text->SetTextColor(kBlack);
     text->SetTextSize(0.05);
-    text->DrawLatex(0.2,0.28,textString);
-    if (option.Contains("2015") && channelname.Contains("2015")){
+    text->DrawLatex(0.2, 0.25, textString);
+    
+    // Print information about the dataset:
+    if (channelname.Contains("2015")){
       textString = "Data 2015, #sqrt{s}=13 TeV, 3.2 fb^{-1}";
-      text->DrawLatex(0.2,0.2,textString);
     }
-    else if (option.Contains("2016") && channelname.Contains("2016")){
-      textString = "Data 2016, #sqrt{s}=13 TeV, 12.2 fb^{-1}";
-      text->DrawLatex(0.2,0.2,textString);
+    else if (channelname.Contains("2016")){
+      textString = Form("Data 2016, #sqrt{s}=13 TeV, %2.1f fb^{-1}", 
+			config->getNum("AnalysisLuminosity")/1000.0);
     }
     else if (option.Contains("1516")){
-      textString = "#sqrt{s}=13 TeV, 15.5 fb^{-1}";
-      text->DrawLatex(0.2,0.2,textString);
+      textString = Form("#sqrt{s}=13 TeV, %2.1f fb^{-1}",
+			3.2 + 0.001 * config->getNum("AnalysisLuminosity"));
     }
-    if (inputWSFileName.Contains("EKEI_minus_EKHI")) {
-      textString="Spin-2 Loose-not-Tight Selection";
+    text->DrawLatex(0.2, 0.17, textString);
+    
+    // Print the name of the analysis:
+    if (config->getStr("AnalysisType").Contains("Graviton")) {
+      textString = "Spin-2 Signal";
     }
-    else if (inputWSFileName.Contains("EKHI")) {
-      textString="Spin-2 Selection";
-    }
-    else if (inputWSFileName.Contains("EKEI")) {
-      textString="Spin-2 Loose Selection";
-    }
-    else {
-      textString="Spin-0 Selection";
-    }
-
+    else textString = "Spin-0 Signal";
+    
+    // Print category names:
     if (option.Contains("EEOS")) textString += ", Endcap-Endcap opposite sign";
-    text->DrawLatex(0.2, 0.12, textString);
-
+    text->DrawLatex(0.2, 0.09, textString);
     if (option.Contains("lowpu")) text->DrawLatex(0.2,0.05,"Low pileup");
     if (option.Contains("highpu")) text->DrawLatex(0.2,0.05,"High pileup");
     if (option.Contains("medpu")) text->DrawLatex(0.2,0.05,"Medium pileup");
@@ -293,7 +274,8 @@ int main(int argc, char** argv) {
     pad2->Update();
     
     // Create output directory if it doesn't exist, and print plots:
+    std::cout << "\n\nPrinting mass plots to file below.\n" << std::endl;
     PrintCanvas(c1, outputDir+"/"+channelname);
-    
+    std::cout << "\n" << std::endl;
   }
 }

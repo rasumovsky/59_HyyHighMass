@@ -1,14 +1,14 @@
-# A search for resonances in the diphoton final state with ATLAS
+# A search for diphoton resonances with ATLAS
 
 ### Introduction
 This package implements statistical tools for a search for diphoton decays of 
 scalar and spin-2 particles into the diphoton final state using the ATLAS 
-detector at the LHC. 
+detector at the LHC. Toy Monte Carlo tools and asymptotic approximations are 
+implemented for p-value tests and CL-exclusions. In particular, a novel global 
+significance method using toy Monte Carlo has been developed. 
 
 The code has been structured so that all general analysis settings are specified
-in the configuration files residing in the `data/` directory. 
-
-If you have any questions about the code, please contact the author, who will be
+in the configuration files residing in the `data/` directory. If you have any questions about the code, please contact the author, who will be
 happy to assist you in getting the code running.
 
 
